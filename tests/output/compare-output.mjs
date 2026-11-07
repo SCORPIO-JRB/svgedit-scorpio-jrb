@@ -62,7 +62,10 @@ const SCENARIOS = {
   'flip (multi)': `c.selectOnly(${byId(['r1', 'e1'])}); c.flipSelectedElements(-1, 1)`,
   'align largest (multi)': `c.selectOnly(${byId(['r1', 'e1', 'p1'])}); c.alignSelectedElements('t', 'largest')`,
   'setRotationAngle (multi)': `c.selectOnly(${byId(['r1', 'e1', 'r2'])}); c.setRotationAngle(30)`,
-  'undo everything': `c.selectAllInCurrentLayer(); c.moveSelectedElements(5, 5); c.selectOnly(${byId(['r1'])}); c.changeSelectedAttribute('width', 10); while (c.undoMgr.getUndoStackSize()) c.undoMgr.undo()`
+  'undo everything': `c.selectAllInCurrentLayer(); c.moveSelectedElements(5, 5); c.selectOnly(${byId(['r1'])}); c.changeSelectedAttribute('width', 10); while (c.undoMgr.getUndoStackSize()) c.undoMgr.undo()`,
+  // Opening a group dims the other objects; closing it must leave no trace.
+  'open group, move inside, close': `c.setContext(document.getElementById('grp')); c.selectOnly(${byId(['g1'])}); c.moveSelectedElements(15, 5); c.leaveContext()`,
+  'open a rotated group (double click)': `c.selectOnly(${byId(['grp'])}); c.setRotationAngle(30); document.getElementById('g1').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window })); c.leaveContext()`
 }
 // Every element type alone: flip, rotation by the API, resize by a grip,
 // rotation by the handle.

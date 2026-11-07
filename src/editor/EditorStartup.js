@@ -335,6 +335,17 @@ class EditorStartup {
       return true
     })
 
+    // Holding Ctrl (Cmd on macOS) outlines the deepest object under the
+    // pointer, what a Ctrl+click takes (M6): refresh the outline when the key
+    // goes down or up without the pointer moving.
+    const refreshHover = (e) => {
+      if (!e.repeat && (e.key === 'Control' || e.key === 'Meta')) {
+        this.svgCanvas.refreshHover?.(e)
+      }
+    }
+    document.addEventListener('keydown', refreshHover)
+    document.addEventListener('keyup', refreshHover)
+
     // preventing browser's scaling with Ctrl+wheel
     this.$container.addEventListener('wheel', (e) => {
       if (e.ctrlKey) {
@@ -551,6 +562,15 @@ class EditorStartup {
           break
         case 'move_back':
           this.svgCanvas.moveToBottomSelectedElement()
+          break
+        case 'select_same_symbol':
+          this.svgCanvas.selectSimilar('symbol')
+          break
+        case 'select_same_fill':
+          this.svgCanvas.selectSimilar('fill')
+          break
+        case 'select_same_stroke':
+          this.svgCanvas.selectSimilar('stroke')
           break
         default:
           if (hasCustomHandler(action)) {

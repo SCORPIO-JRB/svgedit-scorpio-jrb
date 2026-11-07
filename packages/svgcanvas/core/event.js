@@ -19,6 +19,8 @@ import * as draw from './draw.js'
 import * as pathModule from './path.js'
 import * as hstry from './history.js'
 import { findPos } from '../../svgcanvas/common/util.js'
+import { isMac } from '../common/browser.js'
+import { isDeepClick } from './selection-nav.js'
 import {
   beginGroupResize,
   updateGroupResize,
@@ -101,6 +103,26 @@ const pointerAngleAbout = (elem, x, y) => {
   return ((Math.atan2(center.y - y, center.x - x) * (180 / Math.PI)) - 90) % 360
 }
 
+/** Where the pointer was last seen over the canvas, for refreshHover. */
+let lastHoverPoint = null
+
+/**
+ * Outlines again what a click would select, after Ctrl (Cmd on macOS) was
+ * pressed or released without moving the pointer.
+ * @function module:event.SvgCanvas#refreshHover
+ * @param {KeyboardEvent} evt Gives the modifiers held
+ * @returns {void}
+ */
+const refreshHover = (evt) => {
+  if (!lastHoverPoint) { return }
+  updateHover({
+    ...lastHoverPoint,
+    buttons: 0,
+    ctrlKey: Boolean(evt?.ctrlKey),
+    metaKey: Boolean(evt?.metaKey)
+  })
+}
+
 /**
  * Outlines the element a click would select: the one getMouseTarget returns,
  * unless it is already selected. Only in the selection tool, when no button
@@ -111,13 +133,16 @@ const pointerAngleAbout = (elem, x, y) => {
 const updateHover = (evt) => {
   const mgr = svgCanvas.selectorManager
   if (!mgr?.showHover) { return }
+  lastHoverPoint = { target: evt.target, clientX: evt.clientX, clientY: evt.clientY }
   if (svgCanvas.getCurrentMode() !== 'select' || evt.buttons || svgCanvas.spaceKey) {
     mgr.hideHover()
     return
   }
   let target = null
   try {
-    target = svgCanvas.getMouseTarget(evt)
+    // With Ctrl (Cmd on macOS), the deepest object: what a Ctrl+click takes.
+    target = (isDeepClick(evt, isMac()) && svgCanvas.getDeepTarget?.(evt)?.elem) ||
+      svgCanvas.getMouseTarget(evt)
   } catch (e) {
     target = null
   }
@@ -147,6 +172,7 @@ export const init = (canvas) => {
   svgCanvas.mouseOutEvent = mouseOutEvent
   svgCanvas.DOMMouseScrollEvent = DOMMouseScrollEvent
   svgCanvas.cancelGesture = cancelGesture
+  svgCanvas.refreshHover = refreshHover
 }
 
 const getBsplinePoint = (t) => {
@@ -898,6 +924,7 @@ const mouseMoveEvent = (evt) => {
 const mouseOutEvent = (evt) => {
   const { $id } = svgCanvas
   svgCanvas.selectorManager?.hideHover?.()
+  lastHoverPoint = null
   if (svgCanvas.getCurrentMode() !== 'select' && svgCanvas.getStarted()) {
     const event = new MouseEvent('mouseup', {
       bubbles: true,
@@ -1439,7 +1466,7 @@ const dblClickEvent = (evt) => {
  */
 const mouseDownEvent = (evt) => {
   const dataStorage = svgCanvas.getDataStorage()
-  const selectedElements = svgCanvas.getSelectedElements()
+  let selectedElements = svgCanvas.getSelectedElements()
   const zoom = svgCanvas.getZoom()
   const curShape = svgCanvas.getStyle()
   const svgRoot = svgCanvas.getSvgRoot()
@@ -1487,6 +1514,17 @@ const mouseDownEvent = (evt) => {
 
   if (mouseTarget.tagName === 'a' && mouseTarget.childNodes.length === 1) {
     mouseTarget = mouseTarget.firstChild
+  }
+
+  // Ctrl+click (Cmd+click on macOS) in the selection tool takes the deepest
+  // object under the pointer, opening the groups that hold it. A selection
+  // grip keeps its role.
+  if (!rightClick && svgCanvas.getCurrentMode() === 'select' &&
+    mouseTarget !== svgCanvas.selectorManager.selectorParentGroup &&
+    isDeepClick(evt, isMac())) {
+    mouseTarget = svgCanvas.openDeepTarget(evt) ?? mouseTarget
+    // Opening a group starts a new selection.
+    selectedElements = svgCanvas.getSelectedElements()
   }
 
   // realX/y ignores grid-snap value
@@ -1547,7 +1585,10 @@ const mouseDownEvent = (evt) => {
             svgCanvas.clearSelection(true)
           }
           svgCanvas.addToSelection([mouseTarget])
-          svgCanvas.setJustSelected(mouseTarget)
+          // A right click opens the menu: the next left click on this
+          // element must still be able to keep it alone or, with Shift, take
+          // it out (the mouse up of a right click never resets this).
+          svgCanvas.setJustSelected(rightClick ? null : mouseTarget)
           svgCanvas.pathActions.clear()
         }
         duplicateOnDrag = evt.altKey && !rightClick

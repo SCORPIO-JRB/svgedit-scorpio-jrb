@@ -9,6 +9,8 @@ const { $qa, $id, $click, isValidUnit, getTypeMap, convertUnit } = SvgCanvas
 
 // Elements alone whose box has W and H fields: they are scaled from its top
 // left corner, as by a grip. A text always keeps its proportions.
+/** Criteria of the "select same" entries of the context menu (M6). */
+const SIMILAR_CRITERIA = ['symbol', 'fill', 'stroke']
 const SIZED_ALONE = new Set(['path', 'polyline', 'g', 'text'])
 // Shapes that can be converted to a path.
 const CONVERTIBLE = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
@@ -511,6 +513,14 @@ class TopPanel {
         '#delete,#cut,#copy,#group,#ungroup,#move_front,#move_up,#move_down,#move_back'
       )
     }
+    // Objects that look the same as the selection: same symbol for a <use>,
+    // same fill or stroke for a shape or a text.
+    SIMILAR_CRITERIA.forEach((criterion) => {
+      menuItems.setItemEnabled?.(
+        `select_same_${criterion}`,
+        !isNode && this.editor.svgCanvas.canSelectSimilar(criterion)
+      )
+    })
 
     // update history buttons
     $id('tool_undo').disabled =

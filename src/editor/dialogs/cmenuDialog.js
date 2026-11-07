@@ -27,6 +27,12 @@ export class SeCMenuDialog extends HTMLElement {
     this.$moveUpLink = this._shadowRoot.querySelector('#se-move-up')
     this.$moveDownLink = this._shadowRoot.querySelector('#se-move-down')
     this.$moveBackLink = this._shadowRoot.querySelector('#se-move-back')
+    // Objects that look the same as the selection (M6)
+    this.$similarLinks = {
+      select_same_symbol: this._shadowRoot.querySelector('#se-select-same-symbol'),
+      select_same_fill: this._shadowRoot.querySelector('#se-select-same-fill'),
+      select_same_stroke: this._shadowRoot.querySelector('#se-select-same-stroke')
+    }
   }
 
   /**
@@ -46,6 +52,9 @@ export class SeCMenuDialog extends HTMLElement {
     this.setAttribute('tools-move_up', i18next.t('tools.move_up'))
     this.setAttribute('tools-move_down', i18next.t('tools.move_down'))
     this.setAttribute('tools-move_back', i18next.t('tools.move_back'))
+    Object.entries(this.$similarLinks).forEach(([action, link]) => {
+      link.textContent = i18next.t(`tools.${action}`)
+    })
   }
 
   /**
@@ -190,6 +199,18 @@ export class SeCMenuDialog extends HTMLElement {
   }
 
   /**
+   * Enables or greys out one item. Unlike the `enablemenuitems` attribute,
+   * this applies even when the same value is set twice in a row.
+   * @param {string} action The item's action, as in its href
+   * @param {boolean} enabled
+   * @returns {void}
+   */
+  setItemEnabled (action, enabled) {
+    this._shadowRoot.querySelector(`a[href="#${action}"]`)
+      ?.parentElement.classList.toggle('disabled', !enabled)
+  }
+
+  /**
    * Adds a menu item registered by an extension (see `contextmenu.add`). A
    * click dispatches `change` with the item id, which the editor routes to the
    * extension's action. The label is inserted as text, never as markup.
@@ -274,6 +295,13 @@ export class SeCMenuDialog extends HTMLElement {
     svgEditor.$click(this.$moveUpLink, (evt) => onMenuClickHandler(evt, 'move_up'))
     svgEditor.$click(this.$moveDownLink, (evt) => onMenuClickHandler(evt, 'move_down'))
     svgEditor.$click(this.$moveBackLink, (evt) => onMenuClickHandler(evt, 'move_back'))
+    Object.entries(this.$similarLinks).forEach(([action, link]) => {
+      svgEditor.$click(link, (evt) => {
+        evt.preventDefault()
+        current.$dialog.style.display = 'none'
+        onMenuClickHandler(evt, action)
+      })
+    })
   }
 }
 

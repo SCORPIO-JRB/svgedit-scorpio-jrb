@@ -1102,8 +1102,11 @@ export const leaveContext = () => {
       } else {
         elem.setAttribute('opacity', orig)
       }
-      elem.setAttribute('style', 'pointer-events: inherit')
+      // Only pointer-events was changed: the rest of the style is kept (the
+      // whole attribute used to be replaced, losing the element's style).
+      elem.style.pointerEvents = dataStorage.get(elem, 'orig_pe') || 'inherit'
       dataStorage.remove(elem, 'orig_opac')
+      dataStorage.remove(elem, 'orig_pe')
     }
     disabledElems = []
     svgCanvas.clearSelection(true)
@@ -1172,11 +1175,35 @@ export const setContext = elem => {
     const parsedOpacity = Number.parseFloat(origOpacity)
     const opac = Number.isFinite(parsedOpacity) ? parsedOpacity : 1
     curthis.setAttribute('opacity', opac * 0.33)
-    curthis.setAttribute('style', 'pointer-events: none')
+    dataStorage.put(curthis, 'orig_pe', curthis.style.pointerEvents)
+    curthis.style.pointerEvents = 'none'
     disabledElems.push(curthis)
   })
   svgCanvas.clearSelection()
   svgCanvas.call('contextset', svgCanvas.getCurrentGroup())
+}
+
+/**
+ * The element drawn at a point of the window, the elements an open group
+ * dims included: they ignore the pointer while the group is open.
+ * @function module:draw.elementFromPointInDrawing
+ * @param {Float} clientX
+ * @param {Float} clientY
+ * @returns {Element|null}
+ */
+export const elementFromPointInDrawing = (clientX, clientY) => {
+  const doc = svgCanvas.getSvgContent()?.ownerDocument
+  if (!doc?.elementFromPoint) { return null }
+  if (!disabledElems.length) { return doc.elementFromPoint(clientX, clientY) }
+  const dataStorage = svgCanvas.getDataStorage()
+  disabledElems.forEach((elem) => {
+    elem.style.pointerEvents = dataStorage.get(elem, 'orig_pe') || 'inherit'
+  })
+  try {
+    return doc.elementFromPoint(clientX, clientY)
+  } finally {
+    disabledElems.forEach((elem) => { elem.style.pointerEvents = 'none' })
+  }
 }
 
 /**

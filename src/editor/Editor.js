@@ -150,6 +150,21 @@ class Editor extends EditorStartup {
         }
       },
       {
+        // Enter: the objects of the selected group (a path: its nodes, a
+        // text: its characters); Shift+Enter: the group that holds the
+        // selection.
+        key: ['enter', true],
+        fn: () => {
+          this.svgCanvas.selectChildren()
+        }
+      },
+      {
+        key: ['shift+enter', true],
+        fn: () => {
+          this.svgCanvas.selectParent()
+        }
+      },
+      {
         key: 'tab',
         fn: () => {
           this.svgCanvas.cycleElement(0)
@@ -403,12 +418,9 @@ class Editor extends EditorStartup {
             this.cancelTool()
             return
           }
-          const group = this.svgCanvas.getCurrentGroup()
-          if (group) {
-            this.svgCanvas.leaveContext()
-            this.svgCanvas.selectOnly([group], true)
-            return
-          }
+          // In an open group, up one level, as Shift+Enter: the group is
+          // selected in the group that holds it.
+          if (this.svgCanvas.selectParent()) { return }
           if (this.svgCanvas.getSelectedElements().some(Boolean)) {
             this.svgCanvas.clearSelection()
           }
@@ -1008,7 +1020,9 @@ class Editor extends EditorStartup {
       rootLink.dataset.root = 'y'
       rootLink.textContent = this.svgCanvas.getCurrentDrawing().getCurrentLayerName()
       panel.append(rootLink)
-      const parentsUntil = getParentsUntil(context, '#svgcontent')
+      // From the outermost group to the open one (the list went the other
+      // way, which read backwards once groups are nested).
+      const parentsUntil = getParentsUntil(context, '#svgcontent').reverse()
       parentsUntil.forEach(function (parent) {
         if (parent.id) {
           str += ' > ' + parent.id
