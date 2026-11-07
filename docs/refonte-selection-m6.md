@@ -152,3 +152,19 @@ Bilan : lint propre, 710 tests unitaires et 226 tests E2E verts.
 - **Réglage désactivable.** Les tests de M6 sont verts : aucun réglage n'a été ajouté.
 - **Décisions de M4 toujours ouvertes :** sens du champ angle « Mixte », X et Y trait compris d'un chemin ou d'un groupe seul, largeur de la barre du haut.
 - **Lots suivants :** le presse-papiers et la duplication (M7), puis l'outil Échelle et le rangement (M9).
+
+## 6. Correctif hors plan : l'outil connecteur
+
+Signalé en test : « can't access property "value", connector.attributes['se:connector'] is undefined » à chaque clic sur un objet. Le défaut existe déjà dans la version d'origine (branche `master`) ; aucun lot de la refonte n'y touchait.
+
+- **Cause.** L'outil connecteur ne terminait jamais un tracé. Le point de départ du geste était rangé dans une variable locale qui masquait celle du module, si bien que le relâchement calculait avec des valeurs vides et échouait. La ligne entamée restait dans le dessin, avec un id `conn_…` mais sans attribut `se:connector`. Ensuite, chaque changement de sélection parcourait les éléments dont l'id commence par `conn_` et échouait sur elle. Un objet importé dont l'id commence par `conn_` (un fichier issu d'un autre outil, par exemple) donnait la même erreur.
+- **Correction** (`src/editor/extensions/ext-connector/ext-connector.js`) :
+  - un connecteur est un élément du dessin qui porte l'attribut `se:connector`, lu par son espace de noms ; un autre objet nommé `conn_…` est laissé tel quel et peut être groupé ;
+  - le point de départ est enregistré à l'appui, et la ligne suit la souris pendant le tracé ;
+  - un connecteur dont un objet a disparu est ignoré au lieu de faire échouer la sélection. Il reste dans le dessin et se raccroche si une annulation fait revenir l'objet. Le code d'origine prévoyait de le supprimer hors de l'historique, ce qui aurait rendu cette annulation incomplète ;
+  - après une annulation, les connecteurs des objets modifiés sont recalculés, même quand ces objets ne sont pas sélectionnés ;
+  - un fichier dont un connecteur désigne un objet absent s'ouvre sans erreur.
+- **Tests.** `tests/e2e/connector.spec.js`, 6 tests : tracé par glisser et par deux clics, déplacement puis annulation, suppression d'un objet relié, objet nommé `conn_…`, fichier avec un connecteur orphelin. Les 6 échouent sur `master` et passent avec la correction. Chaque test vérifie aussi qu'aucune erreur n'atteint la console.
+- **Sortie SVG** des opérations existantes identique (15/15 allers-retours, 62/62 scénarios contre le commit M6). Bilan : lint propre, 710 tests unitaires et 232 tests E2E verts.
+- **Limite.** Échap n'interrompt pas un connecteur commencé par un clic : le clic suivant sur un objet le termine. Changer d'outil l'abandonne.
+- **Erreur « Permission denied to access property "apply" »** (`moz-extension://…/inpage_sol.js`) : elle vient d'une extension de Firefox, pas de l'éditeur. Elle disparaît dans une fenêtre privée sans extensions.
