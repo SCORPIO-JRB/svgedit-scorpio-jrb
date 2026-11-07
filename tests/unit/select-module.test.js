@@ -471,6 +471,78 @@ describe('Select Module', () => {
     })
   })
 
+  describe('Visual feedback (M5)', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = getSelectorManager()
+    })
+
+    const box = (x, y, w, h) => ({
+      nw: [x, y],
+      n: [x + w / 2, y],
+      ne: [x + w, y],
+      e: [x + w, y + h / 2],
+      se: [x + w, y + h],
+      s: [x + w / 2, y + h],
+      sw: [x, y + h],
+      w: [x, y + h / 2]
+    })
+    const hidden = () => Object.entries(manager.selectorGripHits)
+      .filter(([, hit]) => hit.getAttribute('display') === 'none').map(([dir]) => dir).sort()
+
+    it('hides the side grips of a small frame and shows them again on a large one', () => {
+      manager.positionGrips(box(10, 10, 12, 12))
+      expect(hidden()).toEqual(['e', 'n', 's', 'w'])
+      expect(manager.selectorGrips.n.getAttribute('display')).toBe('none')
+      manager.positionGrips(box(10, 10, 100, 60))
+      expect(hidden()).toEqual([])
+      expect(manager.selectorGrips.n.hasAttribute('display')).toBe(false)
+    })
+
+    it('puts rotation zones outside the corners, below the resize hit areas', () => {
+      manager.positionGrips(box(100, 100, 80, 60))
+      const zone = manager.rotateZones.se
+      expect([zone.getAttribute('x'), zone.getAttribute('y'), zone.getAttribute('width')]).toEqual(['180', '160', '20'])
+      const children = [...manager.selectorGripsGroup.children]
+      expect(children.indexOf(zone)).toBeLessThan(children.indexOf(manager.selectorGripHits.se))
+      // Only the hit area takes the pointer, not the visible grip.
+      expect(manager.selectorGrips.se.getAttribute('pointer-events')).toBe('none')
+    })
+
+    it('turns the cursors of the zones with the frame', () => {
+      Selector.updateGripCursors(30)
+      expect(decodeURIComponent(manager.rotateZones.ne.getAttribute('style'))).toMatch(/rotate\(30 12 12\)/)
+      expect(manager.rotateZones.ne.getAttribute('style')).toMatch(/rotate\.svg\) 12 12, auto$/)
+    })
+
+    it('outlines a hovered element with the frame of its selector, and hides the outline', () => {
+      manager.showHover(rectElement)
+      const outline = document.getElementById('selectorHover')
+      expect(outline.hasAttribute('display')).toBe(false)
+      expect(outline.getAttribute('d')).toBe(manager.requestSelector(rectElement).selectorRect.getAttribute('d'))
+      manager.hideHover()
+      expect(outline.getAttribute('display')).toBe('none')
+      expect(manager.hoverTarget).toBeNull()
+    })
+
+    it('shows the dimension label under the selection, then hides it', () => {
+      svgCanvas.getSelectedElements = () => [rectElement]
+      const selector = manager.requestSelector(rectElement)
+      selector.resize()
+      manager.showSize(100, 50)
+      const label = document.getElementById('selectorDimension')
+      expect(label.hasAttribute('display')).toBe(false)
+      expect(label.textContent).toBe('100 × 50')
+      const back = label.querySelector('rect')
+      expect(Number(back.getAttribute('y'))).toBeGreaterThan(selector.screenBox.y + selector.screenBox.height)
+      manager.showAngle(270)
+      expect(label.textContent).toBe('-90°')
+      manager.hideDimension()
+      expect(label.getAttribute('display')).toBe('none')
+    })
+  })
+
   describe('Private field encapsulation', () => {
     it('should not expose SelectModule private field', () => {
       const manager = getSelectorManager()

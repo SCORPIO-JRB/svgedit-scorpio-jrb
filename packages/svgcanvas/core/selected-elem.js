@@ -1422,6 +1422,8 @@ const updateCanvas = (w, h) => {
     'transform',
     `translate(${x},${y})`
   )
+  // The hover outline was drawn for the previous zoom.
+  svgCanvas.selectorManager.hideHover?.()
 
   /**
    * Invoked upon updates to the canvas.

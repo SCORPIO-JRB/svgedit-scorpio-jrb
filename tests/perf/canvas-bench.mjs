@@ -5,7 +5,10 @@
  * Measures the interactions that scale with the number of selected elements:
  * select all, one drag mousemove, drag release, undo, redo, zoom and a rubber
  * band covering the whole drawing. Each measure includes the next frame, so
- * that layout and paint triggered by the interaction are counted.
+ * that layout and paint triggered by the interaction are counted. The hover
+ * measure is the exception: a mouse move without a button, averaged over 20
+ * moves from one element to another, with the layout it causes but without
+ * waiting for the next frame.
  *
  * The bench drives a built editor served over HTTP (`npm run build` then
  * `npm run start:e2e`) and dispatches synthetic mouse events, which keeps the
@@ -46,7 +49,8 @@ const MEASURES = [
   ['groupResizeMove', 'Redimensionner tout, un mouvement (cadre commun)'],
   ['groupResizeRelease', 'Relâchement du redimensionnement collectif'],
   ['groupRotateMove', 'Pivoter tout, un mouvement (poignée du cadre commun)'],
-  ['groupRotateRelease', 'Relâchement de la rotation collective']
+  ['groupRotateRelease', 'Relâchement de la rotation collective'],
+  ['hover', 'Surbrillance au survol (un mouvement, sans attendre l\'image)']
 ]
 
 const launchOptions = process.env.PW_CHROMIUM_PATH
@@ -195,6 +199,26 @@ async function benchSize (size) {
     out.marquee = await time(() => mouse('mousemove', root, content.right + 5, content.bottom + 5))
     mouse('mouseup', root, content.right + 5, content.bottom + 5)
     await frame()
+
+    // Hover: the mouse passes from one element to another, no button down.
+    canvas.clearSelection()
+    await frame()
+    const count = document.querySelectorAll('#svgcontent rect').length
+    const outline = document.getElementById('selectorHover')
+    let hoverTotal = 0
+    const moves = 20
+    for (let i = 0; i < moves; i++) {
+      const target = document.getElementById(`r${(i * 37 + 3) % count}`)
+      const p = center(target)
+      const start = performance.now()
+      mouse('mousemove', target, p.x, p.y, { buttons: 0 })
+      // Flushes the layout the new outline causes.
+      outline?.getBoundingClientRect()
+      hoverTotal += performance.now() - start
+      await frame()
+    }
+    out.hover = hoverTotal / moves
+    mouse('mouseleave', root, 0, 0, { buttons: 0 })
 
     canvas.clearSelection()
     await frame()

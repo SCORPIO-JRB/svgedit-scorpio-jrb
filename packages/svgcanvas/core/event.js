@@ -12,7 +12,7 @@ import {
   convertAttrs
 } from './units.js'
 import {
-  transformPoint, hasMatrixTransform, getMatrix, snapToAngle, getTransformList
+  transformPoint, hasMatrixTransform, getMatrix, snapToAngle, getTransformList, normalizeRotationAngle
 } from './math.js'
 import { withStartTransform } from './recalculate.js'
 import * as draw from './draw.js'
@@ -32,7 +32,8 @@ import {
   isGroupRotating,
   isScalableText,
   commitSingleTextResize,
-  singleTextPreview
+  singleTextPreview,
+  drawingBoxOf
 } from './multi-transform.js'
 
 const {
@@ -54,6 +55,83 @@ let selectionBeforeClone = null
 let rubberBandBase = new Set()
 // A single text resized by a grip: it gets a new font size, not a matrix.
 let singleTextResize = null
+// Rotation of a single element started from a zone outside a corner: the
+// difference between its angle and the pointer's, so that it does not jump.
+// Null for the handle above the frame, whose behaviour is unchanged.
+let rotateOffset = null
+// A single circle resized with free proportions: the scale the gesture
+// really applies, put back before the release writes the circle (see
+// mouseMoveEvent).
+let circleResize = null
+
+/**
+ * Puts back the scale of a circle's resize gesture, replaced during the
+ * gesture by the preview of the circle it gives.
+ * @param {Element} elem
+ * @param {{ox: number, oy: number, sx: number, sy: number}} gesture
+ * @returns {void}
+ */
+const restoreCircleScale = (elem, { ox, oy, sx, sy }) => {
+  const tlist = getTransformList(elem)
+  const N = tlist?.numberOfItems || 0
+  if (N < 3) { return }
+  const svgRoot = svgCanvas.getSvgRoot()
+  const back = svgRoot.createSVGTransform()
+  const scale = svgRoot.createSVGTransform()
+  const origin = svgRoot.createSVGTransform()
+  back.setTranslate(ox, oy)
+  scale.setScale(sx, sy)
+  origin.setTranslate(-ox, -oy)
+  tlist.replaceItem(back, N - 3)
+  tlist.replaceItem(scale, N - 2)
+  tlist.replaceItem(origin, N - 1)
+}
+
+/**
+ * Pointer angle about an element's centre, as the rotation handle measures it:
+ * 0 when the pointer is straight above the centre.
+ * @param {Element} elem
+ * @param {number} x - Pointer, in the drawing's coordinates
+ * @param {number} y
+ * @returns {number} Degrees
+ */
+const pointerAngleAbout = (elem, x, y) => {
+  const box = getBBox(elem)
+  const center = transformPoint(box.x + box.width / 2, box.y + box.height / 2, getMatrix(elem))
+  return ((Math.atan2(center.y - y, center.x - x) * (180 / Math.PI)) - 90) % 360
+}
+
+/**
+ * Outlines the element a click would select: the one getMouseTarget returns,
+ * unless it is already selected. Only in the selection tool, when no button
+ * is down.
+ * @param {MouseEvent} evt
+ * @returns {void}
+ */
+const updateHover = (evt) => {
+  const mgr = svgCanvas.selectorManager
+  if (!mgr?.showHover) { return }
+  if (svgCanvas.getCurrentMode() !== 'select' || evt.buttons || svgCanvas.spaceKey) {
+    mgr.hideHover()
+    return
+  }
+  let target = null
+  try {
+    target = svgCanvas.getMouseTarget(evt)
+  } catch (e) {
+    target = null
+  }
+  // As on mousedown, a link around a single element selects that element.
+  if (target?.tagName === 'a' && target.childNodes.length === 1) {
+    target = target.firstChild
+  }
+  if (!target || target.nodeType !== 1 || target === svgCanvas.getSvgRoot() ||
+    target === mgr.selectorParentGroup || svgCanvas.getSelectedElements().includes(target)) {
+    mgr.hideHover()
+    return
+  }
+  mgr.showHover(target)
+}
 
 /**
 * @function module:undo.init
@@ -118,6 +196,12 @@ const beginDragTransform = (svgRoot, selectedElements) => {
     if (!selectedElement || !measure) { continue }
     svgCanvas.dragStartBBoxes.set(selectedElement, measure(selectedElement))
   }
+  // Box of the dragged elements, read before the drag transform is added:
+  // its top left corner is the position the dimension label shows.
+  const dragged = selectedElements.filter(Boolean)
+  svgCanvas.dragStartFrame = measure
+    ? drawingBoxOf(dragged, dragged.map((elem) => svgCanvas.dragStartBBoxes.get(elem)))
+    : null
   for (const selectedElement of selectedElements) {
     if (!selectedElement) { continue }
     svgCanvas.dragStartTransforms.set(
@@ -239,7 +323,11 @@ const cancelGesture = () => {
 
   svgCanvas.dragStartTransforms = null
   svgCanvas.dragStartBBoxes = null
+  svgCanvas.dragStartFrame = null
   svgCanvas.hasDragStartTransform = false
+  svgCanvas.selectorManager.hideDimension?.()
+  rotateOffset = null
+  circleResize = null
   duplicateOnDrag = false
   moveSelectionThresholdReached = false
   pendingCloneCmd = null
@@ -284,8 +372,11 @@ const updateTransformList = (svgRoot, element, dx, dy) => {
  * @returns {void}
  */
 const mouseMoveEvent = (evt) => {
-  // if the mouse is move without dragging an element, just return.
-  if (!svgCanvas.getStarted()) { return }
+  // Without a gesture, the mouse only shows what a click would select.
+  if (!svgCanvas.getStarted()) {
+    updateHover(evt)
+    return
+  }
   if (evt.button === 1 || svgCanvas.spaceKey) { return }
 
   svgCanvas.textActions.init()
@@ -365,6 +456,10 @@ const mouseMoveEvent = (evt) => {
               svgCanvas.selectorManager.requestSelector(el).resize(bbox, Boolean(bbox))
             }
           })
+          const frame = svgCanvas.dragStartFrame
+          if (frame) {
+            svgCanvas.selectorManager.showPosition?.(frame.x + dx, frame.y + dy)
+          }
           svgCanvas.call('transition', dragged)
         }
       }
@@ -501,6 +596,25 @@ const mouseMoveEvent = (evt) => {
       scale.setScale(sx, sy)
 
       translateBack.setTranslate(left + tx, top + ty)
+      // Factors the dimension label applies to the element's own size.
+      let labelSx = sx
+      let labelSy = sy
+      circleResize = null
+      if (selected.tagName === 'circle' && !hasMatrix && !angle && Math.abs(Math.abs(sx) - Math.abs(sy)) > 1e-12) {
+        // A circle stays a circle, of radius scaled by the smaller factor
+        // (see coords.js): the preview shows that circle instead of an
+        // ellipse, and the release puts the real scale back before writing.
+        const ox = left + tx
+        const oy = top + ty
+        const c = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+        const s = Math.min(Math.abs(sx), Math.abs(sy))
+        circleResize = { elem: selected, ox, oy, sx, sy }
+        translateOrigin.setTranslate(-c.x, -c.y)
+        scale.setScale(s, s)
+        translateBack.setTranslate(ox + (c.x - ox) * sx, oy + (c.y - oy) * sy)
+        labelSx = s
+        labelSy = s
+      }
       if (singleTextResize === selected && !(angle && sx * sy < 0)) {
         // A text is never distorted: the preview shows the uniform scale and
         // the position it will get (see commitSingleTextResize).
@@ -508,6 +622,8 @@ const mouseMoveEvent = (evt) => {
         translateOrigin.setTranslate(-preview.origin.x, -preview.origin.y)
         scale.setScale(preview.sx, preview.sy)
         translateBack.setTranslate(preview.target.x, preview.target.y)
+        labelSx = preview.sx
+        labelSy = preview.sy
       }
       if (hasMatrix) {
         const diff = angle ? 1 : 0
@@ -522,6 +638,7 @@ const mouseMoveEvent = (evt) => {
       }
 
       svgCanvas.selectorManager.requestSelector(selected).resize()
+      svgCanvas.selectorManager.showSize?.(Math.abs(box.width * labelSx), Math.abs(box.height * labelSy))
       svgCanvas.call('transition', selectedElements)
 
       break
@@ -734,6 +851,10 @@ const mouseMoveEvent = (evt) => {
       cx = center.x
       cy = center.y
       angle = ((Math.atan2(cy - y, cx - x) * (180 / Math.PI)) - 90) % 360
+      if (rotateOffset !== null) {
+        // From a corner: the angle turned since the mouse went down.
+        angle = normalizeRotationAngle(angle + rotateOffset)
+      }
       if (svgCanvas.getCurConfig().gridSnapping) {
         angle = snapToGrid(angle)
       }
@@ -742,7 +863,9 @@ const mouseMoveEvent = (evt) => {
         angle = Math.round(angle / snap) * snap
       }
 
-      svgCanvas.setRotationAngle(angle < -180 ? (360 + angle) : angle, true)
+      angle = angle < -180 ? (360 + angle) : angle
+      svgCanvas.setRotationAngle(angle, true)
+      svgCanvas.selectorManager.showAngle?.(angle)
       svgCanvas.call('transition', selectedElements)
       break
     }
@@ -774,6 +897,7 @@ const mouseMoveEvent = (evt) => {
 */
 const mouseOutEvent = (evt) => {
   const { $id } = svgCanvas
+  svgCanvas.selectorManager?.hideHover?.()
   if (svgCanvas.getCurrentMode() !== 'select' && svgCanvas.getStarted()) {
     const event = new MouseEvent('mouseup', {
       bubbles: true,
@@ -834,6 +958,9 @@ const mouseUpEvent = (evt) => {
   // TODO: Make true when in multi-unit mode
   const useUnit = false // (svgCanvas.getCurConfig().baseUnit !== 'px');
   svgCanvas.setStarted(false)
+  svgCanvas.selectorManager.hideDimension?.()
+  svgCanvas.dragStartFrame = null
+  rotateOffset = null
   let t
   const mouseUpMode = svgCanvas.getCurrentMode()
   if ((mouseUpMode === 'resize' && isGroupResizing()) || (mouseUpMode === 'rotate' && isGroupRotating())) {
@@ -914,6 +1041,9 @@ const mouseUpEvent = (evt) => {
               ? svgCanvas.dragStartTransforms.get(elem)
               : (svgCanvas.getStartTransform() || '')
 
+            if (mouseUpMode === 'resize' && elem === circleResize?.elem) {
+              restoreCircleScale(elem, circleResize)
+            }
             if (mouseUpMode === 'resize' && elem === singleTextResize) {
               const textCmd = commitSingleTextResize(elem, oldTransform)
               if (textCmd) {
@@ -1324,6 +1454,10 @@ const mouseDownEvent = (evt) => {
   // selection, even on a simple Alt+click or while drawing with Alt.
   duplicateOnDrag = false
   flushPendingClone()
+  svgCanvas.selectorManager.hideHover?.()
+  svgCanvas.selectorManager.hideDimension?.()
+  rotateOffset = null
+  circleResize = null
 
   // Get screenCTM from the first child group of svgcontent
   // Note: svgcontent itself has x/y offset attributes, so we use its first child
@@ -1379,7 +1513,12 @@ const mouseDownEvent = (evt) => {
     // rotating
     if (griptype === 'rotate') {
       svgCanvas.setCurrentMode('rotate')
-      // svgCanvas.setCurrentRotateMode(dataStorage.get(grip, 'dir'));
+      // A zone outside a corner: a single element turns by the angle the
+      // pointer turns, without jumping to the pointer (see mouseMoveEvent).
+      if (dataStorage.get(grip, 'dir') && selectedElements.filter(Boolean).length === 1) {
+        const elem = selectedElements[0]
+        rotateOffset = (getRotationAngle(elem) || 0) - pointerAngleAbout(elem, x, y)
+      }
       // resizing
     } else if (griptype === 'resize') {
       svgCanvas.setCurrentMode('resize')

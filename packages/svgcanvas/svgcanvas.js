@@ -109,6 +109,8 @@ const refAttrs = [
 const THRESHOLD_DIST = 0.8
 const STEP_COUNT = 10
 const CLIPBOARD_ID = 'svgedit_clipboard'
+// Events after which the hover outline no longer matches the drawing.
+const HOVER_RESET_EVENTS = new Set(['changed', 'selected', 'zoomed', 'contextset', 'sourcechanged', 'afterClear'])
 
 /**
  * The main SvgCanvas class that manages all SVG-related functions.
@@ -729,6 +731,7 @@ class SvgCanvas {
 
   setZoom (value) {
     this.zoom = value
+    this.selectorManager?.hideHover?.()
   }
 
   getImportIds (key) {
@@ -847,6 +850,7 @@ class SvgCanvas {
    * @returns {void}
    */
   setMode (name) {
+    this.selectorManager?.hideHover?.()
     this.pathActions.clear(true)
     this.textActions.clear()
     this.curProperties =
@@ -945,6 +949,11 @@ class SvgCanvas {
   }
 
   call (ev, arg) {
+    // The hover outline describes the drawing as it was: drop it when the
+    // drawing, the selection or the view changes.
+    if (HOVER_RESET_EVENTS.has(ev)) {
+      this.selectorManager?.hideHover?.()
+    }
     if (this.events[ev]) {
       return this.events[ev](window, arg)
     }

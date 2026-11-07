@@ -622,6 +622,40 @@ const frameOf = (elements, infos) => {
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
 }
 
+/**
+ * Axis-aligned box of elements in the drawing's coordinates, from their own
+ * boxes, stroke excluded: the box the dimension label describes during a
+ * gesture. Call it before the gesture adds its temporary transforms.
+ * @param {Element[]} elements
+ * @param {Array<module:utilities.BBoxObject|undefined>} [boxes] - Own box of
+ *   each element, read when missing
+ * @returns {module:utilities.BBoxObject|null}
+ */
+export const drawingBoxOf = (elements, boxes = []) => {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  elements.forEach((elem, i) => {
+    if (!elem) { return }
+    const box = boxes[i] || getBBox(elem)
+    if (!box) { return }
+    const tlist = getTransformList(elem)
+    const own = tlist?.numberOfItems ? toPlain(transformListToTransform(tlist).matrix) : identity()
+    const m = multiply(parentToDrawing(elem), own)
+    ;[[box.x, box.y], [box.x + box.width, box.y], [box.x, box.y + box.height],
+      [box.x + box.width, box.y + box.height]].forEach(([x, y]) => {
+      const p = apply(m, x, y)
+      if (p.x < minX) { minX = p.x }
+      if (p.y < minY) { minY = p.y }
+      if (p.x > maxX) { maxX = p.x }
+      if (p.y > maxY) { maxY = p.y }
+    })
+  })
+  if (minX === Infinity) { return null }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
 // ---------------------------------------------------------------------------
 // Rotation of the selection.
 
@@ -984,6 +1018,7 @@ export const beginGroupResize = (elements, dir, startX, startY) => {
   const measure = svgCanvas.getSelector?.()?.getSelectionBBox
   const boxes = elements.map((elem) => (measure ? measure(elem) : undefined))
   const frame = frameOf(elements, infos)
+  const geometry = drawingBoxOf(elements, boxes)
   const mgr = svgCanvas.selectorManager
   insertTemporaryTransforms(infos, true)
   gesture = {
@@ -995,6 +1030,7 @@ export const beginGroupResize = (elements, dir, startX, startY) => {
     startX,
     startY,
     frame,
+    geometry,
     screenFrame: mgr.frameBox ? { ...mgr.frameBox } : null,
     M: identity()
   }
@@ -1044,6 +1080,11 @@ export const updateGroupResize = (x, y, { alt = false, shift = false, snap } = {
     svgCanvas.selectorManager.lockFrame(box)
     svgCanvas.selectorManager.updateMultiFrame(box)
   }
+  // Dimensions of the selection, stroke excluded, as the matrix scales them.
+  if (gesture.geometry) {
+    const { width, height } = gesture.geometry
+    svgCanvas.selectorManager.showSize?.(Math.abs(width * M.a), Math.abs(height * M.d))
+  }
 }
 
 /**
@@ -1064,6 +1105,7 @@ const restoreElements = () => {
   })
   svgCanvas.selectorManager.lockFrame(null)
   svgCanvas.selectorManager.setFrameRotation?.(0)
+  svgCanvas.selectorManager.hideDimension?.()
 }
 
 /**
@@ -1148,6 +1190,8 @@ export const updateGroupRotate = (x, y, { shift = false, snap } = {}) => {
     mgr.setFrameRotation(angle, { x: center.x * zoom, y: center.y * zoom })
     mgr.updateMultiFrame(gesture.screenFrame)
   }
+  // The angle of the frame, as the angle field shows it.
+  svgCanvas.selectorManager.showAngle?.(getSelectionAngle())
   return angle
 }
 
