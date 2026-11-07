@@ -41,45 +41,21 @@
     <se-input id="elem_class" data-attr="class" size="10" label="properties.class_label" title="properties.class">
     </se-input>
   </div>
-  <!-- The angle field also turns a multi-selection about its center. -->
-  <div class="angle_panel">
-    <se-spin-input size="3" id="angle" min=-180 max=180 step=5 src="angle.svg" title="properties.angle">
-    </se-spin-input>
-  </div>
-  <div class="selected_panel">
-    <se-spin-input size="2" id="blur" min=0 max=100 step=5 src="blur.svg" title="properties.blur"></se-spin-input>
-    <se-list id="tool_position" title="tools.align_to_page" label="" width="22px" height="22px">
-      <se-list-item id="tool_posleft" value="l" title="tools.align_left" src="align_left.svg" img-height="22px">
-      </se-list-item>
-      <se-list-item id="tool_poscenter" value="c" title="tools.align_center" src="align_center.svg"
-        img-height="22px"></se-list-item>
-      <se-list-item id="tool_posright" value="r" title="tools.align_right" src="align_right.svg"
-        img-height="22px"></se-list-item>
-      <se-list-item id="tool_postop" value="t" title="tools.align_top" src="align_top.svg" img-height="22px">
-      </se-list-item>
-      <se-list-item id="tool_posmiddle" value="m" title="tools.align_middle" src="align_middle.svg"
-        img-height="22px"></se-list-item>
-      <se-list-item id="tool_posbottom" value="b" src="align_bottom.svg" title="tools.align_bottom"
-        img-height="22px"></se-list-item>
-      <se-list-item id="tool_poshoriz" value="dh" src="align_distrib_horiz.svg" title="tools.align_distrib_horiz"
-        img-height="22px"></se-list-item>
-      <se-list-item id="tool_posverti" value="dv" src="align_distrib_verti.svg" title="tools.align_distrib_verti"
-        img-height="22px"></se-list-item>
-    </se-list>
-  </div>
-  <div class="xy_panel">
-    <se-spin-input id="selected_x" data-attr="x" size="4" type="text" label="properties.x_label"
-      title="properties.pos_x">
-    </se-spin-input>
-    <se-spin-input id="selected_y" data-attr="y" size="4" type="text" label="properties.y_label"
-      title="properties.pos_y">
-    </se-spin-input>
-  </div>
   <!-- Buttons when multiple elements are selected -->
   <div class="multiselected_panel">
     <div class="tool_sep"></div>
     <se-button id="tool_clone_multi" title="tools.clone" shortcut="C" src="clone.svg"></se-button>
     <se-button id="tool_delete_multi" title="tools.del" shortcut="Delete/Backspace" src="delete.svg"></se-button>
+  </div>
+  <!-- Ctrl+Shift+] and Ctrl+Shift+[ are bound by tool_move_top and
+       tool_move_bottom, which order a multi-selection too. -->
+  <div class="multiselected_panel">
+    <div class="tool_sep"></div>
+    <se-button id="tool_move_top_multi" title="tools.move_top" shortcut="Ctrl+Shift+]"
+      shortcut-hint-only src="move_top.svg"></se-button>
+    <se-button id="tool_move_bottom_multi" title="tools.move_bottom" shortcut="Ctrl+Shift+["
+      shortcut-hint-only src="move_bottom.svg"></se-button>
+    <se-button id="tool_topath_multi" title="tools.to_path" src="to_path.svg"></se-button>
   </div>
   <div class="multiselected_panel">
     <div class="tool_sep"></div>
@@ -108,6 +84,51 @@
       </se-list-item>
     </se-select>
   </div> <!-- multiselected_panel -->
+  <!-- The angle field also turns a multi-selection about its center. -->
+  <div class="angle_panel">
+    <se-spin-input size="3" id="angle" min=-180 max=180 step=5 src="angle.svg" title="properties.angle">
+    </se-spin-input>
+  </div>
+  <div class="selected_panel">
+    <se-spin-input size="2" id="blur" min=0 max=100 step=5 src="blur.svg" title="properties.blur"></se-spin-input>
+    <se-list id="tool_position" title="tools.align_to_page" label="" width="22px" height="22px">
+      <se-list-item id="tool_posleft" value="l" title="tools.align_left" src="align_left.svg" img-height="22px">
+      </se-list-item>
+      <se-list-item id="tool_poscenter" value="c" title="tools.align_center" src="align_center.svg"
+        img-height="22px"></se-list-item>
+      <se-list-item id="tool_posright" value="r" title="tools.align_right" src="align_right.svg"
+        img-height="22px"></se-list-item>
+      <se-list-item id="tool_postop" value="t" title="tools.align_top" src="align_top.svg" img-height="22px">
+      </se-list-item>
+      <se-list-item id="tool_posmiddle" value="m" title="tools.align_middle" src="align_middle.svg"
+        img-height="22px"></se-list-item>
+      <se-list-item id="tool_posbottom" value="b" src="align_bottom.svg" title="tools.align_bottom"
+        img-height="22px"></se-list-item>
+      <se-list-item id="tool_poshoriz" value="dh" src="align_distrib_horiz.svg" title="tools.align_distrib_horiz"
+        img-height="22px"></se-list-item>
+      <se-list-item id="tool_posverti" value="dv" src="align_distrib_verti.svg" title="tools.align_distrib_verti"
+        img-height="22px"></se-list-item>
+    </se-list>
+  </div>
+  <!-- X and Y of an element, or of the box of a multi-selection. -->
+  <div class="xy_panel">
+    <se-spin-input id="selected_x" data-attr="x" size="4" type="text" label="properties.x_label"
+      title="properties.pos_x">
+    </se-spin-input>
+    <se-spin-input id="selected_y" data-attr="y" size="4" type="text" label="properties.y_label"
+      title="properties.pos_y">
+    </se-spin-input>
+  </div>
+  <!-- Width and height of the box of a multi-selection, or of a path,
+       polyline, group or text alone: changing one scales from the top left
+       corner. -->
+  <div class="wh_panel">
+    <se-spin-input id="selected_w" size="4" min=0 label="properties.w_label"
+      title="properties.selection_width"></se-spin-input>
+    <se-spin-input id="selected_h" size="4" min=0 label="properties.h_label"
+      title="properties.selection_height"></se-spin-input>
+    <se-button id="tool_ratio_lock" title="tools.ratio_lock" src="ratio_lock.svg"></se-button>
+  </div>
   <div class="rect_panel">
     <se-spin-input id="rect_width" data-attr="width" size="4" label="properties.w_label"
       title="properties.rect_width"></se-spin-input>

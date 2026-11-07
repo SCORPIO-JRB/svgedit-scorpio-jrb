@@ -95,7 +95,7 @@ const undoSize = (page) => page.evaluate(() => window.svgEditor.svgCanvas.undoMg
 const angleField = (page) => page.locator('#angle').evaluate((el) => el.value)
 
 // Types a value in the angle field, key by key. The field applies the value
-// at each key, as for a single element: "90" turns to 9 then to 90.
+// on Enter (since M4; it applied the first key at once before).
 async function typeAngle (page, value) {
   const input = page.locator('#angle').locator('#input')
   await input.click()
@@ -374,26 +374,33 @@ test.describe('Angle field and shortcuts of a multi-selection (M3)', () => {
 
   test('with different angles, the field shows the rotations applied to the selection', async ({ page }) => {
     await select(page, ['r1', 'rr'])
+    // Different angles: the field shows "Mixed" (M4), and is empty.
     expect(await angleField(page)).toBe('')
-    await typeAngle(page, 10)
-    expect(await angleOf(page, 'r1')).toBe(10)
-    expect(await angleOf(page, 'rr')).toBe(40)
-    expect(await angleField(page)).toBe('10')
-    // Typed again, the field turns the frame to the new value, not by it.
+    expect(await page.locator('#angle').evaluate((el) => el.mixed)).toBe(true)
+    // The shortcuts turn the whole selection: the field shows the rotation
+    // applied to it.
+    await page.locator('#svgcanvas').hover({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('Control+ArrowRight')
+    expect(await angleOf(page, 'r1')).toBe(1)
+    expect(await angleOf(page, 'rr')).toBe(31)
+    expect(await angleField(page)).toBe('1')
+    // Typed then, the field turns the frame to the new value, not by it.
     await typeAngle(page, 25)
     expect(await angleOf(page, 'r1')).toBe(25)
     expect(await angleOf(page, 'rr')).toBe(55)
+    expect(await angleField(page)).toBe('25')
     // The shortcuts add up in the same angle (once the field has lost the
     // focus, which keeps the arrows otherwise).
     await page.locator('#angle').locator('#input').blur()
     await page.keyboard.press('Control+ArrowRight')
     expect(await angleField(page)).toBe('26')
     // After an undo (which clears the selection), the angles differ from
-    // those recorded: empty again.
+    // those recorded: "Mixed" again.
     await page.keyboard.press('Control+z')
     await select(page, ['r1', 'rr'])
     expect(await angleOf(page, 'r1')).toBe(25)
     expect(await angleField(page)).toBe('')
+    expect(await page.locator('#angle').evaluate((el) => el.mixed)).toBe(true)
   })
 
   test('Ctrl+arrows turn a multi-selection by 1 degree, with Shift by 15', async ({ page }) => {

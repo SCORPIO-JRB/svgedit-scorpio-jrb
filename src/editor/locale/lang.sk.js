@@ -31,6 +31,11 @@ export default {
     panel: 'Bočný panel'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Zmeniť ID elementu',
     fill_color: 'Zmeniť farbu výplne',
     stroke_color: 'Zmeniť farbu obrysu',
@@ -120,6 +125,7 @@ export default {
     label: 'štítok'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Hlavné menu',
     bkgnd_color_opac: 'Zmeniť farbu a priehľadnosť pozadia',
     connector_no_arrow: 'Spojnica bez šípok',

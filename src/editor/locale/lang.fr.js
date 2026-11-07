@@ -31,6 +31,11 @@ export default {
     panel: 'Panneau'
   },
   properties: {
+    mixed: 'Mixte',
+    selection_x: "Changer l'abscisse (X) de la sélection",
+    selection_y: "Changer l'ordonnée (Y) de la sélection",
+    selection_width: 'Changer la largeur de la sélection',
+    selection_height: 'Changer la hauteur de la sélection',
     id: "Identifier l'élément",
     fill_color: 'Changer la couleur de remplissage',
     stroke_color: 'Changer la couleur du contour',
@@ -120,6 +125,7 @@ export default {
     label: 'étiquette'
   },
   tools: {
+    ratio_lock: 'Conserver les proportions',
     main_menu: 'Menu principal',
     bkgnd_color_opac: "Changer la couleur d'arrière-plan/l'opacité",
     connector_no_arrow: 'Sans flèches',

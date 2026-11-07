@@ -31,6 +31,11 @@ export default {
     panel: 'पैनल'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identify the element',
     fill_color: 'बदलें का रंग भरना',
     stroke_color: 'बदलें स्ट्रोक रंग',
@@ -120,6 +125,7 @@ export default {
     label: 'लेबल'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Main Menu',
     bkgnd_color_opac: 'पृष्ठभूमि का रंग बदल / अस्पष्टता',
     connector_no_arrow: 'No arrow',

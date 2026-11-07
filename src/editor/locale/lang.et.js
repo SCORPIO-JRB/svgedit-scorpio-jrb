@@ -31,6 +31,11 @@ export default {
     panel: 'Paneel'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identify the element',
     fill_color: 'Muuda täitke värvi',
     stroke_color: 'Muuda insult värvi',
@@ -120,6 +125,7 @@ export default {
     label: 'silt'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Main Menu',
     bkgnd_color_opac: 'Muuda tausta värvi / läbipaistmatus',
     connector_no_arrow: 'No arrow',

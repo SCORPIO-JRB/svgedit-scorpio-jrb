@@ -31,6 +31,11 @@ export default {
     panel: '面板'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: '元素ID',
     fill_color: '更改填充颜色',
     stroke_color: '线条的颜色变化',
@@ -120,6 +125,7 @@ export default {
     label: '标签'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: '主菜单',
     bkgnd_color_opac: '更改背景颜色/不透明',
     connector_no_arrow: '无箭头',

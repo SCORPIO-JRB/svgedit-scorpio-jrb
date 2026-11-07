@@ -1,6 +1,7 @@
 import SvgCanvas from '@svgedit/svgcanvas'
 import { jGraduate } from '../components/jgraduate/jQuery.jGraduate.js'
 import BottomPanelHtml from './BottomPanel.html'
+import { commonValueOf, shapesOf } from './panelValues.js'
 
 const { $id } = SvgCanvas
 
@@ -36,6 +37,16 @@ class BottomPanel {
    * @type {module}
    */
   changeStrokeWidth (e) {
+    if (e.detail?.relative) {
+      // A field showing "Mixed": each shape's own width changes.
+      const { relative } = e.detail
+      const shapes = shapesOf(this.editor.svgCanvas.getSelectedElements())
+      this.editor.svgCanvas.changeSelectedAttributeEach('stroke-width', (elem) => {
+        const current = Number.parseFloat(elem.getAttribute('stroke-width') ?? 1)
+        return Number.isFinite(current) ? relative(current) : undefined
+      }, shapes)
+      return
+    }
     let val = e.target.value
     if (
       val === 0 &&
@@ -154,6 +165,15 @@ class BottomPanel {
    * @type {module}
    */
   handleOpacity (evt) {
+    if (evt.detail?.relative) {
+      // A field showing "Mixed": each element's own opacity changes, in percent.
+      const { relative } = evt.detail
+      this.editor.svgCanvas.changeSelectedAttributeEach('opacity', (elem) => {
+        const current = Number.parseFloat(elem.getAttribute('opacity') ?? 1)
+        return Number.isFinite(current) ? relative(current * 100) / 100 : undefined
+      })
+      return
+    }
     const val = Number.parseInt(evt.currentTarget.value.split('%')[0])
     this.editor.svgCanvas.setOpacity(val / 100)
   }
@@ -232,6 +252,37 @@ class BottomPanel {
     $id('opacity').addEventListener('change', this.handleOpacity.bind(this))
     $id('fill_color').init(i18next)
     $id('stroke_color').init(i18next)
+  }
+
+  /**
+   * Shows the stroke, fill and opacity that the elements of a multi-selection
+   * share, or "Mixed".
+   * @param {Element[]} elements
+   * @returns {void}
+   */
+  showCommonValues (elements) {
+    const { svgCanvas } = this.editor
+    const shapes = shapesOf(elements)
+    const width = commonValueOf(shapes, (elem) => elem.getAttribute('stroke-width') ?? '1')
+    if (width === undefined) {
+      $id('stroke_width').mixed = true
+    } else {
+      $id('stroke_width').value = width
+    }
+    const dash = commonValueOf(shapes, (elem) => elem.getAttribute('stroke-dasharray') || 'none')
+    if (dash === undefined) {
+      $id('stroke_style').mixed = true
+    } else {
+      $id('stroke_style').value = dash
+    }
+    const opacity = commonValueOf(elements, (elem) => elem.getAttribute('opacity') ?? '1')
+    if (opacity === undefined) {
+      $id('opacity').mixed = true
+    } else {
+      $id('opacity').value = Number(opacity) * 100
+    }
+    $id('fill_color').updateMany(svgCanvas, elements)
+    $id('stroke_color').updateMany(svgCanvas, elements)
   }
 
   /**

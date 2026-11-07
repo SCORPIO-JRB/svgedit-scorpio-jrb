@@ -31,6 +31,11 @@ export default {
     panel: 'Панель'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Ідентифікатор елемента',
     fill_color: 'Зміна кольору заливки',
     stroke_color: 'Зміна кольору обводки',
@@ -120,6 +125,7 @@ export default {
     jgraduate_repeat: 'Повторення'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Головне Меню',
     bkgnd_color_opac: 'Зміна фонового кольору/прозорості',
     connector_no_arrow: 'Без стрілки',

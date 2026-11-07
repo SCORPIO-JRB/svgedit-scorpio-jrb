@@ -31,6 +31,11 @@ export default {
     panel: 'Panel lateral'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identify the element',
     fill_color: 'Cambiar el color de relleno',
     stroke_color: 'Cambiar el color del contorno',
@@ -120,6 +125,7 @@ export default {
     label: 'etiqueta'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Menú principal',
     bkgnd_color_opac: 'Cambiar color de fondo / opacidad',
     connector_no_arrow: 'Sin flecha',

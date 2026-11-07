@@ -31,6 +31,11 @@ export default {
     panel: 'Pannello'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: "Identifica l'elemento",
     fill_color: 'Cambia il colore di riempimento',
     stroke_color: 'Cambia il colore del tratto',
@@ -120,6 +125,7 @@ export default {
     label: 'etichetta'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Menù principale',
     bkgnd_color_opac: 'Cambia colore/opacità dello sfondo',
     connector_no_arrow: 'No freccia',

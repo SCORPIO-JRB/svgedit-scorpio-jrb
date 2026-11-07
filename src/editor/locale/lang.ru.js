@@ -31,6 +31,11 @@ export default {
     panel: 'Панель'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Идентификатор элемента',
     fill_color: 'Изменить цвет заливки',
     stroke_color: 'Изменить цвет обводки',
@@ -120,6 +125,7 @@ export default {
     label: 'метка'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Главное меню',
     bkgnd_color_opac: 'Изменить цвет фона или прозрачность',
     connector_no_arrow: 'Нет стрелки',

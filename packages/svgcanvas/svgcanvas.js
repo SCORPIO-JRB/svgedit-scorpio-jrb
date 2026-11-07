@@ -23,7 +23,8 @@ import { svgRootElement } from './core/svgroot.js'
 import {
   init as undoInit,
   changeSelectedAttributeNoUndoMethod,
-  changeSelectedAttributeMethod
+  changeSelectedAttributeMethod,
+  changeSelectedAttributeEachMethod
 } from './core/undo.js'
 import { init as selectionInit } from './core/selection.js'
 import { init as textActionsInit, textActionsMethod } from './core/text-actions.js'
@@ -93,6 +94,15 @@ import {
 
 import dataStorage from './core/dataStorage.js'
 
+// Shapes that convertToPath turns into a path.
+const CONVERTIBLE_TO_PATH = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
+// Style of the current shape that a click on a single shape copies from it.
+const STYLE_COPIED_ON_CLICK = [
+  ['fill', 'fill'], ['fill_opacity', 'fill-opacity'], ['stroke', 'stroke'],
+  ['stroke_opacity', 'stroke-opacity'], ['stroke_width', 'stroke-width'],
+  ['stroke_dasharray', 'stroke-dasharray'], ['stroke_linejoin', 'stroke-linejoin'],
+  ['stroke_linecap', 'stroke-linecap']
+]
 const visElems =
   'a,circle,ellipse,foreignObject,g,image,line,path,polygon,polyline,rect,svg,text,tspan,use'
 const refAttrs = [
@@ -1311,6 +1321,45 @@ class SvgCanvas {
   }
 
   /**
+   * Converts the selected shapes to paths, as one undo step. Each shape is
+   * converted as when it is clicked alone and converted: the click gives the
+   * current style its stroke and fill, which the new path takes. The other
+   * elements are left as they are and stay selected with the new paths.
+   * @function module:svgcanvas.SvgCanvas#convertSelectedToPaths
+   * @fires module:svgcanvas.SvgCanvas#event:changed
+   * @returns {SVGPathElement[]} The new paths
+   */
+  convertSelectedToPaths () {
+    const selected = this.getSelectedElements().filter(Boolean)
+    const shapes = selected.filter((elem) => CONVERTIBLE_TO_PATH.has(elem.tagName))
+    if (!shapes.length) { return [] }
+    const batch = new this.history.BatchCommand('Convert elements to Path')
+    const own = Object.prototype.hasOwnProperty.call(this, 'addCommandToHistory')
+    const add = this.addCommandToHistory
+    const paths = new Map()
+    const savedStyle = { ...this.curShape }
+    // Each conversion records its own command: they are gathered into one.
+    this.addCommandToHistory = (cmd) => batch.addSubCommand(cmd)
+    try {
+      shapes.forEach((elem) => {
+        // The style a click on the element alone copies (see mouseUp).
+        STYLE_COPIED_ON_CLICK.forEach(([key, attr]) => { this.curShape[key] = elem.getAttribute(attr) })
+        const path = this.convertToPath(elem)
+        if (path) { paths.set(elem, path) }
+      })
+    } finally {
+      if (own) { this.addCommandToHistory = add } else { delete this.addCommandToHistory }
+      Object.assign(this.curShape, savedStyle)
+    }
+    if (!batch.isEmpty()) { this.addCommandToHistory(batch) }
+    const kept = selected.map((elem) => paths.get(elem) || elem).filter((elem) => elem.parentNode)
+    this.clearSelection()
+    this.addToSelection(kept, true)
+    if (paths.size) { this.call('changed', [...paths.values()]) }
+    return [...paths.values()]
+  }
+
+  /**
    * Removes all selected elements from the DOM and adds the change to the
    * history stack. Remembers removed elements on the clipboard.
    * @function module:svgcanvas.SvgCanvas#cutSelectedElements
@@ -1368,6 +1417,7 @@ class SvgCanvas {
     this.setContext = draw.setContext
     this.changeSelectedAttributeNoUndo = changeSelectedAttributeNoUndoMethod // This function makes the changes to the elements. It does not add the change to the history stack.
     this.changeSelectedAttribute = changeSelectedAttributeMethod // Change the given/selected element and add the original value to the history stack.
+    this.changeSelectedAttributeEach = changeSelectedAttributeEachMethod // Give each element its own new value, as one undo step.
     this.setBlurNoUndo = setBlurNoUndo // Sets the `stdDeviation` blur value on the selected element without being undoable.
     this.setBlurOffsets = setBlurOffsets // Sets the `x`, `y`, `width`, `height` values of the filter element in order to make the blur not be clipped. Removes them if not neeeded.
     this.setBlur = setBlur // Adds/updates the blur filter to the selected element.

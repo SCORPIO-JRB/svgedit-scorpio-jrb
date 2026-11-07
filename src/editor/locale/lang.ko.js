@@ -31,6 +31,11 @@ export default {
     panel: '패널'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identify the element',
     fill_color: '채우기 색상 변경',
     stroke_color: '뇌졸중으로 색상 변경',
@@ -120,6 +125,7 @@ export default {
     label: '상표'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Main Menu',
     bkgnd_color_opac: '배경 색상 변경 / 투명도',
     connector_no_arrow: 'No arrow',

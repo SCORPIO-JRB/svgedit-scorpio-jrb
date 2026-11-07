@@ -73,6 +73,22 @@ for (const id of ['r1', 'r2', 'e1', 'c1', 'p1', 't1', 'grp', 'l1']) {
   SCENARIOS[`handle rotate ${id}`] = { rotate: [id] }
 }
 SCENARIOS['handle rotate (multi)'] = { rotate: ['r1', 'e1', 'r2'] }
+// Fields of the panel that existed before M4, with a value sent by their
+// change event, as the field sends it once typed.
+const FIELD_SCENARIOS = {
+  'field X, Y of a path': { select: ['p1'], fields: [['selected_x', '120'], ['selected_y', '50']] },
+  'field X of a group': { select: ['grp'], fields: [['selected_x', '400']] },
+  'field X, Y of a text': { select: ['t1'], fields: [['selected_x', '80'], ['selected_y', '90']] },
+  'field width, height of a rectangle': { select: ['r1'], fields: [['rect_width', '140'], ['rect_height', '30']] },
+  'field radius of a circle': { select: ['c1'], fields: [['circle_r', '45']] },
+  'field stroke width (single)': { select: ['r1'], fields: [['stroke_width', '5']] },
+  'field opacity (single)': { select: ['e1'], fields: [['opacity', '50']] },
+  'field angle (single)': { select: ['r2'], fields: [['angle', '45']] },
+  'field stroke width (multi)': { select: ['r1', 'e1', 'p1'], fields: [['stroke_width', '3']] },
+  'field opacity (multi)': { select: ['r1', 'e1'], fields: [['opacity', '40']] },
+  'field angle (multi, same angle)': { select: ['r1', 'e1'], fields: [['angle', '30']] }
+}
+Object.assign(SCENARIOS, FIELD_SCENARIOS)
 
 const browser = await chromium.launch(process.env.PW_CHROMIUM_PATH
   ? { executablePath: process.env.PW_CHROMIUM_PATH }
@@ -141,6 +157,15 @@ const runScenario = (page, scenario) => page.evaluate(async ({ svg, scenario }) 
       ev('mousemove', 30, 12)
       ev('mousemove', 37, 21)
       ev('mouseup', 37, 21)
+    } else if (scenario.fields) {
+      c.selectOnly(scenario.select.map((id) => document.getElementById(id)), true)
+      await frame()
+      for (const [id, value] of scenario.fields) {
+        const field = document.getElementById(id)
+        field.value = value
+        field.dispatchEvent(new CustomEvent('change'))
+        await frame()
+      }
     } else if (scenario.drag) {
       // Drag the whole selection, optionally with Alt.
       if (scenario.selectAll) { c.selectAllInCurrentLayer() }

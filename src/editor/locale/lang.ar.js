@@ -31,6 +31,11 @@ export default {
     panel: 'لوحة'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'تحديد العنصر',
     fill_color: 'تغير لون التعبئة',
     stroke_color: 'تغير لون stroke',
@@ -120,6 +125,7 @@ export default {
     label: 'تسمية'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'القائمة الرئيسية',
     bkgnd_color_opac: 'تغيير لون الخلفية / الشفافية',
     connector_no_arrow: 'لا يوجد سهم',

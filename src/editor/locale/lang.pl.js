@@ -32,6 +32,11 @@ export default {
     panel: 'Panel boczny'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identyfikator elementu',
     fill_color: 'Zmień kolor wypełnienia',
     stroke_color: 'Zmień kolor obramowania',
@@ -121,6 +126,7 @@ export default {
     label: 'etykieta'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Menu główne',
     bkgnd_color_opac: 'Zmiana koloru/przezroczystości tła',
     connector_no_arrow: 'Brak strzałek',

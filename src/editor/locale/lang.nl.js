@@ -31,6 +31,11 @@ export default {
     panel: 'Paneel'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identificeer het element',
     fill_color: 'Verander vul kleur',
     stroke_color: 'Verander lijn kleur',
@@ -120,6 +125,7 @@ export default {
     label: 'Etiket'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Hoofdmenu',
     bkgnd_color_opac: 'Verander achtergrond kleur/doorzichtigheid',
     connector_no_arrow: 'Geen pijl',

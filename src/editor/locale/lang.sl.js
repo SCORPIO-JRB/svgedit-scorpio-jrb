@@ -31,6 +31,11 @@ export default {
     panel: 'Stranska plošča'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'ID elementa',
     fill_color: 'Spremeni barvo polnila',
     stroke_color: 'Spremeni barvo orisa',
@@ -120,6 +125,7 @@ export default {
     label: 'oznaka'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Glavni meni',
     bkgnd_color_opac: 'Spremeni barvo / prosojnost',
     connector_no_arrow: 'Brez puščice',

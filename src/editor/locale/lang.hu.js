@@ -31,6 +31,11 @@ export default {
     panel: 'Oldalsó panel'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identify the element',
     fill_color: 'Change töltse color',
     stroke_color: 'Change stroke color',
@@ -120,6 +125,7 @@ export default {
     label: 'címke'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Main Menu',
     bkgnd_color_opac: 'Change background color / homályosság',
     connector_no_arrow: 'No arrow',

@@ -31,6 +31,11 @@ export default {
     panel: 'Seitenteil'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Element identifizieren',
     fill_color: 'Füllfarbe ändern',
     stroke_color: 'Linienfarbe ändern',
@@ -120,6 +125,7 @@ export default {
     label: 'Etikett'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Hauptmenü',
     bkgnd_color_opac: 'Hintergrundfarbe ändern / Opazität',
     connector_no_arrow: 'Kein Pfeil',

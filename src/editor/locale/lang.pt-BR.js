@@ -31,6 +31,11 @@ export default {
     panel: 'Painel'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identifica o elemento',
     fill_color: 'Mudar a cor de preenchimento',
     stroke_color: 'Mudar a cor do traço',
@@ -120,6 +125,7 @@ export default {
     label: 'rótulo'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Menu Principal',
     bkgnd_color_opac: 'Mudar cor/opacidade do fundo',
     connector_no_arrow: 'Sem flecha',

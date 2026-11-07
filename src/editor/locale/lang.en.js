@@ -31,6 +31,11 @@ export default {
     export_type_label: 'Select an image type for export:'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identify the element',
     fill_color: 'Change fill color',
     stroke_color: 'Change stroke color',
@@ -120,6 +125,7 @@ export default {
     jgraduate_repeat: 'Repeat'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Main Menu',
     bkgnd_color_opac: 'Change background color/opacity',
     connector_no_arrow: 'No arrow',

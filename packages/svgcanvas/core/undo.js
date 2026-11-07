@@ -348,3 +348,33 @@ export const changeSelectedAttributeMethod = (attr, val, elems) => {
     svgCanvas.undoMgr.addCommandToHistory(batchCmd)
   }
 }
+
+/**
+ * Gives each element its own new value of an attribute, as one undo step:
+ * the change a field showing "Mixed" makes with an expression such as +10.
+ * @function module:svgcanvas.SvgCanvas#changeSelectedAttributeEach
+ * @param {string} attr - Attribute name
+ * @param {(elem: Element) => (string|number|null|undefined)} valueOf - New
+ *   value of an element; null or undefined leaves it unchanged
+ * @param {Element[]} [elems] - The selected elements by default
+ * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @returns {void}
+ */
+export const changeSelectedAttributeEachMethod = (attr, valueOf, elems) => {
+  elems = (elems || svgCanvas.getSelectedElements()).filter(Boolean)
+  // Every value is computed before any write.
+  const values = elems.map((elem) => valueOf(elem))
+  const changed = elems.filter((elem, i) => values[i] !== undefined && values[i] !== null)
+  if (!changed.length) { return }
+  svgCanvas.undoMgr.beginUndoableChange(attr, changed)
+  elems.forEach((elem, i) => {
+    if (values[i] !== undefined && values[i] !== null) {
+      changeSelectedAttributeNoUndoMethod(attr, values[i], [elem])
+    }
+  })
+  const batchCmd = svgCanvas.undoMgr.finishUndoableChange()
+  if (!batchCmd.isEmpty()) {
+    svgCanvas.undoMgr.addCommandToHistory(batchCmd)
+    svgCanvas.call('changed', changed)
+  }
+}

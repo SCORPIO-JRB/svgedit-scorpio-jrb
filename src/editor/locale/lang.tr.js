@@ -31,6 +31,11 @@ export default {
     export_type_label: 'Dışa aktarma için resim seçin:'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Öge kimlik numarası',
     fill_color: 'Dolgu rengini değiştir',
     stroke_color: 'Çizgi rengini değiştir',
@@ -120,6 +125,7 @@ export default {
     jgraduate_repeat: 'Tekrarla'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Ana Menu',
     bkgnd_color_opac: 'Arka plan rengini/saydamlığını ayarla',
     connector_no_arrow: 'Düz bağlantı',

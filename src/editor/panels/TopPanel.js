@@ -3,8 +3,22 @@
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import topPanelHTML from './TopPanel.html'
+import { commonValueOf, roundForField } from './panelValues.js'
 
 const { $qa, $id, $click, isValidUnit, getTypeMap, convertUnit } = SvgCanvas
+
+// Elements alone whose box has W and H fields: they are scaled from its top
+// left corner, as by a grip. A text always keeps its proportions.
+const SIZED_ALONE = new Set(['path', 'polyline', 'g', 'text'])
+// Shapes that can be converted to a path.
+const CONVERTIBLE = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
+// Text fields of the panel, the attribute each one shows and its default.
+const TEXT_FIELDS = [
+  ['font_size', 'font-size', null],
+  ['tool_letter_spacing', 'letter-spacing', 0],
+  ['tool_word_spacing', 'word-spacing', 0],
+  ['tool_text_length', 'textLength', 0]
+]
 
 /*
  * register actions for left panel
@@ -241,6 +255,7 @@ class TopPanel {
     this.hideTool('use_panel')
     this.hideTool('a_panel')
     this.hideTool('xy_panel')
+    this.hideTool('wh_panel')
     if (elem) {
       const elname = elem.nodeName
 
@@ -302,6 +317,10 @@ class TopPanel {
           updateValue('selected_y', y)
 
           this.displayTool('xy_panel')
+        }
+        // W and H of a path, a group or a text alone.
+        if (SIZED_ALONE.has(elname)) {
+          this.showSelectionSize(this.editor.svgCanvas.getSelectionBox?.([elem]), elname === 'text')
         }
 
         // Elements in this array cannot be converted to a path
@@ -462,9 +481,9 @@ class TopPanel {
       )
 
       // if (elem)
-    } else if (this.multiselected) {
+    } else if (this.multiselected && this.editor.svgCanvas.getSelectedElements().filter(Boolean).length > 1) {
+      const selElems = this.editor.svgCanvas.getSelectedElements().filter(Boolean)
       // Check if all selected elements are 'text' nodes, if yes enable text panel
-      const selElems = this.editor.svgCanvas.getSelectedElements()
       if (selElems.every(elem => elem.tagName === 'text')) {
         this.displayTool('text_panel')
       }
@@ -474,6 +493,16 @@ class TopPanel {
       // about its center.
       this.displayTool('angle_panel')
       this.updateSelectionAngle()
+      // X, Y, W and H of the box of the whole selection, and the values
+      // the elements share.
+      this.displayTool('xy_panel')
+      this.displayTool('wh_panel')
+      this.scheduleSelectionFields()
+      if (selElems.some(elem => CONVERTIBLE.has(elem.tagName))) {
+        this.displayTool('tool_topath_multi')
+      } else {
+        this.hideTool('tool_topath_multi')
+      }
       menuItems.setAttribute('enablemenuitems', '#group')
       menuItems.setAttribute('disablemenuitems', '#ungroup')
     } else {
@@ -582,24 +611,258 @@ class TopPanel {
    * @type {module}
    */
   changeFontSize (e) {
+    if (e.detail?.relative) {
+      this.changeEachAttribute(e.detail.relative, 'font-size', this.selectedTexts(), null)
+      return
+    }
     this.editor.svgCanvas.setFontSize(e.target.value)
+  }
+
+  /**
+   * @returns {Element[]} The selected texts
+   */
+  selectedTexts () {
+    return this.editor.svgCanvas.getSelectedElements().filter(el => el?.tagName === 'text')
   }
 
   /**
    * Shows in the angle field the angle of the frame of a multi-selection: the
    * angle its elements share, otherwise the rotations applied since it was
-   * selected, or nothing.
+   * selected, or "Mixed".
    * @returns {void}
    */
   updateSelectionAngle () {
     const angle = this.editor.svgCanvas.getSelectionAngle?.()
-    $id('angle').value = angle ?? ''
+    if (angle === null || angle === undefined) {
+      $id('angle').mixed = true
+    } else {
+      $id('angle').value = angle
+    }
+  }
+
+  /**
+   * Value of a length shown in a field: in the document's unit, rounded.
+   * @param {number} px
+   * @returns {number}
+   */
+  toField (px) {
+    return roundForField(this.inUnit(px))
+  }
+
+  /**
+   * Length in the document's unit, not rounded.
+   * @param {number} px
+   * @returns {number}
+   */
+  inUnit (px) {
+    const { baseUnit } = this.editor.configObj.curConfig
+    return baseUnit !== 'px' ? px / getTypeMap()[baseUnit] : px
+  }
+
+  /**
+   * Length typed in a field, in the drawing's units.
+   * @param {string|number} value - In the document's unit
+   * @returns {number}
+   */
+  fromField (value) {
+    const { baseUnit } = this.editor.configObj.curConfig
+    const number = Number(value)
+    return baseUnit !== 'px' ? number * getTypeMap()[baseUnit] : number
+  }
+
+  /**
+   * Fills the fields of a multi-selection (X, Y, W and H of its box, and
+   * the values its elements share) once the next frame is drawn and the
+   * browser is idle, once for all the changes of this frame. The boxes of
+   * the elements are then read from a layout already done: read between the
+   * writes of a selection change, they would force a layout of the whole
+   * drawing (a rectangle selection changes the selection at each move). The
+   * fields never delay what the canvas shows.
+   * @returns {void}
+   */
+  scheduleSelectionFields () {
+    if (this.selectionFieldsPending) { return }
+    this.selectionFieldsPending = true
+    const run = () => {
+      this.selectionFieldsPending = false
+      this.showSelectionFields()
+    }
+    requestAnimationFrame(() => {
+      if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(run, { timeout: 100 })
+      } else {
+        setTimeout(run, 0)
+      }
+    })
+  }
+
+  /**
+   * Fills the fields of a multi-selection now (see scheduleSelectionFields).
+   * @returns {void}
+   */
+  showSelectionFields () {
+    if (!this.multiselected) { return }
+    const elements = this.editor.svgCanvas.getSelectedElements().filter(Boolean)
+    if (elements.length < 2) { return }
+    // Read once for the four fields.
+    const box = this.editor.svgCanvas.getSelectionBox?.(elements)
+    this.showSelectionPosition(box)
+    this.showSelectionSize(box, false)
+    this.editor.bottomPanel.showCommonValues(elements)
+    if (elements.every(elem => elem.tagName === 'text')) {
+      this.showCommonTextValues(elements)
+    }
+  }
+
+  /**
+   * Shows X and Y of the box of a multi-selection, stroke excluded.
+   * @param {module:utilities.BBoxObject|null} box - From getSelectionBox
+   * @returns {void}
+   */
+  showSelectionPosition (box) {
+    if (!box) { return }
+    this.shownPosition = { x: String(this.toField(box.x)), y: String(this.toField(box.y)) }
+    $id('selected_x').value = this.shownPosition.x
+    $id('selected_y').value = this.shownPosition.y
+    // Expressions such as +10 apply to the exact values.
+    $id('selected_x').preciseValue = this.inUnit(box.x)
+    $id('selected_y').preciseValue = this.inUnit(box.y)
+    this.displayTool('xy_panel')
+  }
+
+  /**
+   * Shows W and H of the box of a multi-selection, or of a path, a group or
+   * a text alone, and the proportion lock.
+   * @param {module:utilities.BBoxObject|null} box - From getSelectionBox
+   * @param {boolean} ratioForced - The proportions are always kept (a text)
+   * @returns {void}
+   */
+  showSelectionSize (box, ratioForced) {
+    if (!box) { return }
+    this.shownSize = { w: String(this.toField(box.width)), h: String(this.toField(box.height)) }
+    $id('selected_w').value = this.shownSize.w
+    $id('selected_h').value = this.shownSize.h
+    $id('selected_w').preciseValue = this.inUnit(box.width)
+    $id('selected_h').preciseValue = this.inUnit(box.height)
+    this.ratioForced = ratioForced
+    const lock = $id('tool_ratio_lock')
+    lock.pressed = ratioForced || Boolean(this.keepRatio)
+    lock.disabled = ratioForced
+    this.displayTool('wh_panel')
+  }
+
+  /**
+   * Shows the values the selected texts share, or "Mixed".
+   * @param {Element[]} texts
+   * @returns {void}
+   */
+  showCommonTextValues (texts) {
+    TEXT_FIELDS.forEach(([id, attr, fallback]) => {
+      const value = commonValueOf(texts, (text) => text.getAttribute(attr) ?? fallback)
+      if (value === undefined) {
+        $id(id).mixed = true
+      } else {
+        $id(id).value = value ?? ''
+      }
+    })
+    const family = commonValueOf(texts, (text) => text.getAttribute('font-family'))
+    if (family === undefined) {
+      $id('tool_font_family').mixed = true
+    } else {
+      $id('tool_font_family').value = family
+    }
+    const adjust = commonValueOf(texts, (text) => text.getAttribute('lengthAdjust') ?? '')
+    if (adjust === undefined) {
+      $id('tool_length_adjust').mixed = true
+    } else {
+      $id('tool_length_adjust').value = adjust
+    }
+    $id('tool_bold').pressed = this.editor.svgCanvas.getBold()
+    $id('tool_italic').pressed = this.editor.svgCanvas.getItalic()
+    ;['underline', 'line-through', 'overline'].forEach((value) => {
+      $id(`tool_text_decoration_${value.replace('-', '')}`).pressed =
+        this.editor.svgCanvas.hasTextDecoration(value)
+    })
+  }
+
+  /**
+   * Moves a multi-selection by its X or Y field; an element alone keeps the
+   * field's own meaning.
+   * @param {Event} e
+   * @returns {void}
+   */
+  changeSelectionPosition (e) {
+    if (!this.multiselected) {
+      this.attrChanger(e)
+      return
+    }
+    const axis = e.target.id === 'selected_x' ? 'x' : 'y'
+    // The value shown, sent back unchanged, must not move the selection by
+    // its rounding.
+    if (e.target.value === this.shownPosition?.[axis]) { return }
+    const value = this.fromField(e.target.value)
+    const moved = axis === 'x'
+      ? this.editor.svgCanvas.moveSelectionTo(value, null)
+      : this.editor.svgCanvas.moveSelectionTo(null, value)
+    if (!moved) { this.updateContextPanel() }
+  }
+
+  /**
+   * Scales the selection from the top left corner of its box by its W or H
+   * field, keeping the proportions when the lock is on or for a text.
+   * @param {Event} e
+   * @returns {void}
+   */
+  changeSelectionSize (e) {
+    const axis = e.target.id === 'selected_w' ? 'w' : 'h'
+    if (e.target.value === this.shownSize?.[axis]) { return }
+    const value = this.fromField(e.target.value)
+    const keepRatio = this.ratioForced || Boolean(this.keepRatio)
+    const resized = axis === 'w'
+      ? this.editor.svgCanvas.resizeSelectionTo(value, null, { keepRatio })
+      : this.editor.svgCanvas.resizeSelectionTo(null, value, { keepRatio })
+    if (!resized) { this.updateContextPanel() }
+  }
+
+  /**
+   * Turns the proportion lock of the W and H fields on or off.
+   * @returns {void}
+   */
+  clickRatioLock () {
+    if (this.ratioForced) { return }
+    this.keepRatio = !this.keepRatio
+    $id('tool_ratio_lock').pressed = this.keepRatio
+  }
+
+  /**
+   * Applies a change typed in a field showing "Mixed" to each selected
+   * element's own value of an attribute.
+   * @param {(value: number) => number} relative - From the field's change event
+   * @param {string} attr
+   * @param {Element[]} elements
+   * @param {number|null} fallback - Value of an element without the attribute;
+   *   null leaves such an element unchanged
+   * @returns {void}
+   */
+  changeEachAttribute (relative, attr, elements, fallback) {
+    this.editor.svgCanvas.changeSelectedAttributeEach(attr, (elem) => {
+      const current = Number.parseFloat(elem.getAttribute(attr) ?? fallback)
+      return Number.isFinite(current) ? relative(current) : undefined
+    }, elements)
   }
 
   /**
    * @type {module}
    */
   changeRotationAngle (e) {
+    const { relative, wasMixed } = e.detail || {}
+    if (this.multiselected && (relative || wasMixed)) {
+      // The elements' angles differ: each element gets the value, or the
+      // expression applied to its own angle, about its own center.
+      const value = Number(e.target.value)
+      this.editor.svgCanvas.rotateEachSelectedElement(relative || (() => value))
+      return
+    }
     this.editor.svgCanvas.setRotationAngle(e.target.value)
     if (Number.parseInt(e.target.value) === 0) {
       $id('tool_reorient').classList.add('disabled')
@@ -703,6 +966,8 @@ class TopPanel {
   convertToPath () {
     if (this.editor.selectedElement) {
       this.editor.svgCanvas.convertToPath()
+    } else if (this.multiselected) {
+      this.editor.svgCanvas.convertSelectedToPaths()
     }
   }
 
@@ -896,6 +1161,10 @@ class TopPanel {
    * @type {module}
    */
   changeLetterSpacing (e) {
+    if (e.detail?.relative) {
+      this.changeEachAttribute(e.detail.relative, 'letter-spacing', this.selectedTexts(), 0)
+      return
+    }
     this.editor.svgCanvas.setLetterSpacing(e.target.value)
   }
 
@@ -903,6 +1172,10 @@ class TopPanel {
    * @type {module}
    */
   changeWordSpacing (e) {
+    if (e.detail?.relative) {
+      this.changeEachAttribute(e.detail.relative, 'word-spacing', this.selectedTexts(), 0)
+      return
+    }
     this.editor.svgCanvas.setWordSpacing(e.target.value)
   }
 
@@ -910,6 +1183,10 @@ class TopPanel {
    * @type {module}
    */
   changeTextLength (e) {
+    if (e.detail?.relative) {
+      this.changeEachAttribute(e.detail.relative, 'textLength', this.selectedTexts(), 0)
+      return
+    }
     this.editor.svgCanvas.setTextLength(e.target.value)
   }
 
@@ -1027,7 +1304,17 @@ class TopPanel {
     $click($id('tool_delete_multi'), this.deleteSelected.bind(this))
     $click($id('tool_move_top'), this.moveToTopSelected.bind(this))
     $click($id('tool_move_bottom'), this.moveToBottomSelected.bind(this))
+    $click($id('tool_move_top_multi'), this.moveToTopSelected.bind(this))
+    $click($id('tool_move_bottom_multi'), this.moveToBottomSelected.bind(this))
     $click($id('tool_topath'), this.convertToPath.bind(this))
+    $click($id('tool_topath_multi'), this.convertToPath.bind(this))
+    $click($id('tool_ratio_lock'), this.clickRatioLock.bind(this))
+    ;['selected_x', 'selected_y'].forEach(id =>
+      $id(id).addEventListener('change', this.changeSelectionPosition.bind(this))
+    )
+    ;['selected_w', 'selected_h'].forEach(id =>
+      $id(id).addEventListener('change', this.changeSelectionSize.bind(this))
+    )
     $click($id('tool_make_link'), this.makeHyperlink.bind(this))
     $click($id('tool_make_link_multi'), this.makeHyperlink.bind(this))
     $click($id('tool_reorient'), this.reorientPath.bind(this))
@@ -1106,8 +1393,6 @@ class TopPanel {
       'ellipse_cy',
       'ellipse_rx',
       'ellipse_ry',
-      'selected_x',
-      'selected_y',
       'rect_width',
       'rect_height',
       'line_x1',

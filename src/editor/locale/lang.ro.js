@@ -31,6 +31,11 @@ export default {
     panel: 'Panou'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identificare element',
     fill_color: 'Schimbarea culorii de umplere',
     stroke_color: 'Schimbarea culorii de contur',
@@ -120,6 +125,7 @@ export default {
     label: 'etichetă'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Menu Principal',
     bkgnd_color_opac: 'Schimbare culoare de fundal / opacitate',
     connector_no_arrow: 'Fără săgeată',

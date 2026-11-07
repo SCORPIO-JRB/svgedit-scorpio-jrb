@@ -48,6 +48,10 @@ export const init = (canvas) => {
   svgCanvas.setSelectionAngle = setSelectionAngle
   svgCanvas.getSelectionAngle = getSelectionAngle
   svgCanvas.getCommonRotationAngle = getCommonRotationAngle
+  svgCanvas.getSelectionBox = getSelectionBox
+  svgCanvas.moveSelectionTo = moveSelectionTo
+  svgCanvas.resizeSelectionTo = resizeSelectionTo
+  svgCanvas.rotateEachSelectedElement = rotateEachSelectedElement
 }
 
 // ---------------------------------------------------------------------------
@@ -654,6 +658,114 @@ export const drawingBoxOf = (elements, boxes = []) => {
   })
   if (minX === Infinity) { return null }
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+// ---------------------------------------------------------------------------
+// Box of the selection, as the panel's X, Y, W and H fields describe it.
+
+/**
+ * Box of the selection in the drawing's coordinates, stroke excluded: the
+ * box that the X, Y, W and H fields of the panel describe, and that the
+ * dimension label shows during a gesture. For an unrotated rectangle alone,
+ * these are its x, y, width and height.
+ * @function module:svgcanvas.SvgCanvas#getSelectionBox
+ * @param {Element[]} [elements] - The selected elements by default
+ * @returns {module:utilities.BBoxObject|null}
+ */
+export const getSelectionBox = (elements) =>
+  drawingBoxOf((elements || svgCanvas.getSelectedElements()).filter(Boolean))
+
+/**
+ * Moves the selection so that its box (see getSelectionBox) starts at x, y,
+ * as one undo step, the way the arrow keys move it.
+ * @function module:svgcanvas.SvgCanvas#moveSelectionTo
+ * @param {number|null} x - Left of the box; null keeps it
+ * @param {number|null} y - Top of the box; null keeps it
+ * @returns {module:history.BatchCommand|null}
+ */
+export const moveSelectionTo = (x, y) => {
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  const box = drawingBoxOf(elements)
+  if (!box) { return null }
+  const dx = Number.isFinite(x) ? x - box.x : 0
+  const dy = Number.isFinite(y) ? y - box.y : 0
+  if (Math.abs(dx) < EPSILON && Math.abs(dy) < EPSILON) { return null }
+  // Distances given per element are in the drawing's units, not divided by
+  // the zoom.
+  const count = svgCanvas.getSelectedElements().length
+  return svgCanvas.moveSelectedElements(Array(count).fill(dx), Array(count).fill(dy), true) || null
+}
+
+/**
+ * Scales the selection so that its box (see getSelectionBox) gets a width or
+ * a height, from its top left corner, as one undo step: the whole selection
+ * behaves as a single object, with the rules of each element type, as when
+ * it is resized by a grip.
+ * @function module:svgcanvas.SvgCanvas#resizeSelectionTo
+ * @param {number|null} width - Null keeps the width, or scales it with the
+ *   height when the ratio is kept
+ * @param {number|null} height
+ * @param {PlainObject} [options]
+ * @param {boolean} [options.keepRatio=false] - Scales both sides alike
+ * @returns {module:history.BatchCommand|null}
+ */
+export const resizeSelectionTo = (width, height, { keepRatio = false } = {}) => {
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  const box = drawingBoxOf(elements)
+  if (!box) { return null }
+  const factor = (size, current) => {
+    if (!Number.isFinite(size)) { return null }
+    return current > EPSILON ? size / current : NaN
+  }
+  let sx = factor(width, box.width)
+  let sy = factor(height, box.height)
+  if (keepRatio) {
+    if (sx === null) { sx = sy } else { sy = sx }
+  }
+  sx = sx ?? 1
+  sy = sy ?? 1
+  if (!(sx > 0) || !(sy > 0)) { return null }
+  return scaleSelectedElements(sx, sy, box.x, box.y)
+}
+
+/**
+ * Gives each selected element its own new angle, about its own center, as
+ * one undo step: the SVG of each element is the one setRotationAngle writes
+ * for it alone. Used by the angle field when the elements' angles differ.
+ * @function module:svgcanvas.SvgCanvas#rotateEachSelectedElement
+ * @param {(angle: number, elem: Element) => number} angleOf - New angle of an
+ *   element from its current angle
+ * @param {PlainObject} [options]
+ * @param {boolean} [options.addToHistory=true]
+ * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @returns {module:history.BatchCommand|null}
+ */
+export const rotateEachSelectedElement = (angleOf, { addToHistory = true } = {}) => {
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  if (!elements.length) { return null }
+  // Every box is read before any write.
+  const infos = elements.map(describeRotation)
+  const boxes = new Map(infos.filter((info) => info.box).map((info) => [info.elem, info.box]))
+  const batch = new BatchCommand('Rotate Elements')
+  withBBoxCache(boxes, () => {
+    infos.forEach(({ elem, angle }) => {
+      const target = angleOf(angle, elem)
+      if (!Number.isFinite(target)) { return }
+      // Each element is written once, and no other element reads its box.
+      const oldValues = rotateElementTo(elem, target)
+      if (!oldValues) { return }
+      recalculateDimensions(elem)
+      if (hasGeometryChanged(elem, oldValues)) {
+        batch.addSubCommand(new ChangeElementCommand(elem, oldValues, 'transform'))
+      }
+    })
+  })
+  frameAngle = null
+  if (batch.isEmpty()) { return null }
+  if (addToHistory) { svgCanvas.addCommandToHistory(batch) }
+  svgCanvas.call('changed', elements)
+  resizeSelectorsOf(elements)
+  return batch
 }
 
 // ---------------------------------------------------------------------------

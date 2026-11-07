@@ -31,6 +31,11 @@ export default {
     panel: 'パネル'
   },
   properties: {
+    mixed: 'Mixed',
+    selection_x: 'Change the X coordinate of the selection',
+    selection_y: 'Change the Y coordinate of the selection',
+    selection_width: 'Change the width of the selection',
+    selection_height: 'Change the height of the selection',
     id: 'Identify the element',
     fill_color: '塗りの色を変更',
     stroke_color: '線の色を変更',
@@ -120,6 +125,7 @@ export default {
     label: 'ラベル'
   },
   tools: {
+    ratio_lock: 'Keep the proportions',
     main_menu: 'Main Menu',
     bkgnd_color_opac: '背景色/不透明度の変更',
     connector_no_arrow: 'No arrow',
