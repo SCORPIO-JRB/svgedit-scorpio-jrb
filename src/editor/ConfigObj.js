@@ -179,6 +179,9 @@ export default class ConfigObj {
       baseUnit: 'px',
       snappingStep: 10,
       showRulers: true,
+      // The editor zooms with Ctrl/Cmd + wheel and pinch; Shift + wheel scrolls
+      // horizontally instead of zooming (canvas default: true).
+      shiftWheelZoom: false,
       // SOURCE OUTPUT BEHAVIOR
       dynamicOutput: false,
       // URL BEHAVIOR CONFIGURATION

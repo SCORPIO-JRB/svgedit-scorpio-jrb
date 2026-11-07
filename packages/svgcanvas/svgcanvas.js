@@ -167,6 +167,8 @@ class SvgCanvas {
     this.curConfig = {
       // Default configuration options
       show_outside_canvas: true,
+      // Shift + wheel zooms around the cursor (an embedding editor may handle zoom itself)
+      shiftWheelZoom: true,
       selectNew: true,
       dimensions: [640, 480]
     }

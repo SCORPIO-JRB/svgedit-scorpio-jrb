@@ -367,15 +367,19 @@ class EditorStartup {
       }
     })
 
-    // Add a new shortcut for zoom in/out : Alt + Wheels
+    // Zoom with Ctrl/Cmd + wheel and with a trackpad pinch (which browsers send
+    // as a wheel event with ctrlKey), anchored on the cursor and proportional
+    // to the gesture. Alt + wheel is kept as an alias. A plain wheel scrolls,
+    // and Shift + wheel scrolls horizontally (native behavior).
     this.workarea.addEventListener('wheel', (e) => {
-      if (e.altKey) {
-        e.preventDefault()
-        this.svgCanvas.setZoom(e.deltaY > 0 ? this.svgCanvas.getZoom() * 0.9 : this.svgCanvas.getZoom() * 1.1, true)
-        this.updateCanvas(true)
-        $id('zoom').value = (this.svgCanvas.getZoom() * 100).toFixed(1)
-      }
-    })
+      if (!(e.ctrlKey || e.metaKey || e.altKey)) { return }
+      e.preventDefault()
+      const unit = e.deltaMode === 1 ? 33 : (e.deltaMode === 2 ? 400 : 1)
+      const delta = e.deltaY * unit
+      // Small pixel deltas come from trackpads: give them more weight per unit.
+      const sensitivity = (e.deltaMode === 0 && Math.abs(e.deltaY) < 40) ? 0.01 : 0.002
+      this.zoomAt(this.svgCanvas.getZoom() * Math.exp(-delta * sensitivity), e.clientX, e.clientY)
+    }, { passive: false })
 
     document.addEventListener('keyup', (e) => {
       if (e.target.nodeName !== 'BODY') return

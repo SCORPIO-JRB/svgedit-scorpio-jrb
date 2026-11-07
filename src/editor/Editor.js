@@ -17,6 +17,7 @@ import './components/index.js'
 import './dialogs/index.js'
 
 import { isMac } from '@svgedit/svgcanvas/common/browser'
+import { normalizeShortcut, eventShortcut } from './shortcuts.js'
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import ConfigObj from './ConfigObj.js'
@@ -27,6 +28,11 @@ import BottomPanel from './panels/BottomPanel.js'
 import LayersPanel from './panels/LayersPanel.js'
 import MainMenu from './MainMenu.js'
 import { getParentsUntil } from '@svgedit/svgcanvas/common/util.js'
+
+// Zoom bounds and ladder shared by every zoom gesture (1 = 100 %).
+const ZOOM_MIN = 0.01
+const ZOOM_MAX = 10
+const ZOOM_STEPS = [0.01, 0.02, 0.03, 0.06, 0.12, 0.25, 0.5, 1, 2, 4, 8, 10]
 
 const { $id, $click, decode64 } = SvgCanvas
 
@@ -115,13 +121,20 @@ class Editor extends EditorStartup {
       {
         key: ['ctrl+shift+arrowleft', true],
         fn: () => {
-          this.rotateSelected(0, 5)
+          this.rotateSelected(0, 15)
         }
       },
       {
-        key: 'ctrl+shift+arrowright',
+        key: ['ctrl+shift+arrowright', true],
         fn: () => {
-          this.rotateSelected(1, 5)
+          this.rotateSelected(1, 15)
+        }
+      },
+      {
+        // Redo: Ctrl+Y (tool_redo button) or the standard Mod+Shift+Z
+        key: ['ctrl+shift+z', true],
+        fn: () => {
+          this.topPanel.clickRedo()
         }
       },
       {
@@ -148,6 +161,38 @@ class Editor extends EditorStartup {
           this.svgCanvas.cycleElement(1)
         }
       },
+      // View shortcuts: Shift+0 100 %, Shift+1 fit content, Shift+2 fit
+      // selection, Shift+3 fit page; Mod+plus / Mod+minus step the zoom.
+      {
+        key: ['shift+0', true],
+        fn: () => {
+          this.zoomAt(1)
+        }
+      },
+      {
+        key: ['shift+1', true],
+        fn: () => {
+          this.zoomChanged(window, 'content')
+        }
+      },
+      {
+        key: ['shift+2', true],
+        fn: () => {
+          if (this.selectedElement || this.multiselected) {
+            this.zoomChanged(window, 'selection')
+          }
+        }
+      },
+      {
+        key: ['shift+3', true],
+        fn: () => {
+          this.zoomChanged(window, 'canvas')
+        }
+      },
+      { key: ['ctrl+=', true], fn: () => { this.zoomStep(1) } },
+      { key: ['ctrl++', true], fn: () => { this.zoomStep(1) } },
+      { key: ['ctrl+shift++', true], fn: () => { this.zoomStep(1) } },
+      { key: ['ctrl+-', true], fn: () => { this.zoomStep(-1) } },
       {
         key: [modKey + 'arrowup', true],
         fn: () => {
@@ -421,7 +466,7 @@ class Editor extends EditorStartup {
         keyval = String(keyval)
         const { fn } = shortcut
         keyval.split('/').forEach((key) => {
-          keyHandler[key] = { fn, pd }
+          keyHandler[normalizeShortcut(key)] = { fn, pd }
         })
       }
       return true
@@ -431,9 +476,7 @@ class Editor extends EditorStartup {
       // only track keyboard shortcuts for the body containing the SVG-Editor
       if (e.target.nodeName !== 'BODY') return
       // normalize key
-      const key = `${e.altKey ? 'alt+' : ''}${e.shiftKey ? 'shift+' : ''}${
-        e.metaKey ? 'meta+' : ''
-      }${e.ctrlKey ? 'ctrl+' : ''}${e.key.toLowerCase()}`
+      const key = eventShortcut(e)
       // return if no shortcut defined for this key
       if (!keyHandler[key]) return
       // launch associated handler and preventDefault if necessary
@@ -980,12 +1023,77 @@ class Editor extends EditorStartup {
   }
 
   /**
+   * Zooms to a level, keeping the document point under a screen position
+   * fixed. Every zoom gesture (wheel, pinch, keyboard steps) goes through it,
+   * with the same bounds.
+   * @param {Float} level - Requested zoom (1 = 100 %), clamped to the bounds
+   * @param {Float} [clientX] - Anchor, in client coordinates; defaults to the view center
+   * @param {Float} [clientY]
+   * @returns {void}
+   */
+  zoomAt (level, clientX, clientY) {
+    const zoom = this.svgCanvas.getZoom()
+    const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, level))
+    if (!Number.isFinite(newZoom) || Math.abs(newZoom - zoom) < 1e-9) { return }
+
+    const { workarea } = this
+    const area = workarea.getBoundingClientRect()
+    const anchorX = clientX ?? area.left + workarea.clientWidth / 2
+    const anchorY = clientY ?? area.top + workarea.clientHeight / 2
+    // Document point under the anchor, through the first layer's screen CTM
+    // (svgcontent itself carries an x/y offset).
+    const layer = this.svgCanvas.getSvgContent().querySelector('g')
+    const ctm = layer?.getScreenCTM?.()
+    this.svgCanvas.setZoom(newZoom)
+    if (!ctm) {
+      this.updateCanvas(true)
+    } else {
+      const inverse = ctm.inverse()
+      const point = {
+        x: inverse.a * anchorX + inverse.c * anchorY + inverse.e,
+        y: inverse.b * anchorX + inverse.d * anchorY + inverse.f
+      }
+      const width = parseFloat(getComputedStyle(workarea, null).width)
+      const height = parseFloat(getComputedStyle(workarea, null).height)
+      this.updateCanvas(false, {
+        x: point.x * newZoom - (anchorX - area.left) + width / 2,
+        y: point.y * newZoom - (anchorY - area.top) + height / 2
+      })
+      // Correct any residual offset (rulers, borders) by measuring where the
+      // point landed.
+      const after = layer.getScreenCTM()
+      if (after) {
+        workarea.scrollLeft += (after.a * point.x + after.c * point.y + after.e) - anchorX
+        workarea.scrollTop += (after.b * point.x + after.d * point.y + after.f) - anchorY
+      }
+    }
+    $id('zoom').syncValue((newZoom * 100).toFixed(1))
+    this.zoomDone()
+    this.svgCanvas.runExtensions('zoomChanged', newZoom)
+  }
+
+  /**
+   * Zooms to the next or previous step of the zoom ladder, around the view
+   * center.
+   * @param {1|-1} direction
+   * @returns {void}
+   */
+  zoomStep (direction) {
+    const zoom = this.svgCanvas.getZoom()
+    const next = direction > 0
+      ? ZOOM_STEPS.find((step) => step > zoom * 1.001)
+      : [...ZOOM_STEPS].reverse().find((step) => step < zoom * 0.999)
+    this.zoomAt(next ?? (direction > 0 ? ZOOM_MAX : ZOOM_MIN))
+  }
+
+  /**
    * @param {Float} multiplier
    * @returns {void}
    */
   zoomImage (multiplier) {
     const resolution = this.svgCanvas.getResolution()
     multiplier = multiplier ? resolution.zoom * multiplier : 1
+    multiplier = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, multiplier))
     // setResolution(res.w * multiplier, res.h * multiplier, true);
     $id('zoom').syncValue((multiplier * 100).toFixed(1))
     this.svgCanvas.setCurrentZoom(multiplier)

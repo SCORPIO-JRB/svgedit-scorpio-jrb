@@ -1455,7 +1455,7 @@ const mouseDownEvent = (evt) => {
 const DOMMouseScrollEvent = (e) => {
   const zoom = svgCanvas.getZoom()
   const { $id } = svgCanvas
-  if (!e.shiftKey) { return }
+  if (!e.shiftKey || svgCanvas.getCurConfig().shiftWheelZoom === false) { return }
 
   e.preventDefault()
 
