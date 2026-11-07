@@ -1,0 +1,11 @@
+{
+  "2000": {
+    "selectAll": 150,
+    "dragMove": 100,
+    "dragRelease": 200,
+    "undo": 50,
+    "redo": 50,
+    "zoom": 100,
+    "marquee": 100
+  }
+}
