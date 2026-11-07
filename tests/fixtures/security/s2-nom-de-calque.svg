@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
+  <!-- Test S2 : le nom du calque contient du HTML. Il doit s'afficher comme du texte, sans boîte d'alerte. -->
+  <g class="layer">
+    <title>Calque &lt;img src=x onerror="alert('Faille S2 : le nom du calque est execute')"&gt;</title>
+    <g id="groupe_test">
+      <rect x="120" y="120" width="200" height="120" fill="#3a7" stroke="#123" stroke-width="4"/>
+    </g>
+  </g>
+</svg>
