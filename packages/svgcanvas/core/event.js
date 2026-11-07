@@ -31,6 +31,10 @@ let moveSelectionThresholdReached = false
 // Alt was held when the drag started on a selected element: duplicate the
 // selection once the drag really starts, and move the copies.
 let duplicateOnDrag = false
+// Insertion of the Alt+drag copies, recorded with their move as one undo step
+// when the mouse is released, and the selection it replaced.
+let pendingCloneCmd = null
+let selectionBeforeClone = null
 // Elements that stay selected during a Shift+drag rubber band.
 let rubberBandBase = new Set()
 
@@ -47,6 +51,7 @@ export const init = (canvas) => {
   svgCanvas.mouseUpEvent = mouseUpEvent
   svgCanvas.mouseOutEvent = mouseOutEvent
   svgCanvas.DOMMouseScrollEvent = DOMMouseScrollEvent
+  svgCanvas.cancelGesture = cancelGesture
 }
 
 const getBsplinePoint = (t) => {
@@ -132,6 +137,103 @@ const resizeSelectors = (elements) => {
   boxes.forEach(([element, bbox]) => {
     svgCanvas.selectorManager.requestSelector(element).resize(bbox, Boolean(bbox))
   })
+}
+
+/**
+ * Records Alt+drag copies that no move was recorded with, so that they can
+ * still be undone.
+ * @returns {void}
+ */
+const flushPendingClone = () => {
+  if (pendingCloneCmd) {
+    svgCanvas.addCommandToHistory(pendingCloneCmd)
+  }
+  pendingCloneCmd = null
+  selectionBeforeClone = null
+}
+
+/**
+ * Cancels the gesture in progress, for Escape while the mouse button is down:
+ * a move, an Alt+drag duplicate, a resize, a rotation or a rubber band.
+ * Everything returns to its state at the start of the drag and nothing is
+ * added to the history. The coming mouseup is then ignored.
+ * @function module:svgcanvas.SvgCanvas#cancelGesture
+ * @returns {boolean} True when a gesture was cancelled
+ */
+const cancelGesture = () => {
+  if (!svgCanvas.getStarted()) { return false }
+  const mode = svgCanvas.getCurrentMode()
+  if (!['select', 'resize', 'rotate', 'multiselect'].includes(mode)) { return false }
+
+  const restoreTransform = (elem, value) => {
+    // The drag edited the transform list through the SVG DOM, and the browser
+    // writes such changes to the attribute lazily: without this read,
+    // removeAttribute() found no attribute and the drag transform stayed.
+    elem.getAttribute('transform')
+    if (value) {
+      elem.setAttribute('transform', value)
+    } else {
+      elem.removeAttribute('transform')
+    }
+  }
+  const selectedElements = svgCanvas.getSelectedElements().filter(Boolean)
+
+  switch (mode) {
+    case 'select':
+      svgCanvas.dragStartTransforms?.forEach((value, elem) => restoreTransform(elem, value))
+      if (pendingCloneCmd) {
+        // Alt+drag: remove the copies and select the originals again.
+        const originals = selectionBeforeClone || []
+        svgCanvas.clearSelection(true)
+        pendingCloneCmd.elements().forEach((elem) => elem.remove())
+        svgCanvas.addToSelection(originals)
+      }
+      break
+    case 'resize':
+    case 'rotate':
+      // Resize and rotation handles exist for a single element only.
+      if (selectedElements[0]) {
+        restoreTransform(selectedElements[0], svgCanvas.getStartTransform())
+      }
+      if (mode === 'rotate') {
+        // Drop the undoable change opened on mousedown.
+        svgCanvas.undoMgr.finishUndoableChange()
+      }
+      break
+    case 'multiselect': {
+      svgCanvas.getRubberBox()?.setAttribute('display', 'none')
+      svgCanvas.setCurBBoxes([])
+      // Back to the selection kept when the band started (Shift+drag).
+      const toRemove = selectedElements.filter((elem) => !rubberBandBase.has(elem))
+      if (toRemove.length) {
+        svgCanvas.removeFromSelection(toRemove)
+      }
+      const toAdd = [...rubberBandBase].filter((elem) => !selectedElements.includes(elem))
+      if (toAdd.length) {
+        svgCanvas.addToSelection(toAdd)
+      }
+      break
+    }
+  }
+
+  svgCanvas.dragStartTransforms = null
+  svgCanvas.dragStartBBoxes = null
+  svgCanvas.hasDragStartTransform = false
+  duplicateOnDrag = false
+  moveSelectionThresholdReached = false
+  pendingCloneCmd = null
+  selectionBeforeClone = null
+  svgCanvas.setStarted(false)
+  svgCanvas.setCurrentMode('select')
+
+  const selection = svgCanvas.getSelectedElements()
+  resizeSelectors(selection)
+  const remaining = selection.filter(Boolean)
+  if (remaining.length === 1) {
+    svgCanvas.selectorManager.requestSelector(remaining[0]).showGrips(true)
+  }
+  svgCanvas.call('selected', selection)
+  return true
 }
 
 // Update only the temporary drag transform inserted at index 0.
@@ -223,8 +325,10 @@ const mouseMoveEvent = (evt) => {
           if (!svgCanvas.hasDragStartTransform) {
             if (duplicateOnDrag) {
               // Alt+drag: copy what is being dragged, then move the copies.
+              // The copies enter the history with their move, on mouse up.
               duplicateOnDrag = false
-              svgCanvas.cloneSelectedElements(0, 0)
+              selectionBeforeClone = selectedElements.filter(Boolean)
+              pendingCloneCmd = svgCanvas.cloneSelectedElements(0, 0, { addToHistory: false }) || null
               dragged = svgCanvas.getSelectedElements()
             }
             beginDragTransform(svgRoot, dragged)
@@ -768,7 +872,17 @@ const mouseUpEvent = (evt) => {
             }
           })
 
-          if (!batchCmd.isEmpty()) {
+          if (pendingCloneCmd) {
+            // Alt+drag: the copies and their move form a single undo step.
+            const duplicateCmd = new BatchCommand('Duplicate')
+            duplicateCmd.addSubCommand(pendingCloneCmd)
+            if (!batchCmd.isEmpty()) {
+              duplicateCmd.addSubCommand(batchCmd)
+            }
+            pendingCloneCmd = null
+            selectionBeforeClone = null
+            svgCanvas.addCommandToHistory(duplicateCmd)
+          } else if (!batchCmd.isEmpty()) {
             svgCanvas.addCommandToHistory(batchCmd)
           }
           if (changedElements.length) {
@@ -968,6 +1082,7 @@ const mouseUpEvent = (evt) => {
   // Reset drag flag after any mouseUp
   svgCanvas.hasDragStartTransform = false
   svgCanvas.dragStartTransforms = null
+  flushPendingClone()
 
   /**
 * The main (left) mouse button is released (anywhere).
@@ -1137,6 +1252,7 @@ const mouseDownEvent = (evt) => {
   // selection tool (see mouseMoveEvent): cloning here copied the previous
   // selection, even on a simple Alt+click or while drawing with Alt.
   duplicateOnDrag = false
+  flushPendingClone()
 
   // Get screenCTM from the first child group of svgcontent
   // Note: svgcontent itself has x/y offset attributes, so we use its first child

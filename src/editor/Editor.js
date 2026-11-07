@@ -384,11 +384,15 @@ class Editor extends EditorStartup {
         }
       },
       {
-        // Escape goes up one level: drawing tool -> selection tool, node
-        // editing -> selection, open group -> the group selected, selection ->
-        // nothing selected.
+        // Escape first cancels a drag in progress (move, duplicate, resize,
+        // rotation, rubber band). Otherwise it goes up one level: drawing tool
+        // -> selection tool, node editing -> selection, open group -> the
+        // group selected, selection -> nothing selected.
         key: 'escape',
         fn: () => {
+          // enableToolCancel is false while the mouse button is down: only
+          // the gesture can be cancelled then, not the tool.
+          if (this.svgCanvas.cancelGesture?.()) { return }
           if (!this.enableToolCancel) { return }
           const mode = this.svgCanvas.getMode()
           if (mode === 'pathedit') {

@@ -310,9 +310,12 @@ const moveSelectedElements = (dx, dy, undoable = true) => {
  * @function module:selected-elem.SvgCanvas#cloneSelectedElements
  * @param {Float} x Float with the distance to move on the x-axis
  * @param {Float} y Float with the distance to move on the y-axis
- * @returns {void}
+ * @param {PlainObject} [options]
+ * @param {boolean} [options.addToHistory=true] - False to let the caller record
+ *   the returned command, for instance together with the move of an Alt+drag
+ * @returns {module:history.BatchCommand|undefined} The insertion of the copies
  */
-const cloneSelectedElements = (x, y) => {
+const cloneSelectedElements = (x, y, { addToHistory = true } = {}) => {
   const selectedElements = svgCanvas.getSelectedElements()
   const currentGroup = svgCanvas.getCurrentGroup()
   let i
@@ -365,8 +368,12 @@ const cloneSelectedElements = (x, y) => {
   if (!batchCmd.isEmpty()) {
     svgCanvas.addToSelection(copiedElements.reverse()) // Need to reverse for correct selection-adding
     moveSelectedElements(x, y, false)
-    svgCanvas.addCommandToHistory(batchCmd)
+    if (addToHistory) {
+      svgCanvas.addCommandToHistory(batchCmd)
+    }
+    return batchCmd
   }
+  return undefined
 }
 /**
  * Aligns selected elements.
@@ -387,6 +394,9 @@ const alignSelectedElements = (type, relativeTo) => {
   let miny = Number.MAX_VALUE
   let maxy = Number.MIN_VALUE
 
+  // "Largest" and "smallest" compare areas: comparing widths only picked a
+  // wide, flat object as the largest one, even for a vertical alignment.
+  const byArea = (a, b) => a.width * a.height - b.width * b.height
   const isHorizontalAlign = (type) => ['l', 'c', 'r', 'left', 'center', 'right'].includes(type)
   const isVerticalAlign = (type) => ['t', 'm', 'b', 'top', 'middle', 'bottom'].includes(type)
 
@@ -406,7 +416,7 @@ const alignSelectedElements = (type, relativeTo) => {
   switch (relativeTo) {
     case 'smallest':
       if (isHorizontalAlign(type) || isVerticalAlign(type)) {
-        const sortedBboxes = bboxes.slice().sort((a, b) => a.width - b.width)
+        const sortedBboxes = bboxes.slice().sort(byArea)
         const minBbox = sortedBboxes[0]
         minx = minBbox.x
         miny = minBbox.y
@@ -416,7 +426,7 @@ const alignSelectedElements = (type, relativeTo) => {
       break
     case 'largest':
       if (isHorizontalAlign(type) || isVerticalAlign(type)) {
-        const sortedBboxes = bboxes.slice().sort((a, b) => a.width - b.width)
+        const sortedBboxes = bboxes.slice().sort(byArea)
         const maxBbox = sortedBboxes[bboxes.length - 1]
         minx = maxBbox.x
         miny = maxBbox.y
@@ -485,12 +495,9 @@ const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes,
 
   const bboxesSortedClone = bboxes
     .slice()
-    .sort((firstBox, secondBox) => {
-      const firstMaxX = firstBox.x + firstBox.width
-      const secondMaxX = secondBox.x + secondBox.width
-
-      if (firstMaxX === secondMaxX) { return 0 } else if (firstMaxX > secondMaxX) { return 1 } else { return -1 }
-    })
+    // Sorted by left edge, so that the leftmost object keeps its place: sorting
+    // by right edge moved it when a narrower object ended before it did.
+    .sort((firstBox, secondBox) => firstBox.x - secondBox.x)
 
   if (relativeTo === 'page') {
     bboxesSortedClone.unshift({ x: 0, y: 0, width: 0, height: maxy }) // virtual left box
@@ -546,12 +553,8 @@ const _getDistributeVerticalDistances = (relativeTo, selectedElements, bboxes, m
 
   const bboxesSortedClone = bboxes
     .slice()
-    .sort((firstBox, secondBox) => {
-      const firstMaxY = firstBox.y + firstBox.height
-      const secondMaxY = secondBox.y + secondBox.height
-
-      if (firstMaxY === secondMaxY) { return 0 } else if (firstMaxY > secondMaxY) { return 1 } else { return -1 }
-    })
+    // Sorted by top edge, for the same reason as the horizontal distribution.
+    .sort((firstBox, secondBox) => firstBox.y - secondBox.y)
 
   if (relativeTo === 'page') {
     bboxesSortedClone.unshift({ x: 0, y: 0, width: maxx, height: 0 }) // virtual top box
@@ -696,10 +699,19 @@ const flipSelectedElements = (scaleX, scaleY) => {
   const batchCmd = new BatchCommand('Flip Elements')
   const svgRoot = svgCanvas.getSvgRoot()
 
+  // The whole selection flips around the centre of its common box, like a
+  // single object: relative positions are mirrored too. For one element the
+  // common box is its own box, so the result is unchanged. The boxes are in
+  // the parent's user space, which the elements of a selection share.
+  const elements = selectedElements.filter(Boolean)
+  const commonBox = elements.length > 1
+    ? getStrokedBBoxDefaultVisible(elements)
+    : null
+
   selectedElements.forEach(selected => {
     if (!selected) return
 
-    const bbox = getStrokedBBoxDefaultVisible([selected])
+    const bbox = commonBox || getStrokedBBoxDefaultVisible([selected])
     if (!bbox) return
 
     const cx = bbox.x + bbox.width / 2

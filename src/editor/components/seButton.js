@@ -224,8 +224,11 @@ export class ToolButton extends HTMLElement {
    * @returns {void}
    */
   connectedCallback () {
-    // capture shortcuts
-    const shortcut = normalizeShortcut(this.getAttribute('shortcut'))
+    // capture shortcuts; with shortcut-hint-only the shortcut is only shown in
+    // the tooltip, because another button already binds it
+    const shortcut = this.hasAttribute('shortcut-hint-only')
+      ? ''
+      : normalizeShortcut(this.getAttribute('shortcut'))
     if (shortcut) {
       // register the keydown event
       document.addEventListener('keydown', (e) => {

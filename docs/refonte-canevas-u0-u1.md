@@ -105,7 +105,7 @@ Les critères de U1 sont atteints à 2 000 objets : tout sélectionner en moins 
 
 ## 3. Ce qui ne change pas
 
-- **Sortie SVG.** La sortie de cette branche a été comparée à celle de `phase-0-securite`, compilée séparément :
+- **Sortie SVG.** La sortie de cette branche a été comparée à celle de `phase-0-securite`, compilée séparément. La première comparaison partageait par erreur le cœur `svgcanvas` des deux builds ; elle a été refaite pendant M1 avec un cœur propre à chaque build, avec le même résultat (voir `docs/refonte-selection-m1.md`, section 2) :
   - aller-retour import puis export de tous les SVG du dépôt : 15 sur 15 identiques ;
   - 12 scénarios identiques à l'octet près : déplacements, redimensionnement, rotation, groupes, clonage, alignement, symétrie, ordre, conversion en chemin, annulations, et glisser de toute la sélection à la souris.
 - **API des extensions.**

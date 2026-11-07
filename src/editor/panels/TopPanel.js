@@ -1016,6 +1016,8 @@ class TopPanel {
     $click($id('tool_reorient'), this.reorientPath.bind(this))
     $click($id('tool_flip_h'), this.clickFlipHorizontal.bind(this))
     $click($id('tool_flip_v'), this.clickFlipVertical.bind(this))
+    $click($id('tool_flip_h_multi'), this.clickFlipHorizontal.bind(this))
+    $click($id('tool_flip_v_multi'), this.clickFlipVertical.bind(this))
     $click($id('tool_group_elements'), this.clickGroup.bind(this))
     $id('tool_position').addEventListener('change', evt =>
       this.clickAlignEle.bind(this)(evt)
