@@ -1003,13 +1003,14 @@ class SvgCanvas {
     }
 
     // find every element and remove it from our array copy
+    const toRemove = new Set(elemsToRemove)
     const newSelectedItems = []
     const len = this.selectedElements.length
     for (let i = 0; i < len; ++i) {
       const elem = this.selectedElements[i]
       if (elem) {
         // keep the item
-        if (!elemsToRemove.includes(elem)) {
+        if (!toRemove.has(elem)) {
           newSelectedItems.push(elem)
         } else {
           // remove the item and its selector
@@ -1017,8 +1018,17 @@ class SvgCanvas {
         }
       }
     }
+    if (newSelectedItems.length === this.selectedElements.filter(Boolean).length) {
+      return
+    }
     // the copy becomes the master now
     this.selectedElements = newSelectedItems
+    // A single remaining element gets its grips back.
+    if (newSelectedItems.length === 1) {
+      this.selectorManager.requestSelector(newSelectedItems[0]).showGrips(true)
+    }
+    // Panels must reflect the smaller selection.
+    this.call('selected', this.selectedElements)
   }
 
   /**

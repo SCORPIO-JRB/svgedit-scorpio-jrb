@@ -352,10 +352,29 @@ class Editor extends EditorStartup {
         }
       },
       {
+        // Escape goes up one level: drawing tool -> selection tool, node
+        // editing -> selection, open group -> the group selected, selection ->
+        // nothing selected.
         key: 'escape',
         fn: () => {
-          if (this.enableToolCancel) {
+          if (!this.enableToolCancel) { return }
+          const mode = this.svgCanvas.getMode()
+          if (mode === 'pathedit') {
+            this.svgCanvas.pathActions.toSelectMode()
+            return
+          }
+          if (mode !== 'select') {
             this.cancelTool()
+            return
+          }
+          const group = this.svgCanvas.getCurrentGroup()
+          if (group) {
+            this.svgCanvas.leaveContext()
+            this.svgCanvas.selectOnly([group], true)
+            return
+          }
+          if (this.svgCanvas.getSelectedElements().some(Boolean)) {
+            this.svgCanvas.clearSelection()
           }
         }
       }
@@ -1160,14 +1179,13 @@ class Editor extends EditorStartup {
    */
   moveSelected (dx, dy) {
     if (this.selectedElement || this.multiselected) {
-      if (this.configObj.curConfig.gridSnapping) {
-        // Use grid snap value regardless of zoom level
-        const multi =
-          this.svgCanvas.getZoom() * this.configObj.curConfig.snappingStep
-        dx *= multi
-        dy *= multi
-      }
-      this.svgCanvas.moveSelectedElements(dx, dy)
+      // Arrow keys move by document units (one grid step when snapping),
+      // whatever the zoom. moveSelectedElements expects screen pixels.
+      const step = this.configObj.curConfig.gridSnapping
+        ? this.configObj.curConfig.snappingStep
+        : 1
+      const multi = this.svgCanvas.getZoom() * step
+      this.svgCanvas.moveSelectedElements(dx * multi, dy * multi)
     }
   }
 

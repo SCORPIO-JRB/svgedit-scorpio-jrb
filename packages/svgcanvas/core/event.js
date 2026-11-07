@@ -28,6 +28,11 @@ const {
 
 let svgCanvas = null
 let moveSelectionThresholdReached = false
+// Alt was held when the drag started on a selected element: duplicate the
+// selection once the drag really starts, and move the copies.
+let duplicateOnDrag = false
+// Elements that stay selected during a Shift+drag rubber band.
+let rubberBandBase = new Set()
 
 /**
 * @function module:undo.init
@@ -174,7 +179,6 @@ const mouseMoveEvent = (evt) => {
   let cy
   let dx
   let dy
-  let len
   let angle
   let box
 
@@ -207,17 +211,27 @@ const mouseMoveEvent = (evt) => {
           dy = snapToGrid(dy)
         }
 
-        // Enable moving selection only if the pointer moved more than 4 px.
-        // This prevents objects from being accidentally moved when (initially) selected
-        const deltaThreshold = 4
-        const deltaThresholdReached = Math.abs(dx) > deltaThreshold || Math.abs(dy) > deltaThreshold
+        // Enable moving selection only if the pointer moved more than 3 screen
+        // pixels, whatever the zoom. This prevents objects from being
+        // accidentally moved when (initially) selected.
+        const deltaThreshold = 3
+        const deltaThresholdReached = Math.abs(dx * zoom) > deltaThreshold || Math.abs(dy * zoom) > deltaThreshold
         moveSelectionThresholdReached = moveSelectionThresholdReached || deltaThresholdReached
 
         if (moveSelectionThresholdReached) {
+          let dragged = selectedElements
           if (!svgCanvas.hasDragStartTransform) {
-            beginDragTransform(svgRoot, selectedElements)
+            if (duplicateOnDrag) {
+              // Alt+drag: copy what is being dragged, then move the copies.
+              duplicateOnDrag = false
+              svgCanvas.cloneSelectedElements(0, 0)
+              dragged = svgCanvas.getSelectedElements()
+            }
+            beginDragTransform(svgRoot, dragged)
+          } else {
+            dragged = svgCanvas.getSelectedElements()
           }
-          selectedElements.forEach((el) => {
+          dragged.forEach((el) => {
             if (el) {
               updateTransformList(svgRoot, el, dx, dy)
               // update our internal bbox that we're tracking while dragging
@@ -225,7 +239,7 @@ const mouseMoveEvent = (evt) => {
               svgCanvas.selectorManager.requestSelector(el).resize(bbox, Boolean(bbox))
             }
           })
-          svgCanvas.call('transition', selectedElements)
+          svgCanvas.call('transition', dragged)
         }
       }
       break
@@ -244,23 +258,13 @@ const mouseMoveEvent = (evt) => {
       // - if newList contains selected, do nothing
       // - if newList doesn't contain selected, remove it from selected
       // - for any newList that was not in selectedElements, add it to selected
-      const elemsToRemove = selectedElements.slice(); const elemsToAdd = []
+      // Elements selected before a Shift+drag always stay selected.
       const newList = svgCanvas.getIntersectionList()
-
-      // For every element in the intersection, add if not present in selectedElements.
-      len = newList.length
-      for (i = 0; i < len; ++i) {
-        const intElem = newList[i]
-        // Found an element that was not selected before, so we should add it.
-        if (!selectedElements.includes(intElem)) {
-          elemsToAdd.push(intElem)
-        }
-        // Found an element that was already selected, so we shouldn't remove it.
-        const foundInd = elemsToRemove.indexOf(intElem)
-        if (foundInd !== -1) {
-          elemsToRemove.splice(foundInd, 1)
-        }
-      }
+      const current = new Set(selectedElements.filter(Boolean))
+      const wanted = new Set(newList)
+      rubberBandBase.forEach((elem) => wanted.add(elem))
+      const elemsToRemove = [...current].filter((elem) => !wanted.has(elem))
+      const elemsToAdd = newList.filter((elem) => !current.has(elem))
 
       if (elemsToRemove.length > 0) {
         svgCanvas.removeFromSelection(elemsToRemove)
@@ -327,6 +331,17 @@ const mouseMoveEvent = (evt) => {
         tx = width
       }
 
+      // Alt: resize from the center, so the opposite side moves symmetrically.
+      if (evt.altKey) {
+        const mode = svgCanvas.getCurrentResizeMode()
+        if (mode.includes('e')) { sx = width ? (width + 2 * dx) / width : 1 }
+        if (mode.includes('w')) { sx = width ? (width - 2 * dx) / width : 1 }
+        if (mode.includes('s')) { sy = height ? (height + 2 * dy) / height : 1 }
+        if (mode.includes('n')) { sy = height ? (height - 2 * dy) / height : 1 }
+        tx = width / 2
+        ty = height / 2
+      }
+
       // update the transform list with translate,scale,translate
       const translateOrigin = svgRoot.createSVGTransform()
       const scale = svgRoot.createSVGTransform()
@@ -340,8 +355,8 @@ const mouseMoveEvent = (evt) => {
       }
 
       translateOrigin.setTranslate(-(left + tx), -(top + ty))
-      // For images, we maintain aspect ratio by default and relax when shift pressed
-      const maintainAspectRatio = (selected.tagName !== 'image' && evt.shiftKey) || (selected.tagName === 'image' && !evt.shiftKey)
+      // Shift keeps the proportions, for every kind of element
+      const maintainAspectRatio = evt.shiftKey
       if (maintainAspectRatio) {
         if (sx === 1) {
           sx = sy
@@ -570,7 +585,7 @@ const mouseMoveEvent = (evt) => {
         angle = snapToGrid(angle)
       }
       if (evt.shiftKey) { // restrict rotations to nice angles (WRS)
-        const snap = 45
+        const snap = 15
         angle = Math.round(angle / snap) * snap
       }
 
@@ -768,13 +783,22 @@ const mouseUpEvent = (evt) => {
           resizeSelectors(selectedElements)
           // no change in position/size, so maybe we should move to pathedit
         } else {
-          t = evt.target
+          // The clicked element as selected at mousedown (the top element in
+          // the current layer or group), not the raw event target.
+          t = svgCanvas.getMouseTarget(evt)
+          if (t?.tagName === 'a' && t.childNodes.length === 1) {
+            t = t.firstChild
+          }
           if (selectedElements[0].nodeName === 'path' && !selectedElements[1]) {
             svgCanvas.pathActions.select(selectedElements[0])
             // if it was a path
             // else, if it was selected and this is a shift-click, remove it from selection
           } else if (evt.shiftKey && tempJustSelected !== t) {
             svgCanvas.removeFromSelection([t])
+          } else if (!evt.shiftKey && selectedElements[1] && tempJustSelected !== t &&
+            selectedElements.includes(t)) {
+            // A click without drag on a member of a multi-selection keeps only that member.
+            svgCanvas.selectOnly([t], true)
           }
         } // no change in mouse position
 
@@ -1105,9 +1129,10 @@ const mouseDownEvent = (evt) => {
 
   const rightClick = (evt.button === 2)
 
-  if (evt.altKey) { // duplicate when dragging
-    svgCanvas.cloneSelectedElements(0, 0)
-  }
+  // Alt+drag duplicates, but only once the drag starts and only in the
+  // selection tool (see mouseMoveEvent): cloning here copied the previous
+  // selection, even on a simple Alt+click or while drawing with Alt.
+  duplicateOnDrag = false
 
   // Get screenCTM from the first child group of svgcontent
   // Note: svgcontent itself has x/y offset attributes, so we use its first child
@@ -1194,13 +1219,20 @@ const mouseDownEvent = (evt) => {
           svgCanvas.setJustSelected(mouseTarget)
           svgCanvas.pathActions.clear()
         }
+        duplicateOnDrag = evt.altKey && !rightClick
         // else if it's a path, go into pathedit mode in mouseup
 
         // Note: Dummy transform insertion moved to mouseMove to avoid triggering
         // recalculateDimensions on simple clicks. The dummy transform is only needed
         // when actually starting a drag operation.
       } else if (!rightClick) {
-        svgCanvas.clearSelection()
+        // Shift+drag adds the rubber band to the current selection.
+        if (evt.shiftKey) {
+          rubberBandBase = new Set(selectedElements.filter(Boolean))
+        } else {
+          rubberBandBase = new Set()
+          svgCanvas.clearSelection()
+        }
         svgCanvas.setCurrentMode('multiselect')
         if (!svgCanvas.getRubberBox()) {
           svgCanvas.setRubberBox(svgCanvas.selectorManager.getRubberBandBox())

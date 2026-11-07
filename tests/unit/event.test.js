@@ -267,10 +267,11 @@ describe('event', () => {
     })
     canvas.call = () => {}
 
+    // 2 screen pixels: below the 3-pixel drag threshold
     canvas.mouseMoveEvent({
       button: 0,
-      clientX: 14,
-      clientY: 24,
+      clientX: 12,
+      clientY: 22,
       preventDefault () {}
     })
 

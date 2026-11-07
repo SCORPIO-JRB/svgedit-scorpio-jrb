@@ -123,7 +123,9 @@ describe('Select Module', () => {
       const directions = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
       directions.forEach(dir => {
         expect(manager.selectorGrips[dir]).toBeDefined()
-        expect(manager.selectorGrips[dir].tagName).toBe('circle')
+        // square grips, each with a larger transparent grab area
+        expect(manager.selectorGrips[dir].tagName).toBe('rect')
+        expect(manager.selectorGripHits[dir].tagName).toBe('rect')
       })
     })
 

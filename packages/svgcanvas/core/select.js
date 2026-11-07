@@ -15,6 +15,11 @@ import { warn } from '../common/logger.js'
 let svgCanvas
 // change radius if touch screen
 const gripRadius = window.ontouchstart ? 10 : 4
+// Selection look: square grips with a white fill, a solid accent frame and a
+// larger invisible area to grab each grip.
+const SELECTION_COLOR = '#1e6fff'
+const GRIP_SIZE = window.ontouchstart ? 20 : 8
+const GRIP_HIT_SIZE = window.ontouchstart ? 32 : 16
 
 // A detached <svg> used only to create SVGMatrix objects, instead of creating
 // a new element on every selector resize.
@@ -82,9 +87,8 @@ export class Selector {
       attr: {
         id: `selectedBox${this.id}`,
         fill: 'none',
-        stroke: '#22C',
+        stroke: SELECTION_COLOR,
         'stroke-width': '1',
-        'stroke-dasharray': '5,5',
         // need to specify this so that the rect is not selectable
         style: 'pointer-events:none'
       }
@@ -168,18 +172,26 @@ export class Selector {
     const { nw, n } = this.gripCoords
     if (!nw || !n) { return }
     const mgr = selectModule.getSelectorManager()
-    Object.entries(this.gripCoords).forEach(([dir, coords]) => {
-      mgr.selectorGrips[dir].setAttribute('cx', coords[0])
-      mgr.selectorGrips[dir].setAttribute('cy', coords[1])
+    Object.entries(this.gripCoords).forEach(([dir, [x, y]]) => {
+      mgr.selectorGrips[dir].setAttribute('x', x - GRIP_SIZE / 2)
+      mgr.selectorGrips[dir].setAttribute('y', y - GRIP_SIZE / 2)
+      const hit = mgr.selectorGripHits?.[dir]
+      if (hit) {
+        hit.setAttribute('x', x - GRIP_HIT_SIZE / 2)
+        hit.setAttribute('y', y - GRIP_HIT_SIZE / 2)
+      }
     })
     // we want to go 20 pixels in the negative transformed y direction, ignoring scale
     const [topX, topY] = n
+    const rotateY = topY - (gripRadius * 5)
     mgr.rotateGripConnector.setAttribute('x1', topX)
     mgr.rotateGripConnector.setAttribute('y1', topY)
     mgr.rotateGripConnector.setAttribute('x2', topX)
-    mgr.rotateGripConnector.setAttribute('y2', topY - (gripRadius * 5))
+    mgr.rotateGripConnector.setAttribute('y2', rotateY)
     mgr.rotateGrip.setAttribute('cx', topX)
-    mgr.rotateGrip.setAttribute('cy', topY - (gripRadius * 5))
+    mgr.rotateGrip.setAttribute('cy', rotateY)
+    mgr.rotateGripHit?.setAttribute('cx', topX)
+    mgr.rotateGripHit?.setAttribute('cy', rotateY)
   }
 
   /**
@@ -337,8 +349,11 @@ export class Selector {
       dirArr.push(dirArr.shift())
       steps--
     }
-    Object.values(selectModule.getSelectorManager().selectorGrips).forEach((gripElement, i) => {
-      gripElement.setAttribute('style', `cursor:${dirArr[i]}-resize`)
+    const mgr = selectModule.getSelectorManager()
+    Object.keys(mgr.selectorGrips).forEach((dir, i) => {
+      const style = `cursor:${dirArr[i]}-resize`
+      mgr.selectorGrips[dir].setAttribute('style', style)
+      mgr.selectorGripHits?.[dir]?.setAttribute('style', style)
     })
   }
 }
@@ -409,28 +424,42 @@ export class SelectorManager {
     this.selectors = []
     this.rubberBandBox = null
 
-    // add the corner grips
+    // add the corner grips: a visible square and, on top of it, a larger
+    // transparent square that receives the pointer
+    this.selectorGripHits = {}
     Object.keys(this.selectorGrips).forEach((dir) => {
       const grip = svgCanvas.createSVGElement({
-        element: 'circle',
+        element: 'rect',
         attr: {
           id: `selectorGrip_resize_${dir}`,
-          fill: '#22C',
-          r: gripRadius,
+          width: GRIP_SIZE,
+          height: GRIP_SIZE,
+          fill: '#fff',
+          stroke: SELECTION_COLOR,
+          'stroke-width': 1,
           style: `cursor:${dir}-resize`,
-          // This expands the mouse-able area of the grips making them
-          // easier to grab with the mouse.
-          // This works in Opera and WebKit, but does not work in Firefox
-          // see https://bugzilla.mozilla.org/show_bug.cgi?id=500174
-          'stroke-width': 2,
+          'pointer-events': 'all'
+        }
+      })
+      const hit = svgCanvas.createSVGElement({
+        element: 'rect',
+        attr: {
+          id: `selectorGripHit_resize_${dir}`,
+          width: GRIP_HIT_SIZE,
+          height: GRIP_HIT_SIZE,
+          fill: 'none',
+          style: `cursor:${dir}-resize`,
           'pointer-events': 'all'
         }
       })
 
-      dataStorage.put(grip, 'dir', dir)
-      dataStorage.put(grip, 'type', 'resize')
+      ;[grip, hit].forEach((element) => {
+        dataStorage.put(element, 'dir', dir)
+        dataStorage.put(element, 'type', 'resize')
+      })
       this.selectorGrips[dir] = grip
-      this.selectorGripsGroup.append(grip)
+      this.selectorGripHits[dir] = hit
+      this.selectorGripsGroup.append(grip, hit)
     })
 
     // add rotator elems
@@ -439,26 +468,39 @@ export class SelectorManager {
         element: 'line',
         attr: {
           id: ('selectorGrip_rotateconnector'),
-          stroke: '#22C',
+          stroke: SELECTION_COLOR,
           'stroke-width': '1'
         }
       })
     this.selectorGripsGroup.append(this.rotateGripConnector)
 
+    const rotateCursor = `cursor:url(${svgCanvas.curConfig.imgPath}/rotate.svg) 12 12, auto;`
     this.rotateGrip =
       svgCanvas.createSVGElement({
         element: 'circle',
         attr: {
           id: 'selectorGrip_rotate',
-          fill: 'lime',
-          r: gripRadius,
-          stroke: '#22C',
-          'stroke-width': 2,
-          style: `cursor:url(${svgCanvas.curConfig.imgPath}/rotate.svg) 12 12, auto;`
+          fill: '#fff',
+          r: gripRadius + 0.5,
+          stroke: SELECTION_COLOR,
+          'stroke-width': 1,
+          style: rotateCursor
         }
       })
-    this.selectorGripsGroup.append(this.rotateGrip)
+    this.rotateGripHit =
+      svgCanvas.createSVGElement({
+        element: 'circle',
+        attr: {
+          id: 'selectorGripHit_rotate',
+          fill: 'none',
+          r: GRIP_HIT_SIZE / 2,
+          style: rotateCursor,
+          'pointer-events': 'all'
+        }
+      })
+    this.selectorGripsGroup.append(this.rotateGrip, this.rotateGripHit)
     dataStorage.put(this.rotateGrip, 'type', 'rotate')
+    dataStorage.put(this.rotateGripHit, 'type', 'rotate')
 
     if (document.getElementById('canvasBackground')) { return }
 
@@ -566,10 +608,10 @@ export class SelectorManager {
           element: 'rect',
           attr: {
             id: 'selectorRubberBand',
-            fill: '#22C',
-            'fill-opacity': 0.15,
-            stroke: '#22C',
-            'stroke-width': 0.5,
+            fill: SELECTION_COLOR,
+            'fill-opacity': 0.08,
+            stroke: SELECTION_COLOR,
+            'stroke-width': 1,
             display: 'none',
             style: 'pointer-events:none'
           }
