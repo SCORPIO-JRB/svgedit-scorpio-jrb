@@ -1,4 +1,4 @@
-/* globals seConfirm */
+/* globals seConfirm, seAlert */
 /**
  * @file ext-opensave.js
  *
@@ -65,7 +65,13 @@ export default {
       }
 
       if (!file.type.includes('image')) {
+        // Close the loading dialog (it stayed open) and say why nothing happened.
+        $id('se-prompt-dialog').setAttribute('close', true)
         resetFileInput()
+        seAlert(this.i18next.t('notification.unsupportedFile', {
+          defaultValue: 'This file type cannot be imported: {{name}}',
+          name: file.name
+        }))
         return
       }
       // Detected an image
@@ -95,11 +101,14 @@ export default {
               * @returns {void}
               */
           const insertNewImage = (imageWidth, imageHeight) => {
+            // Place the image at the page center directly, and record its
+            // insertion as one undoable step (it was not recorded at all).
+            const { w, h } = this.svgCanvas.getResolution()
             const newImage = this.svgCanvas.addSVGElementsFromJson({
               element: 'image',
               attr: {
-                x: 0,
-                y: 0,
+                x: (w - imageWidth) / 2,
+                y: (h - imageHeight) / 2,
                 width: imageWidth,
                 height: imageHeight,
                 id: this.svgCanvas.getNextId(),
@@ -107,9 +116,9 @@ export default {
               }
             })
             this.svgCanvas.setHref(newImage, result)
+            const { InsertElementCommand } = this.svgCanvas.history
+            this.svgCanvas.addCommandToHistory(new InsertElementCommand(newImage))
             this.svgCanvas.selectOnly([newImage])
-            this.svgCanvas.alignSelectedElements('m', 'page')
-            this.svgCanvas.alignSelectedElements('c', 'page')
             this.topPanel.updateContextPanel()
             $id('se-prompt-dialog').setAttribute('close', true)
             resetFileInput()
@@ -162,12 +171,14 @@ export default {
       // ask user before clearing an unsaved SVG
       const response = await svgEditor.openPrep()
       if (response === 'Cancel') { return }
-      svgCanvas.clear()
       try {
         const blob = await fileOpen({
           mimeTypes: ['image/*']
         })
         const svgContent = await blob.text()
+        // Replace the document only once the new file has been read:
+        // cancelling the file picker used to leave an empty document.
+        svgCanvas.clear()
         await svgEditor.loadSvgString(svgContent)
         svgEditor.updateCanvas()
         handle = blob.handle

@@ -70,65 +70,83 @@ export const init = canvas => {
 }
 
 /**
- * Repositions the selected element to the bottom in the DOM to appear on top of
- * other elements.
+ * Returns the selected elements in document order.
+ * @returns {Element[]}
+ */
+const getSelectedInDocumentOrder = () => {
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  return elements.sort((a, b) =>
+    (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1)
+}
+
+/**
+ * Returns the first child of a container that the selection can be placed
+ * before: layers start with their <title>, and possibly <defs>.
+ * @param {Element} parent
+ * @returns {Element|null}
+ */
+const getFirstStackedChild = (parent) => {
+  let child = parent.firstElementChild
+  while (child && ['title', 'defs'].includes(child.tagName)) {
+    child = child.nextElementSibling
+  }
+  return child
+}
+
+/**
+ * Applies a reordering to the selected elements as one undoable step.
+ * @param {string} label - History label
+ * @param {Element[]} elements - In the order the move must be applied
+ * @param {(elem: Element) => void} move - Moves one element in the DOM
+ * @returns {void}
+ */
+const reorderSelected = (label, elements, move) => {
+  const batchCmd = new BatchCommand(label)
+  const moved = []
+  elements.forEach((elem) => {
+    const oldParent = elem.parentNode
+    const oldNextSibling = elem.nextSibling
+    move(elem)
+    if (oldNextSibling !== elem.nextSibling || oldParent !== elem.parentNode) {
+      batchCmd.addSubCommand(new MoveElementCommand(elem, oldNextSibling, oldParent, label))
+      moved.push(elem)
+    }
+  })
+  if (!batchCmd.isEmpty()) {
+    svgCanvas.addCommandToHistory(batchCmd)
+    svgCanvas.call('changed', moved)
+  }
+}
+
+/**
+ * Brings the selected elements to the front of their container, keeping
+ * their relative order.
  * @function module:selected-elem.SvgCanvas#moveToTopSelectedElem
  * @fires module:selected-elem.SvgCanvas#event:changed
  * @returns {void}
  */
 const moveToTopSelectedElem = () => {
-  const [selected] = svgCanvas.getSelectedElements()
-  if (selected) {
-    const t = selected
-    const oldParent = t.parentNode
-    const oldNextSibling = t.nextSibling
-    t.parentNode.append(t)
-    // If the element actually moved position, add the command and fire the changed
-    // event handler.
-    if (oldNextSibling !== t.nextSibling) {
-      svgCanvas.addCommandToHistory(
-        new MoveElementCommand(t, oldNextSibling, oldParent, 'top')
-      )
-      svgCanvas.call('changed', [t])
-    }
-  }
+  reorderSelected('top', getSelectedInDocumentOrder(), (elem) => {
+    elem.parentNode.append(elem)
+  })
 }
 
 /**
- * Repositions the selected element to the top in the DOM to appear under
- * other elements.
+ * Sends the selected elements to the back of their container, keeping their
+ * relative order.
  * @function module:selected-elem.SvgCanvas#moveToBottomSelectedElement
  * @fires module:selected-elem.SvgCanvas#event:changed
  * @returns {void}
  */
 const moveToBottomSelectedElem = () => {
-  const [selected] = svgCanvas.getSelectedElements()
-  if (selected) {
-    let t = selected
-    const oldParent = t.parentNode
-    const oldNextSibling = t.nextSibling
-    let firstChild = t.parentNode.firstElementChild
-    if (firstChild?.tagName === 'title') {
-      firstChild = firstChild.nextElementSibling
+  // Last element first: each one goes before the previous, so the relative
+  // order is kept.
+  reorderSelected('bottom', getSelectedInDocumentOrder().reverse(), (elem) => {
+    const first = getFirstStackedChild(elem.parentNode)
+    if (first && first !== elem) {
+      elem.parentNode.insertBefore(elem, first)
     }
-    // This can probably be removed, as the defs should not ever apppear
-    // inside a layer group
-    if (firstChild?.tagName === 'defs') {
-      firstChild = firstChild.nextElementSibling
-    }
-    if (!firstChild) {
-      return
-    }
-    t = t.parentNode.insertBefore(t, firstChild)
-    // If the element actually moved position, add the command and fire the changed
-    // event handler.
-    if (oldNextSibling !== t.nextSibling) {
-      svgCanvas.addCommandToHistory(
-        new MoveElementCommand(t, oldNextSibling, oldParent, 'bottom')
-      )
-      svgCanvas.call('changed', [t])
-    }
-  }
+  })
 }
 
 /**
@@ -143,6 +161,28 @@ const moveUpDownSelected = dir => {
   const selectedElements = svgCanvas.getSelectedElements()
   const selected = selectedElements[0]
   if (!selected) {
+    return
+  }
+
+  // Several elements: move the whole selection one step among its siblings,
+  // keeping the relative order (the overlap-based step below is defined for
+  // a single element).
+  if (selectedElements.filter(Boolean).length > 1) {
+    const inSelection = new Set(selectedElements.filter(Boolean))
+    const ordered = getSelectedInDocumentOrder()
+    if (dir === 'Up') {
+      reorderSelected(`Move ${dir}`, ordered.reverse(), (elem) => {
+        let next = elem.nextElementSibling
+        while (next && inSelection.has(next)) { next = next.nextElementSibling }
+        if (next) { next.after(elem) }
+      })
+    } else {
+      reorderSelected(`Move ${dir}`, ordered, (elem) => {
+        let prev = elem.previousElementSibling
+        while (prev && inSelection.has(prev)) { prev = prev.previousElementSibling }
+        if (prev && !['title', 'defs'].includes(prev.tagName)) { prev.before(elem) }
+      })
+    }
     return
   }
 

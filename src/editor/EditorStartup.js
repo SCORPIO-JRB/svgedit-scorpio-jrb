@@ -236,7 +236,7 @@ class EditorStartup {
 
     // fired when user wants to move elements to another layer
     let promptMoveLayerOnce = false
-    $id('selLayerNames').addEventListener('change', (evt) => {
+    $id('selLayerNames').addEventListener('change', async (evt) => {
       const destLayer = evt.detail.value
       const confirmStr = this.i18next.t('notification.QmoveElemsToLayer').replace('%s', destLayer)
       /**
@@ -254,8 +254,9 @@ class EditorStartup {
         if (promptMoveLayerOnce) {
           moveToLayer(true)
         } else {
-          const ok = seConfirm(confirmStr)
-          if (!ok) {
+          // Wait for the answer: the move used to happen before the user chose.
+          const ok = await seConfirm(confirmStr)
+          if (ok === false || ok === 'Cancel') {
             return
           }
           moveToLayer(true)

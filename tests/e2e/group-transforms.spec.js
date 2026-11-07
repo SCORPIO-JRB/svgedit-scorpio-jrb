@@ -259,15 +259,14 @@ test.describe('Group transform preservation', () => {
     // Wait for ungroup to complete
     await page.waitForTimeout(100)
 
-    // Verify paths still exist and have transforms
-    const path1Transform = await page.locator('#path1').getAttribute('transform')
-    const path2Transform = await page.locator('#path2').getAttribute('transform')
-    const path3Transform = await page.locator('#path3').getAttribute('transform')
-
-    // All paths should have transforms (group's translate prepended to original)
-    expect(path1Transform).toBeTruthy()
-    expect(path2Transform).toBeTruthy()
-    expect(path3Transform).toBeTruthy()
+    // Ctrl+Shift+G really ungroups since U1 (the shortcut did nothing before,
+    // which is why this test used to find the original transforms). The group
+    // is gone and a plain matrix may be baked into the path data, so the
+    // check that matters is the position below.
+    await expect(page.locator('#testGroup')).toHaveCount(0)
+    await expect(page.locator('#path1')).toHaveCount(1)
+    await expect(page.locator('#path2')).toHaveCount(1)
+    await expect(page.locator('#path3')).toHaveCount(1)
 
     // Critical: bounding boxes should not change (no visual jump)
     const path1BoxAfter = await page.locator('#path1').boundingBox()

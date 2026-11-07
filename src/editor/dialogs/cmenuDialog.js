@@ -190,6 +190,40 @@ export class SeCMenuDialog extends HTMLElement {
   }
 
   /**
+   * Adds a menu item registered by an extension (see `contextmenu.add`). A
+   * click dispatches `change` with the item id, which the editor routes to the
+   * extension's action. The label is inserted as text, never as markup.
+   * @param {{id: string, label: string, shortcut?: string}} menuItem
+   * @returns {void}
+   */
+  addExtensionItem ({ id, label, shortcut }) {
+    if (!this.hasExtensionItems) {
+      // extension items appear at the bottom of the menu, after a separator
+      const separator = document.createElement('li')
+      separator.className = 'separator'
+      this.$dialog.append(separator)
+      this.hasExtensionItems = true
+    }
+    const item = document.createElement('li')
+    const link = document.createElement('a')
+    link.href = `#${id}`
+    link.textContent = label
+    if (shortcut) {
+      const hint = document.createElement('span')
+      hint.className = 'shortcut'
+      hint.textContent = shortcut
+      link.append(hint)
+    }
+    item.append(link)
+    this.$dialog.append(item)
+    svgEditor.$click(link, (evt) => {
+      evt.preventDefault()
+      this.$dialog.style.display = 'none'
+      this.dispatchEvent(new CustomEvent('change', { detail: { trigger: id } }))
+    })
+  }
+
+  /**
    * @function connectedCallback
    * @returns {void}
    */

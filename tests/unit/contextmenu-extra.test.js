@@ -24,21 +24,25 @@ describe('contextmenu helpers', () => {
     ).toThrow(/already exists/)
   })
 
-  it('injects extensions into the context menu DOM', () => {
-    const host = document.getElementById('cmenu_canvas')
-    const appended = []
-    host.appendChild = vi.fn((value) => {
-      appended.push(value)
-      return value
-    })
+  it('injects extensions into the canvas context menu', () => {
+    // The canvas menu is <se-cmenu_canvas-dialog id="se-cmenu_canvas">; the
+    // former code appended strings to a missing #cmenu_canvas and threw.
+    const host = document.createElement('div')
+    host.id = 'se-cmenu_canvas'
+    host.addExtensionItem = vi.fn()
+    document.body.append(host)
     add({ id: 'alpha', label: 'Alpha', action: () => {}, shortcut: 'Ctrl+A' })
     add({ id: 'beta', label: 'Beta', action: () => {} })
 
     injectExtendedContextMenuItemsIntoDom()
 
-    expect(host.appendChild).toHaveBeenCalledTimes(2)
-    expect(appended[0]).toContain('#alpha')
-    expect(appended[0]).toContain('Ctrl+A')
-    expect(appended[1]).toContain('#beta')
+    expect(host.addExtensionItem).toHaveBeenCalledTimes(2)
+    expect(host.addExtensionItem.mock.calls[0][0]).toMatchObject({ id: 'alpha', label: 'Alpha', shortcut: 'Ctrl+A' })
+    expect(host.addExtensionItem.mock.calls[1][0]).toMatchObject({ id: 'beta', label: 'Beta' })
+  })
+
+  it('does nothing when the canvas menu is absent', () => {
+    add({ id: 'gamma', label: 'Gamma', action: () => {} })
+    expect(() => injectExtendedContextMenuItemsIntoDom()).not.toThrow()
   })
 })

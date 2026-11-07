@@ -1087,8 +1087,12 @@ const dblClickEvent = (evt) => {
     // TODO: Allow method of in-group editing without having to do
     // this (similar to editing rotated paths)
 
-    // Ungroup and regroup
-    svgCanvas.pushGroupProperties(mouseTarget)
+    // Ungroup and regroup. Entering the group rewrites the children's
+    // transforms: record it so that undo stays consistent (it was silent).
+    const cmd = svgCanvas.pushGroupProperties(mouseTarget, true)
+    if (cmd) {
+      svgCanvas.addCommandToHistory(cmd)
+    }
     mouseTarget = selectedElements[0]
     svgCanvas.clearSelection(true)
   }

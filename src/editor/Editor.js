@@ -211,6 +211,38 @@ class Editor extends EditorStartup {
           this.moveUpDownSelected('Up')
         }
       },
+      // Keyboard-layout independent order shortcuts (brackets need AltGr on
+      // AZERTY): Mod+PageUp/PageDown one step, Mod+Home/End to the front/back.
+      { key: ['ctrl+pageup', true], fn: () => { this.moveUpDownSelected('Up') } },
+      { key: ['ctrl+pagedown', true], fn: () => { this.moveUpDownSelected('Down') } },
+      { key: ['ctrl+home', true], fn: () => { this.topPanel.moveToTopSelected() } },
+      { key: ['ctrl+end', true], fn: () => { this.topPanel.moveToBottomSelected() } },
+      {
+        // Duplicate the selection (Mod+D), like the D / C buttons
+        key: ['ctrl+d', true],
+        fn: () => {
+          if (this.selectedElement || this.multiselected) {
+            this.svgCanvas.cloneSelectedElements(20, 20)
+          }
+        }
+      },
+      {
+        key: ['ctrl+g', true],
+        fn: () => {
+          if (this.multiselected) {
+            this.svgCanvas.groupSelectedElements()
+          }
+        }
+      },
+      {
+        key: ['ctrl+shift+g', true],
+        fn: () => {
+          const elem = this.selectedElement
+          if (elem && !this.multiselected && ['g', 'a', 'use'].includes(elem.tagName)) {
+            this.svgCanvas.ungroupSelectedElement()
+          }
+        }
+      },
       {
         key: [modKey + '[', true],
         fn: () => {
@@ -921,7 +953,8 @@ class Editor extends EditorStartup {
     const bb = zInfo.bbox
 
     if (zoomlevel < 0.001) {
-      this.changeZoom(0.1)
+      // Editor has no changeZoom method: this branch used to throw.
+      this.zoomAt(0.1)
       return
     }
 
@@ -1167,7 +1200,7 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   moveUpDownSelected (dir) {
-    if (this.selectedElement) {
+    if (this.selectedElement || this.multiselected) {
       this.svgCanvas.moveUpDownSelected(dir)
     }
   }
@@ -1263,7 +1296,7 @@ class Editor extends EditorStartup {
    * @param {Event} e
    * @returns {void} Resolves to `undefined`
    */
-  cancelOverlays (e) {
+  async cancelOverlays (e) {
     if ($id('dialog_box') != null) $id('dialog_box').style.display = 'none'
     const $editorDialog = $id('se-svg-editor-dialog')
     const editingsource = $editorDialog.getAttribute('dialog') === 'open'
@@ -1277,10 +1310,11 @@ class Editor extends EditorStartup {
     if (editingsource) {
       const origSource = this.svgCanvas.getSvgString()
       if (origSource !== e.detail.value) {
-        const ok = seConfirm(
+        // Wait for the answer before discarding the edited source.
+        const ok = await seConfirm(
           this.i18next.t('notification.QignoreSourceChanges')
         )
-        if (ok) {
+        if (ok !== false && ok !== 'Cancel') {
           this.hideSourceEditor()
         }
       } else {

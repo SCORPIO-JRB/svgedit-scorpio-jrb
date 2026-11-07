@@ -58,7 +58,12 @@ class TopPanel {
       collection = root.getElementsByClassName(className)
       this.toolCollections.set(className, collection)
     }
-    return [...collection]
+    // Some callers pass an element id (tool_topath, tool_reorient, image_url,
+    // tool_make_link…): they were never hidden or shown before.
+    const byId = $id(className)
+    return byId && root.contains(byId) && !byId.classList.contains(className)
+      ? [...collection, byId]
+      : [...collection]
   }
 
   /**
@@ -796,7 +801,7 @@ class TopPanel {
    * @returns {void}
    */
   moveToTopSelected () {
-    if (this.editor.selectedElement) {
+    if (this.editor.selectedElement || this.editor.multiselected) {
       this.editor.svgCanvas.moveToTopSelectedElement()
     }
   }
@@ -806,7 +811,7 @@ class TopPanel {
    * @returns {void}
    */
   moveToBottomSelected () {
-    if (this.editor.selectedElement) {
+    if (this.editor.selectedElement || this.editor.multiselected) {
       this.editor.svgCanvas.moveToBottomSelectedElement()
     }
   }
