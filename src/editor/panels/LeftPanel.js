@@ -29,7 +29,9 @@ class LeftPanel {
   updateLeftPanel (button) {
     if (button.disabled) return false
     // remove the pressed state on other(s) button(s)
-    $qa('#tools_left *[pressed]').forEach((b) => {
+    const toolsLeft = $id('tools_left')
+    const pressed = toolsLeft ? toolsLeft.querySelectorAll('*[pressed]') : $qa('#tools_left *[pressed]')
+    pressed.forEach((b) => {
       b.pressed = false
     })
     // pressed state for the clicked button

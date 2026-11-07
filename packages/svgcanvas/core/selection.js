@@ -110,7 +110,11 @@ const addToSelectionMethod = (elemsToAdd, showGrips) => {
     ++firstNull
   }
 
-  // now add each element consecutively
+  // Collect the new elements first, then read all their selection boxes, then
+  // create the selectors: reading a box right after inserting the previous
+  // selector forced one layout per element (quadratic on "select all").
+  const alreadySelected = new Set(selectedElements)
+  const toAdd = []
   let i = elemsToAdd.length
   while (i--) {
     let elem = elemsToAdd[i]
@@ -124,19 +128,24 @@ const addToSelectionMethod = (elemsToAdd, showGrips) => {
     }
 
     // if it's not already there, add it
-    if (!selectedElements.includes(elem)) {
-      selectedElements[firstNull] = elem
-
-      // only the first selectedBBoxes element is ever used in the codebase these days
-      // if (j === 0) selectedBBoxes[0] = utilsGetBBox(elem);
-      firstNull++
-      const sel = svgCanvas.selectorManager.requestSelector(elem)
-
-      if (selectedElements.length > 1) {
-        sel.showGrips(false)
-      }
+    if (!alreadySelected.has(elem)) {
+      alreadySelected.add(elem)
+      toAdd.push(elem)
     }
   }
+
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  const boxes = toAdd.map((elem) => (measure ? measure(elem) : undefined))
+  toAdd.forEach((elem, index) => {
+    selectedElements[firstNull] = elem
+    firstNull++
+    const bbox = boxes[index]
+    const sel = svgCanvas.selectorManager.requestSelector(elem, bbox, Boolean(bbox))
+
+    if (selectedElements.length > 1) {
+      sel.showGrips(false)
+    }
+  })
   if (!selectedElements.length) {
     return
   }

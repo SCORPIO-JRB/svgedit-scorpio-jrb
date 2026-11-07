@@ -492,17 +492,17 @@ export class BatchCommand extends Command {
   * @returns {Element[]} All the elements we are changing
   */
   elements () {
-    const elems = []
+    const elems = new Set()
     let cmd = this.stack.length
     while (cmd--) {
       if (!this.stack[cmd]) continue
       const thisElems = this.stack[cmd].elements()
       let elem = thisElems.length
       while (elem--) {
-        if (!elems.includes(thisElems[elem])) { elems.push(thisElems[elem]) }
+        elems.add(thisElems[elem])
       }
     }
-    return elems
+    return [...elems]
   }
 
   /**
@@ -585,7 +585,11 @@ export class UndoManager {
   undo () {
     if (this.undoStackPointer > 0) {
       const cmd = this.undoStack[--this.undoStackPointer]
-      cmd.unapply(this.handler_)
+      try {
+        cmd.unapply(this.handler_)
+      } finally {
+        this.handler_?.flushHistoryEvents?.()
+      }
     }
   }
 
@@ -596,7 +600,11 @@ export class UndoManager {
   redo () {
     if (this.undoStackPointer < this.undoStack.length && this.undoStack.length > 0) {
       const cmd = this.undoStack[this.undoStackPointer++]
-      cmd.apply(this.handler_)
+      try {
+        cmd.apply(this.handler_)
+      } finally {
+        this.handler_?.flushHistoryEvents?.()
+      }
     }
   }
 

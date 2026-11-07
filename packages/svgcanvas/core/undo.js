@@ -34,7 +34,34 @@ export const init = (canvas) => {
 }
 
 export const getUndoManager = () => {
+  // A batch command forwards the handler to each of its sub-commands, so one
+  // undo of a multi-element move used to clear the selection and notify the
+  // editor once per sub-command (thousands of full UI refreshes). The handler
+  // now tracks the nesting depth: the selection is cleared when the outermost
+  // command starts, per-command fix-ups still run for every sub-command, and a
+  // single deduplicated `changed` notification is sent when it ends.
+  let depth = 0
+  let changedElems = null
+
+  const flushChanged = () => {
+    const elems = changedElems ? [...changedElems] : []
+    changedElems = null
+    svgCanvas.pathActions.clear()
+    svgCanvas.call('changed', elems)
+  }
+
   return new UndoManager({
+    /**
+     * Sends the pending `changed` notification if a command threw before
+     * completing, so that the next undo or redo starts from a clean state.
+     * @returns {void}
+     */
+    flushHistoryEvents () {
+      if (depth === 0) return
+      depth = 0
+      flushChanged()
+    },
+
     /**
      * @param {string} eventType One of the HistoryEvent types
      * @param {module:history.HistoryCommand} cmd Fulfills the HistoryCommand interface
@@ -45,7 +72,10 @@ export const getUndoManager = () => {
       const EventTypes = HistoryEventTypes
       // TODO: handle setBlurOffsets.
       if (eventType === EventTypes.BEFORE_UNAPPLY || eventType === EventTypes.BEFORE_APPLY) {
-        svgCanvas.clearSelection()
+        if (depth++ === 0) {
+          changedElems = new Set()
+          svgCanvas.clearSelection()
+        }
       } else if (eventType === EventTypes.AFTER_APPLY || eventType === EventTypes.AFTER_UNAPPLY) {
         const cmdType = cmd.type()
         const isApply = (eventType === EventTypes.AFTER_APPLY)
@@ -64,9 +94,11 @@ export const getUndoManager = () => {
             }
           }
         }
-        const elems = cmd.elements()
-        svgCanvas.pathActions.clear()
-        svgCanvas.call('changed', elems)
+        // Sub-commands report their own elements, so a batch adds nothing new.
+        if (cmdType !== 'BatchCommand') {
+          if (!changedElems) changedElems = new Set()
+          cmd.elements().forEach((elem) => changedElems.add(elem))
+        }
         if (cmdType === 'BatchCommand' && cmd.refreshUseData) {
           svgCanvas.setUseData(svgCanvas.getSvgContent())
         } else if (cmdType === 'MoveElementCommand') {
@@ -118,6 +150,11 @@ export const getUndoManager = () => {
               tspans[i].setAttribute('y', y)
             }
           }
+        }
+
+        depth = Math.max(0, depth - 1)
+        if (depth === 0) {
+          flushChanged()
         }
       }
     }

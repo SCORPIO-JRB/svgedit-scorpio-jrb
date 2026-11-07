@@ -202,40 +202,39 @@ export const matrixMultiply = (...args) => {
     return matrix
   }
 
-  if (typeof DOMMatrix === 'function' && typeof DOMMatrix.fromMatrix === 'function') {
-    const result = args.reduce(
-      (acc, curr) => acc.multiply(DOMMatrix.fromMatrix(curr)),
-      new DOMMatrix()
-    )
-
-    const out = svg.createSVGMatrix()
-    Object.assign(out, {
-      a: result.a,
-      b: result.b,
-      c: result.c,
-      d: result.d,
-      e: result.e,
-      f: result.f
-    })
-
-    return normalizeNearZero(out)
-  }
-
-  let m = svg.createSVGMatrix()
+  // Plain arithmetic on numbers, then a single SVGMatrix: this function runs
+  // for every selected element on every mousemove, and allocating a DOMMatrix
+  // or an SVGMatrix per factor dominated the cost of dragging a large
+  // selection. The result is the same product as DOMMatrix#multiply.
+  let a = 1
+  let b = 0
+  let c = 0
+  let d = 1
+  let e = 0
+  let f = 0
   for (const curr of args) {
-    const next = svg.createSVGMatrix()
-    Object.assign(next, {
-      a: m.a * curr.a + m.c * curr.b,
-      b: m.b * curr.a + m.d * curr.b,
-      c: m.a * curr.c + m.c * curr.d,
-      d: m.b * curr.c + m.d * curr.d,
-      e: m.a * curr.e + m.c * curr.f + m.e,
-      f: m.b * curr.e + m.d * curr.f + m.f
-    })
-    m = next
+    const na = a * curr.a + c * curr.b
+    const nb = b * curr.a + d * curr.b
+    const nc = a * curr.c + c * curr.d
+    const nd = b * curr.c + d * curr.d
+    const ne = a * curr.e + c * curr.f + e
+    const nf = b * curr.e + d * curr.f + f
+    a = na
+    b = nb
+    c = nc
+    d = nd
+    e = ne
+    f = nf
   }
 
-  return normalizeNearZero(m)
+  const out = svg.createSVGMatrix()
+  out.a = a
+  out.b = b
+  out.c = c
+  out.d = d
+  out.e = e
+  out.f = f
+  return normalizeNearZero(out)
 }
 
 /**

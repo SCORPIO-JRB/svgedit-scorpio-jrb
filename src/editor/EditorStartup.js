@@ -610,7 +610,7 @@ class EditorStartup {
     }.bind(this))
 
     // zoom
-    $id('zoom').value = (this.svgCanvas.getZoom() * 100).toFixed(1)
+    $id('zoom').syncValue((this.svgCanvas.getZoom() * 100).toFixed(1))
     this.canvMenu.setAttribute('disableallmenu', true)
     this.canvMenu.setAttribute('enablemenuitems', '#delete,#cut,#copy')
 

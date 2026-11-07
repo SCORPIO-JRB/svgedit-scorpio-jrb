@@ -25,16 +25,40 @@ class TopPanel {
    */
   displayTool (className) {
     // default display is 'none' so removing the property will make the panel visible
-    $qa(`.${className}`).map(el => el.style.removeProperty('display'))
+    this.getTools(className).forEach(el => el.style.removeProperty('display'))
   }
 
   /**
    * @type {module}
    */
   hideTool (className) {
-    $qa(`.${className}`).forEach(el => {
+    this.getTools(className).forEach(el => {
       el.style.display = 'none'
     })
+  }
+
+  /**
+   * Returns the top panel elements that carry a class. The search is limited to
+   * the top panel and the live collection is cached: the context panel used to
+   * scan the whole document, drawing included, about twenty times per update.
+   * @param {string} className
+   * @returns {Element[]}
+   */
+  getTools (className) {
+    const root = $id('tools_top')
+    if (!root) {
+      return $qa(`.${className}`)
+    }
+    if (this.toolsRoot !== root) {
+      this.toolsRoot = root
+      this.toolCollections = new Map()
+    }
+    let collection = this.toolCollections.get(className)
+    if (!collection) {
+      collection = root.getElementsByClassName(className)
+      this.toolCollections.set(className, collection)
+    }
+    return [...collection]
   }
 
   /**

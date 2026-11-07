@@ -82,6 +82,15 @@ const getBsplinePoint = (t) => {
 
 const beginDragTransform = (svgRoot, selectedElements) => {
   svgCanvas.dragStartTransforms = new Map()
+  // A translation does not change an element's own bounding box, so every
+  // selection box is read once here, before any write, and reused on each
+  // mousemove. Reading it inside the move loop forced one layout per element.
+  svgCanvas.dragStartBBoxes = new Map()
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  for (const selectedElement of selectedElements) {
+    if (!selectedElement || !measure) { continue }
+    svgCanvas.dragStartBBoxes.set(selectedElement, measure(selectedElement))
+  }
   for (const selectedElement of selectedElements) {
     if (!selectedElement) { continue }
     svgCanvas.dragStartTransforms.set(
@@ -99,6 +108,25 @@ const beginDragTransform = (svgRoot, selectedElements) => {
     }
   }
   svgCanvas.hasDragStartTransform = true
+}
+
+/**
+ * Resizes the selectors of the given elements. Every selection box is read
+ * first, then every selector is written, so the browser lays out once instead
+ * of once per element.
+ * @param {Element[]} elements - Stops at the first empty slot
+ * @returns {void}
+ */
+const resizeSelectors = (elements) => {
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  const boxes = []
+  for (const element of elements) {
+    if (!element) { break }
+    boxes.push([element, measure ? measure(element) : undefined])
+  }
+  boxes.forEach(([element, bbox]) => {
+    svgCanvas.selectorManager.requestSelector(element).resize(bbox, Boolean(bbox))
+  })
 }
 
 // Update only the temporary drag transform inserted at index 0.
@@ -193,7 +221,8 @@ const mouseMoveEvent = (evt) => {
             if (el) {
               updateTransformList(svgRoot, el, dx, dy)
               // update our internal bbox that we're tracking while dragging
-              svgCanvas.selectorManager.requestSelector(el).resize()
+              const bbox = svgCanvas.dragStartBBoxes?.get(el)
+              svgCanvas.selectorManager.requestSelector(el).resize(bbox, Boolean(bbox))
             }
           })
           svgCanvas.call('transition', selectedElements)
@@ -733,13 +762,10 @@ const mouseUpEvent = (evt) => {
 
           // Clear the stored transforms AND reset the flag together
           svgCanvas.dragStartTransforms = null
+          svgCanvas.dragStartBBoxes = null
           svgCanvas.hasDragStartTransform = false
 
-          const len = selectedElements.length
-          for (let i = 0; i < len; ++i) {
-            if (!selectedElements[i]) { break }
-            svgCanvas.selectorManager.requestSelector(selectedElements[i]).resize()
-          }
+          resizeSelectors(selectedElements)
           // no change in position/size, so maybe we should move to pathedit
         } else {
           t = evt.target

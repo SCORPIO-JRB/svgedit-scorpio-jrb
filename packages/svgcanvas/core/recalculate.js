@@ -29,6 +29,12 @@ import { mergeDeep } from '../common/util.js'
 
 let svgCanvas
 
+// Elements for which `getBBox` always returns a box.
+const ELEMENTS_WITH_BBOX = new Set([
+  'a', 'circle', 'ellipse', 'foreignObject', 'g', 'image', 'line', 'path',
+  'polygon', 'polyline', 'rect', 'svg', 'text', 'tspan', 'use'
+])
+
 const geometryLimitedElements = new Set([
   'circle',
   'ellipse',
@@ -768,11 +774,16 @@ export const recalculateDimensions = selected => {
   } else {
     // Non-group elements
 
-    // Get the bounding box of the element
-    const box = getBBox(selected)
-
-    // Handle elements without a bounding box (e.g., <defs>, <metadata>)
-    if (!box && selected.tagName !== 'path') return null
+    // Get the bounding box of the element. It is only needed to find the
+    // rotation center, or to detect elements without a box (<defs>,
+    // <metadata>…). Reading it for every element of a large unrotated
+    // selection forced one layout per element, so it is read only then.
+    let box
+    if (getRotationAngle(selected) || !ELEMENTS_WITH_BBOX.has(selected.tagName)) {
+      box = getBBox(selected)
+      // Handle elements without a bounding box (e.g., <defs>, <metadata>)
+      if (!box && selected.tagName !== 'path') return null
+    }
 
     let m // Transformation matrix
 
@@ -804,6 +815,9 @@ export const recalculateDimensions = selected => {
     // Handle rotation transformations
     const angle = getRotationAngle(selected)
     if (angle) {
+      if (box === undefined) {
+        box = getBBox(selected)
+      }
       if (selected.localName === 'image') {
         // Use the center of the image as the rotation center
         const xAttr = convertToNum('x', selected.getAttribute('x') || '0')

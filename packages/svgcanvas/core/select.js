@@ -16,6 +16,16 @@ let svgCanvas
 // change radius if touch screen
 const gripRadius = window.ontouchstart ? 10 : 4
 
+// A detached <svg> used only to create SVGMatrix objects, instead of creating
+// a new element on every selector resize.
+let matrixFactory = null
+const getMatrixFactory = () => {
+  if (!matrixFactory) {
+    matrixFactory = document.createElementNS(NS.SVG, 'svg')
+  }
+  return matrixFactory
+}
+
 /**
  * Private singleton manager for selector state
  */
@@ -50,7 +60,7 @@ export class Selector {
   * @param {Element} elem - DOM element associated with this selector
   * @param {module:utilities.BBoxObject} [bbox] - Optional bbox to use for initialization (prevents duplicate `getBBox` call).
   */
-  constructor (id, elem, bbox) {
+  constructor (id, elem, bbox, exactBBox = false) {
     // this is the selector's unique number
     this.id = id
 
@@ -93,7 +103,7 @@ export class Selector {
       w: null
     }
 
-    this.reset(this.selectedElement, bbox)
+    this.reset(this.selectedElement, bbox, exactBBox)
   }
 
   /**
@@ -102,11 +112,31 @@ export class Selector {
   * @param {module:utilities.BBoxObject} bbox - Optional bbox to use for reset (prevents duplicate getBBox call).
   * @returns {void}
   */
-  reset (e, bbox) {
+  reset (e, bbox, exactBBox = false) {
     this.locked = true
     this.selectedElement = e
-    this.resize(bbox)
+    this.resize(bbox, exactBBox)
     this.selectorGroup.setAttribute('display', 'inline')
+  }
+
+  /**
+  * Returns the box the selector frames: the element's bounding box, or for a
+  * group the stroked box of its children. Reading it forces a layout, so
+  * callers handling many elements should read every box first, then resize.
+  * @param {Element} elem
+  * @returns {module:utilities.BBoxObject|null}
+  */
+  static getSelectionBBox (elem) {
+    let bbox = getBBox(elem)
+    if (elem.tagName === 'g' && !svgCanvas.getDataStorage().has(elem, 'gsvg')) {
+      // The bbox for a group does not include stroke vals, so we
+      // get the bbox based on its children.
+      const strokedBbox = getStrokedBBox([elem.childNodes])
+      if (strokedBbox) {
+        bbox = strokedBbox
+      }
+    }
+    return bbox
   }
 
   /**
@@ -120,21 +150,48 @@ export class Selector {
     const elem = this.selectedElement
     this.hasGrips = show
     if (elem && show) {
+      // The grips move to this selector: no other selector owns them anymore.
+      selectModule.getSelectorManager().selectors.forEach((selector) => {
+        if (selector && selector !== this) { selector.hasGrips = false }
+      })
       this.selectorGroup.append(selectModule.getSelectorManager().selectorGripsGroup)
       Selector.updateGripCursors(getRotationAngle(elem))
+      this.updateGripPositions()
     }
+  }
+
+  /**
+  * Moves the shared resize and rotate grips onto this selector's box.
+  * @returns {void}
+  */
+  updateGripPositions () {
+    const { nw, n } = this.gripCoords
+    if (!nw || !n) { return }
+    const mgr = selectModule.getSelectorManager()
+    Object.entries(this.gripCoords).forEach(([dir, coords]) => {
+      mgr.selectorGrips[dir].setAttribute('cx', coords[0])
+      mgr.selectorGrips[dir].setAttribute('cy', coords[1])
+    })
+    // we want to go 20 pixels in the negative transformed y direction, ignoring scale
+    const [topX, topY] = n
+    mgr.rotateGripConnector.setAttribute('x1', topX)
+    mgr.rotateGripConnector.setAttribute('y1', topY)
+    mgr.rotateGripConnector.setAttribute('x2', topX)
+    mgr.rotateGripConnector.setAttribute('y2', topY - (gripRadius * 5))
+    mgr.rotateGrip.setAttribute('cx', topX)
+    mgr.rotateGrip.setAttribute('cy', topY - (gripRadius * 5))
   }
 
   /**
   * Updates the selector to match the element's size.
   * @param {module:utilities.BBoxObject} [bbox] - BBox to use for resize (prevents duplicate getBBox call).
+  * @param {boolean} [exactBBox=false] - The bbox already is the selection box
+  *   (see `Selector.getSelectionBBox`), so groups are not measured again.
   * @returns {void}
   */
-  resize (bbox) {
+  resize (bbox, exactBBox = false) {
     const dataStorage = svgCanvas.getDataStorage()
     const selectedBox = this.selectorRect
-    const mgr = selectModule.getSelectorManager()
-    const selectedGrips = mgr.selectorGrips
     const selected = this.selectedElement
     const zoom = svgCanvas.getZoom()
     let offset = 1 / zoom
@@ -149,8 +206,7 @@ export class Selector {
     }
 
     // find the transformations applied to the parent of the selected element
-    const svg = document.createElementNS(NS.SVG, 'svg')
-    let parentTransformationMatrix = svg.createSVGMatrix()
+    let parentTransformationMatrix = getMatrixFactory().createSVGMatrix()
     let currentElt = selected
     while (currentElt.parentNode) {
       if (currentElt.parentNode && currentElt.parentNode.tagName === 'g' && currentElt.parentNode.transform) {
@@ -177,7 +233,7 @@ export class Selector {
     }
     // TODO: getBBox (previous line) already knows to call getStrokedBBox when tagName === 'g'. Remove this?
     // TODO: getBBox doesn't exclude 'gsvg' and calls getStrokedBBox for any 'g'. Should getBBox be updated?
-    if (tagName === 'g' && !dataStorage.has(selected, 'gsvg')) {
+    if (!exactBBox && tagName === 'g' && !dataStorage.has(selected, 'gsvg')) {
       // The bbox for a group does not include stroke vals, so we
       // get the bbox based on its children.
       const strokedBbox = getStrokedBBox([selected.childNodes])
@@ -255,20 +311,15 @@ export class Selector {
         s: [nbax + (nbaw) / 2, nbay + nbah]
       }
       selectedBox.setAttribute('d', dstr)
-      this.selectorGroup.setAttribute('transform', xform)
-      Object.entries(this.gripCoords).forEach(([dir, coords]) => {
-        selectedGrips[dir].setAttribute('cx', coords[0])
-        selectedGrips[dir].setAttribute('cy', coords[1])
-      })
-
-      // we want to go 20 pixels in the negative transformed y direction, ignoring scale
-      mgr.rotateGripConnector.setAttribute('x1', nbax + (nbaw) / 2)
-      mgr.rotateGripConnector.setAttribute('y1', nbay)
-      mgr.rotateGripConnector.setAttribute('x2', nbax + (nbaw) / 2)
-      mgr.rotateGripConnector.setAttribute('y2', nbay - (gripRadius * 5))
-
-      mgr.rotateGrip.setAttribute('cx', nbax + (nbaw) / 2)
-      mgr.rotateGrip.setAttribute('cy', nbay - (gripRadius * 5))
+      // Unrotated selectors keep an empty transform: skip the redundant write.
+      if (this.selectorGroup.getAttribute('transform') !== xform) {
+        this.selectorGroup.setAttribute('transform', xform)
+      }
+      // The grips are shared by all selectors: only the selector that shows
+      // them positions them (showGrips does it when they move to a selector).
+      if (this.hasGrips) {
+        this.updateGripPositions()
+      }
     }
   }
 
@@ -446,9 +497,10 @@ export class SelectorManager {
   *
   * @param {Element} elem - DOM element to get the selector for
   * @param {module:utilities.BBoxObject} [bbox] - Optional bbox to use for reset (prevents duplicate getBBox call).
+  * @param {boolean} [exactBBox=false] - The bbox comes from `Selector.getSelectionBBox`.
   * @returns {Selector} The selector based on the given element
   */
-  requestSelector (elem, bbox) {
+  requestSelector (elem, bbox, exactBBox = false) {
     if (!elem) { return null }
 
     const N = this.selectors.length
@@ -460,13 +512,13 @@ export class SelectorManager {
     for (let i = 0; i < N; ++i) {
       if (!this.selectors[i]?.locked) {
         this.selectors[i].locked = true
-        this.selectors[i].reset(elem, bbox)
+        this.selectors[i].reset(elem, bbox, exactBBox)
         this.selectorMap[elem.id] = this.selectors[i]
         return this.selectors[i]
       }
     }
     // if we reached here, no available selectors were found, we create one
-    this.selectors[N] = new Selector(N, elem, bbox)
+    this.selectors[N] = new Selector(N, elem, bbox, exactBBox)
     this.selectorParentGroup.append(this.selectors[N].selectorGroup)
     this.selectorMap[elem.id] = this.selectors[N]
     return this.selectors[N]

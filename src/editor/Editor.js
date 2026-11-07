@@ -810,9 +810,14 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   zoomDone () {
-    for (const el of this.svgCanvas.selectedElements) {
-      this.svgCanvas.selectorManager.requestSelector(el).resize()
-    }
+    // Read every selection box first, then resize the selectors: interleaving
+    // reads and writes forced one layout per selected element.
+    const elements = this.svgCanvas.selectedElements.filter(Boolean)
+    const measure = this.svgCanvas.getSelector().getSelectionBBox
+    const boxes = elements.map((el) => measure(el))
+    elements.forEach((el, index) => {
+      this.svgCanvas.selectorManager.requestSelector(el).resize(boxes[index], Boolean(boxes[index]))
+    })
     this.updateWireFrame()
   }
 
@@ -858,7 +863,7 @@ class Editor extends EditorStartup {
       return
     }
 
-    $id('zoom').value = (this.svgCanvas.getZoom() * 100).toFixed(1)
+    $id('zoom').syncValue((this.svgCanvas.getZoom() * 100).toFixed(1))
 
     if (autoCenter) {
       this.updateCanvas()
@@ -982,7 +987,7 @@ class Editor extends EditorStartup {
     const resolution = this.svgCanvas.getResolution()
     multiplier = multiplier ? resolution.zoom * multiplier : 1
     // setResolution(res.w * multiplier, res.h * multiplier, true);
-    $id('zoom').value = (multiplier * 100).toFixed(1)
+    $id('zoom').syncValue((multiplier * 100).toFixed(1))
     this.svgCanvas.setCurrentZoom(multiplier)
     this.zoomDone()
     this.updateCanvas(true)
