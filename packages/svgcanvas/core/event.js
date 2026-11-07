@@ -19,6 +19,16 @@ import * as draw from './draw.js'
 import * as pathModule from './path.js'
 import * as hstry from './history.js'
 import { findPos } from '../../svgcanvas/common/util.js'
+import {
+  beginGroupResize,
+  updateGroupResize,
+  commitGroupResize,
+  cancelGroupResize,
+  isGroupResizing,
+  isScalableText,
+  commitSingleTextResize,
+  singleTextPreview
+} from './multi-transform.js'
 
 const {
   InsertElementCommand,
@@ -37,6 +47,8 @@ let pendingCloneCmd = null
 let selectionBeforeClone = null
 // Elements that stay selected during a Shift+drag rubber band.
 let rubberBandBase = new Set()
+// A single text resized by a grip: it gets a new font size, not a matrix.
+let singleTextResize = null
 
 /**
 * @function module:undo.init
@@ -191,7 +203,11 @@ const cancelGesture = () => {
       break
     case 'resize':
     case 'rotate':
-      // Resize and rotation handles exist for a single element only.
+      if (isGroupResizing()) {
+        cancelGroupResize()
+        break
+      }
+      // Otherwise the handles belong to a single element.
       if (selectedElements[0]) {
         restoreTransform(selectedElements[0], svgCanvas.getStartTransform())
       }
@@ -223,6 +239,7 @@ const cancelGesture = () => {
   moveSelectionThresholdReached = false
   pendingCloneCmd = null
   selectionBeforeClone = null
+  singleTextResize = null
   svgCanvas.setStarted(false)
   svgCanvas.setCurrentMode('select')
 
@@ -381,6 +398,16 @@ const mouseMoveEvent = (evt) => {
       break
     }
     case 'resize': {
+      if (isGroupResizing()) {
+        // The common frame of a multi-selection: one matrix for all.
+        updateGroupResize(x, y, {
+          alt: evt.altKey,
+          shift: evt.shiftKey,
+          snap: svgCanvas.getCurConfig().gridSnapping ? snapToGrid : undefined
+        })
+        svgCanvas.call('transition', selectedElements)
+        break
+      }
       // we track the resize bounding box and translate/scale the selected element
       // while the mouse is down, when mouse goes up, we use this to recalculate
       // the shape's coordinates
@@ -469,6 +496,14 @@ const mouseMoveEvent = (evt) => {
       scale.setScale(sx, sy)
 
       translateBack.setTranslate(left + tx, top + ty)
+      if (singleTextResize === selected && !(angle && sx * sy < 0)) {
+        // A text is never distorted: the preview shows the uniform scale and
+        // the position it will get (see commitSingleTextResize).
+        const preview = singleTextPreview(box, sx, sy, left + tx, top + ty)
+        translateOrigin.setTranslate(-preview.origin.x, -preview.origin.y)
+        scale.setScale(preview.sx, preview.sy)
+        translateBack.setTranslate(preview.target.x, preview.target.y)
+      }
       if (hasMatrix) {
         const diff = angle ? 1 : 0
         tlist.replaceItem(translateOrigin, 2 + diff)
@@ -787,6 +822,17 @@ const mouseUpEvent = (evt) => {
   svgCanvas.setStarted(false)
   let t
   const mouseUpMode = svgCanvas.getCurrentMode()
+  if (mouseUpMode === 'resize' && isGroupResizing()) {
+    // Resize of a multi-selection: one undo step for all the elements.
+    const batch = commitGroupResize()
+    svgCanvas.setCurrentMode('select')
+    if (batch) {
+      svgCanvas.addCommandToHistory(batch)
+      svgCanvas.call('changed', selectedElements.filter(Boolean))
+    }
+    resizeSelectors(selectedElements)
+    return
+  }
   switch (mouseUpMode) {
     // intentionally fall-through to select here
     case 'resize':
@@ -852,6 +898,15 @@ const mouseUpEvent = (evt) => {
             const oldTransform = svgCanvas.dragStartTransforms?.has(elem)
               ? svgCanvas.dragStartTransforms.get(elem)
               : (svgCanvas.getStartTransform() || '')
+
+            if (mouseUpMode === 'resize' && elem === singleTextResize) {
+              const textCmd = commitSingleTextResize(elem, oldTransform)
+              if (textCmd) {
+                batchCmd.addSubCommand(textCmd)
+                changedElements.push(elem)
+                return
+              }
+            }
 
             // recalculateDimensions uses startTransform when building its undo command.
             // Set it per element so multi-selection preserves every original transform.
@@ -1082,6 +1137,7 @@ const mouseUpEvent = (evt) => {
   // Reset drag flag after any mouseUp
   svgCanvas.hasDragStartTransform = false
   svgCanvas.dragStartTransforms = null
+  singleTextResize = null
   flushPendingClone()
 
   /**
@@ -1316,6 +1372,7 @@ const mouseDownEvent = (evt) => {
     }
     mouseTarget = selectedElements[0]
   }
+  singleTextResize = null
 
   svgCanvas.setStartTransform(mouseTarget.getAttribute('transform'))
 
@@ -1383,10 +1440,19 @@ const mouseDownEvent = (evt) => {
       }, 100)
       break
     case 'resize': {
+      if (selectedElements.filter(Boolean).length > 1) {
+        // A grip of the common frame: the whole selection is resized.
+        svgCanvas.setStarted(true)
+        svgCanvas.setStartX(x)
+        svgCanvas.setStartY(y)
+        beginGroupResize(selectedElements.filter(Boolean), svgCanvas.getCurrentResizeMode(), x, y)
+        break
+      }
       if (!tlist) { break }
       svgCanvas.setStarted(true)
       svgCanvas.setStartX(x)
       svgCanvas.setStartY(y)
+      singleTextResize = isScalableText(mouseTarget) ? mouseTarget : null
 
       // Getting the BBox from the selection box, since we know we
       // want to orient around it

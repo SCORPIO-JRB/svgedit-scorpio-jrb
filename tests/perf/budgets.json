@@ -6,6 +6,8 @@
     "undo": 50,
     "redo": 50,
     "zoom": 100,
-    "marquee": 100
+    "marquee": 100,
+    "groupResizeMove": 100,
+    "groupResizeRelease": 300
   }
 }

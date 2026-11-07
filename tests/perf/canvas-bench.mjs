@@ -42,7 +42,9 @@ const MEASURES = [
   ['redo', 'Rétablir le déplacement'],
   ['zoom', 'Zoom ×2 (tout sélectionné)'],
   ['marquee', 'Rectangle de sélection couvrant tout (un mouvement)'],
-  ['singleDragMove', 'Un mouvement de glisser (un seul élément)']
+  ['singleDragMove', 'Un mouvement de glisser (un seul élément)'],
+  ['groupResizeMove', 'Redimensionner tout, un mouvement (cadre commun)'],
+  ['groupResizeRelease', 'Relâchement du redimensionnement collectif']
 ]
 
 const launchOptions = process.env.PW_CHROMIUM_PATH
@@ -146,6 +148,19 @@ async function benchSize (size) {
 
     out.undo = await time(() => canvas.undoMgr.undo())
     out.redo = await time(() => canvas.undoMgr.redo())
+
+    // Resize of the whole selection by a grip of its common frame.
+    canvas.selectAllInCurrentLayer()
+    await frame()
+    const grip = document.getElementById('selectorGrip_resize_se')
+    const gripPoint = center(grip)
+    mouse('mousedown', grip, gripPoint.x, gripPoint.y)
+    mouse('mousemove', grip, gripPoint.x + 10, gripPoint.y + 10)
+    await frame()
+    out.groupResizeMove = await time(() => mouse('mousemove', grip, gripPoint.x + 20, gripPoint.y + 15))
+    out.groupResizeRelease = await time(() => mouse('mouseup', grip, gripPoint.x + 20, gripPoint.y + 15))
+    canvas.undoMgr.undo()
+    await frame()
 
     canvas.selectAllInCurrentLayer()
     await frame()

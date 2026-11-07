@@ -154,11 +154,14 @@ export class Selector {
     const elem = this.selectedElement
     this.hasGrips = show
     if (elem && show) {
+      const mgr = selectModule.getSelectorManager()
       // The grips move to this selector: no other selector owns them anymore.
-      selectModule.getSelectorManager().selectors.forEach((selector) => {
+      mgr.selectors.forEach((selector) => {
         if (selector && selector !== this) { selector.hasGrips = false }
       })
-      this.selectorGroup.append(selectModule.getSelectorManager().selectorGripsGroup)
+      mgr.multiGrips = false
+      mgr.showRotateGrip(true)
+      this.selectorGroup.append(mgr.selectorGripsGroup)
       Selector.updateGripCursors(getRotationAngle(elem))
       this.updateGripPositions()
     }
@@ -169,29 +172,7 @@ export class Selector {
   * @returns {void}
   */
   updateGripPositions () {
-    const { nw, n } = this.gripCoords
-    if (!nw || !n) { return }
-    const mgr = selectModule.getSelectorManager()
-    Object.entries(this.gripCoords).forEach(([dir, [x, y]]) => {
-      mgr.selectorGrips[dir].setAttribute('x', x - GRIP_SIZE / 2)
-      mgr.selectorGrips[dir].setAttribute('y', y - GRIP_SIZE / 2)
-      const hit = mgr.selectorGripHits?.[dir]
-      if (hit) {
-        hit.setAttribute('x', x - GRIP_HIT_SIZE / 2)
-        hit.setAttribute('y', y - GRIP_HIT_SIZE / 2)
-      }
-    })
-    // we want to go 20 pixels in the negative transformed y direction, ignoring scale
-    const [topX, topY] = n
-    const rotateY = topY - (gripRadius * 5)
-    mgr.rotateGripConnector.setAttribute('x1', topX)
-    mgr.rotateGripConnector.setAttribute('y1', topY)
-    mgr.rotateGripConnector.setAttribute('x2', topX)
-    mgr.rotateGripConnector.setAttribute('y2', rotateY)
-    mgr.rotateGrip.setAttribute('cx', topX)
-    mgr.rotateGrip.setAttribute('cy', rotateY)
-    mgr.rotateGripHit?.setAttribute('cx', topX)
-    mgr.rotateGripHit?.setAttribute('cy', rotateY)
+    selectModule.getSelectorManager().positionGrips(this.gripCoords)
   }
 
   /**
@@ -271,6 +252,9 @@ export class Selector {
       let nbay = aabox.y - offset
       let nbaw = aabox.width + (offset * 2)
       let nbah = aabox.height + (offset * 2)
+      // Axis-aligned box on screen, used for the common frame of a
+      // multi-selection.
+      this.screenBox = { x: nbax, y: nbay, width: nbaw, height: nbah }
 
       // now if the shape is rotated, un-rotate it
       const cx = nbax + nbaw / 2
@@ -332,6 +316,7 @@ export class Selector {
       if (this.hasGrips) {
         this.updateGripPositions()
       }
+      selectModule.getSelectorManager().scheduleFrameUpdate()
     }
   }
 
@@ -394,7 +379,148 @@ export class SelectorManager {
     this.rotateGripConnector = null
     this.rotateGrip = null
 
+    // Common frame of a multi-selection, and whether the grips are on it
+    this.multiFrame = null
+    this.multiGrips = false
+    this.frameBox = null
+    this.lockedFrame = null
+    this.frameUpdatePending = false
+
     this.initGroup()
+  }
+
+  /**
+  * Moves the shared resize and rotate grips onto a box.
+  * @param {Object<string, number[]>} gripCoords - Position of each grip
+  * @returns {void}
+  */
+  positionGrips (gripCoords) {
+    const { nw, n } = gripCoords
+    if (!nw || !n) { return }
+    Object.entries(gripCoords).forEach(([dir, [x, y]]) => {
+      this.selectorGrips[dir].setAttribute('x', x - GRIP_SIZE / 2)
+      this.selectorGrips[dir].setAttribute('y', y - GRIP_SIZE / 2)
+      const hit = this.selectorGripHits?.[dir]
+      if (hit) {
+        hit.setAttribute('x', x - GRIP_HIT_SIZE / 2)
+        hit.setAttribute('y', y - GRIP_HIT_SIZE / 2)
+      }
+    })
+    // we want to go 20 pixels in the negative transformed y direction, ignoring scale
+    const [topX, topY] = n
+    const rotateY = topY - (gripRadius * 5)
+    this.rotateGripConnector.setAttribute('x1', topX)
+    this.rotateGripConnector.setAttribute('y1', topY)
+    this.rotateGripConnector.setAttribute('x2', topX)
+    this.rotateGripConnector.setAttribute('y2', rotateY)
+    this.rotateGrip.setAttribute('cx', topX)
+    this.rotateGrip.setAttribute('cy', rotateY)
+    this.rotateGripHit?.setAttribute('cx', topX)
+    this.rotateGripHit?.setAttribute('cy', rotateY)
+  }
+
+  /**
+  * Shows or hides the rotation grip, which a multi-selection does not have
+  * yet (rotation of the whole selection comes with M3).
+  * @param {boolean} show
+  * @returns {void}
+  */
+  showRotateGrip (show) {
+    ;[this.rotateGrip, this.rotateGripHit, this.rotateGripConnector].forEach((element) => {
+      if (!element) { return }
+      if (show) {
+        element.removeAttribute('display')
+      } else {
+        element.setAttribute('display', 'none')
+      }
+    })
+  }
+
+  /**
+  * Keeps the common frame on a box during a gesture on the whole selection,
+  * whatever the selectors' boxes; null releases it.
+  * @param {module:utilities.BBoxObject|null} box - Screen coordinates
+  * @returns {void}
+  */
+  lockFrame (box) {
+    this.lockedFrame = box
+  }
+
+  /**
+  * Updates the common frame once the current task has finished: selectors are
+  * resized one by one, the frame needs their union only once.
+  * @returns {void}
+  */
+  scheduleFrameUpdate () {
+    if (this.frameUpdatePending) { return }
+    this.frameUpdatePending = true
+    queueMicrotask(() => {
+      this.frameUpdatePending = false
+      this.updateMultiFrame()
+    })
+  }
+
+  /**
+  * Draws the common frame of a multi-selection and puts the resize grips on
+  * it. Without a box, the frame is the union of the selectors' boxes, which
+  * are already known: no geometry is read.
+  * @param {module:utilities.BBoxObject} [box] - Frame in screen coordinates
+  * @returns {void}
+  */
+  updateMultiFrame (box) {
+    if (!this.multiFrame) { return }
+    const selected = svgCanvas.getSelectedElements?.()?.filter(Boolean) || []
+    if (selected.length < 2) {
+      this.multiFrame.setAttribute('display', 'none')
+      this.frameBox = null
+      this.multiGrips = false
+      return
+    }
+    if (!box && this.lockedFrame) {
+      box = this.lockedFrame
+    }
+    if (!box) {
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+      selected.forEach((elem) => {
+        const sb = this.selectorMap[elem.id]?.screenBox
+        if (!sb) { return }
+        minX = Math.min(minX, sb.x)
+        minY = Math.min(minY, sb.y)
+        maxX = Math.max(maxX, sb.x + sb.width)
+        maxY = Math.max(maxY, sb.y + sb.height)
+      })
+      if (minX === Infinity) { return }
+      box = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    }
+    this.frameBox = box
+    const { x, y, width: w, height: h } = box
+    this.multiFrame.setAttribute('d', `M${x},${y} L${x + w},${y} ${x + w},${y + h} ${x},${y + h}z`)
+    this.multiFrame.removeAttribute('display')
+
+    // The grips leave the selector that had them and go on the frame.
+    this.selectors.forEach((selector) => {
+      if (selector) { selector.hasGrips = false }
+    })
+    this.multiGrips = true
+    if (this.selectorGripsGroup.parentNode !== this.selectorParentGroup) {
+      this.selectorParentGroup.append(this.selectorGripsGroup)
+      Selector.updateGripCursors(0)
+    }
+    this.showRotateGrip(false)
+    this.positionGrips({
+      nw: [x, y],
+      ne: [x + w, y],
+      sw: [x, y + h],
+      se: [x + w, y + h],
+      n: [x + w / 2, y],
+      w: [x, y + h / 2],
+      e: [x + w, y + h / 2],
+      s: [x + w / 2, y + h]
+    })
+    this.selectorGripsGroup.setAttribute('display', 'inline')
   }
 
   /**
@@ -417,8 +543,21 @@ export class SelectorManager {
       element: 'g',
       attr: { display: 'none' }
     })
-    this.selectorParentGroup.append(this.selectorGripsGroup)
+    this.multiFrame = svgCanvas.createSVGElement({
+      element: 'path',
+      attr: {
+        id: 'selectorMultiFrame',
+        fill: 'none',
+        stroke: SELECTION_COLOR,
+        'stroke-width': 1,
+        display: 'none',
+        style: 'pointer-events:none'
+      }
+    })
+    this.selectorParentGroup.append(this.multiFrame, this.selectorGripsGroup)
     svgCanvas.getSvgRoot().append(this.selectorParentGroup)
+    this.multiGrips = false
+    this.frameBox = null
 
     this.selectorMap = {}
     this.selectors = []
@@ -585,7 +724,9 @@ export class SelectorManager {
         delete this.selectorMap[elem.id]
         sel.locked = false
         sel.selectedElement = null
+        sel.screenBox = null
         sel.showGrips(false)
+        this.scheduleFrameUpdate()
 
         // remove from DOM and store reference in JS but only if it exists in the DOM
         try {

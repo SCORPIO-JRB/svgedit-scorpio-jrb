@@ -28,6 +28,7 @@ import {
 import { init as selectionInit } from './core/selection.js'
 import { init as textActionsInit, textActionsMethod } from './core/text-actions.js'
 import { init as eventInit } from './core/event.js'
+import { init as multiTransformInit } from './core/multi-transform.js'
 import {
   init as jsonInit,
   getJsonFromSvgElements,
@@ -261,6 +262,7 @@ class SvgCanvas {
     this.svgroot.appendChild(this.opacAni)
 
     eventInit(this)
+    multiTransformInit(this)
     textActionsInit(this)
     svgInit(this)
     draw.init(this)
