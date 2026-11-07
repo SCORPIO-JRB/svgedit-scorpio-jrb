@@ -70,13 +70,14 @@ test.describe('Common frame (M2)', () => {
     await loadDrawing(page)
   })
 
-  test('a multi-selection shows one frame with eight grips and no rotation grip', async ({ page }) => {
+  test('a multi-selection shows one frame with eight grips and its rotation grip', async ({ page }) => {
     await select(page, ['r1', 'r2'])
     await expect(page.locator('#selectorMultiFrame')).toBeVisible()
     for (const dir of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']) {
       await expect(page.locator(`#selectorGrip_resize_${dir}`)).toBeVisible()
     }
-    await expect(page.locator('#selectorGrip_rotate')).toBeHidden()
+    // The rotation grip came with M3.
+    await expect(page.locator('#selectorGrip_rotate')).toBeVisible()
     // The frame surrounds both elements.
     const frame = await page.locator('#selectorMultiFrame').boundingBox()
     const r1 = await page.locator('#r1').boundingBox()

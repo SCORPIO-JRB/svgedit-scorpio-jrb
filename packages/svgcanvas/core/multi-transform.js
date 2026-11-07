@@ -10,14 +10,19 @@
  * scaled along its own axes without shear, and a text gets a new font size
  * instead of a scale matrix. Nothing is added to the SVG: no group, no
  * attribute. The whole gesture is one undo step.
+ *
+ * A rotation of the selection turns it about the center of its frame: each
+ * element is turned by the same angle about its own center, then moved as its
+ * center moves, with the code that turns and moves a single element.
  * @module multi-transform
  * @license MIT
  */
 
 import { BatchCommand, ChangeElementCommand } from './history.js'
-import { getBBox, getRotationAngle } from './utilities.js'
-import { getTransformList, transformListToTransform } from './math.js'
+import { getBBox, getRotationAngle, withBBoxCache } from './utilities.js'
+import { getTransformList, normalizeRotationAngle, transformListToTransform } from './math.js'
 import { recalculateDimensions, withStartTransform } from './recalculate.js'
+import { hasGeometryChanged, rotateElementTo } from './selection.js'
 
 let svgCanvas = null
 
@@ -39,6 +44,10 @@ const EPSILON = 1e-9
 export const init = (canvas) => {
   svgCanvas = canvas
   svgCanvas.scaleSelectedElements = scaleSelectedElements
+  svgCanvas.rotateSelectedElements = rotateSelectedElements
+  svgCanvas.setSelectionAngle = setSelectionAngle
+  svgCanvas.getSelectionAngle = getSelectionAngle
+  svgCanvas.getCommonRotationAngle = getCommonRotationAngle
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +88,15 @@ export const rotate = (deg) => {
   const sin = Math.sin(r)
   return { a: cos, b: sin, c: -sin, d: cos, e: 0, f: 0 }
 }
+
+/**
+ * Rotation by `deg` degrees about a point.
+ * @param {number} deg
+ * @param {{x: number, y: number}} center
+ * @returns {PlainObject}
+ */
+export const rotateAbout = (deg, center) =>
+  multiply(translate(center.x, center.y), rotate(deg), translate(-center.x, -center.y))
 
 const isIdentityMatrix = (m) =>
   Math.abs(m.a - 1) < EPSILON && Math.abs(m.b) < EPSILON && Math.abs(m.c) < EPSILON &&
@@ -566,12 +584,7 @@ export const scaleSelectedElements = (sx, sy, ox, oy) => {
     svgCanvas.addCommandToHistory(batch)
     svgCanvas.call('changed', elements)
   }
-  // Every box is read, then every selector is written: one layout.
-  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
-  const boxes = elements.map((elem) => (measure ? measure(elem) : undefined))
-  elements.forEach((elem, i) => {
-    svgCanvas.selectorManager.requestSelector(elem).resize(boxes[i], Boolean(boxes[i]))
-  })
+  resizeSelectorsOf(elements)
   return batch
 }
 
@@ -610,14 +623,352 @@ const frameOf = (elements, infos) => {
 }
 
 // ---------------------------------------------------------------------------
-// The resize gesture.
+// Rotation of the selection.
+
+/**
+ * Angle shared by elements, or null when their angles differ.
+ * @function module:svgcanvas.SvgCanvas#getCommonRotationAngle
+ * @param {Element[]} [elements] - The selected elements by default
+ * @returns {number|null}
+ */
+export const getCommonRotationAngle = (elements) => {
+  elements = (elements || svgCanvas.getSelectedElements()).filter(Boolean)
+  if (!elements.length) { return null }
+  const angles = elements.map((elem) => getRotationAngle(elem) || 0)
+  const same = angles.every((angle) => Math.abs(normalizeRotationAngle(angle - angles[0])) < 1e-6)
+  return same ? angles[0] : null
+}
+
+// Angle of the frame of a multi-selection whose elements have different
+// angles: the rotations applied since it was selected. It holds while the
+// selection and the angles of its elements are those it was computed for.
+let frameAngle = null
+
+const anglesOf = (elements) => elements.map((elem) => getRotationAngle(elem) || 0)
+
+/**
+ * Angle of the frame of the selection, shown in the angle field: the angle
+ * its elements share; otherwise the rotations applied to it since it was
+ * selected, or null before any.
+ * @function module:svgcanvas.SvgCanvas#getSelectionAngle
+ * @returns {number|null}
+ */
+export const getSelectionAngle = () => {
+  if (gesture?.type === 'rotate') {
+    return normalizeRotationAngle((gesture.previousAngle ?? 0) + gesture.angle)
+  }
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  const common = getCommonRotationAngle(elements)
+  if (common !== null) { return common }
+  if (!frameAngle || frameAngle.elements.length !== elements.length ||
+    frameAngle.elements.some((elem, i) => elem !== elements[i])) { return null }
+  const angles = anglesOf(elements)
+  const unchanged = angles.every((angle, i) =>
+    Math.abs(normalizeRotationAngle(angle - frameAngle.angles[i])) < 1e-6)
+  return unchanged ? frameAngle.angle : null
+}
+
+/**
+ * Records the angle of the frame after a rotation of the selection.
+ * @param {Element[]} elements
+ * @param {number|null} previous - Angle of the frame before
+ * @param {number} delta
+ * @returns {void}
+ */
+const advanceFrameAngle = (elements, previous, delta) => {
+  frameAngle = {
+    elements: [...elements],
+    angles: anglesOf(elements),
+    angle: normalizeRotationAngle((previous ?? 0) + delta)
+  }
+}
+
+/**
+ * Angle, in an element's parent coordinates, of a rotation of the drawing:
+ * the same, or its opposite under a mirror. Null when the parent's transform
+ * distorts angles (a non-uniform scale or a skew).
+ * @param {number} deg
+ * @param {PlainObject} info
+ * @returns {number|null}
+ */
+const angleInParent = (deg, info) => {
+  if (!info.Pinv) { return deg }
+  const { P } = info
+  const det = P.a * P.d - P.b * P.c
+  const tol = 1e-9 * Math.max(1, Math.sqrt(Math.abs(det)))
+  if (det > 0 && Math.abs(P.a - P.d) < tol && Math.abs(P.b + P.c) < tol) { return deg }
+  if (det < 0 && Math.abs(P.a + P.d) < tol && Math.abs(P.b - P.c) < tol) { return -deg }
+  return null
+}
+
+/**
+ * Describes an element for a rotation of the selection: its angle and its
+ * visual center in its parent's coordinates, read before anything is written.
+ * @param {Element} elem
+ * @returns {PlainObject}
+ */
+const describeRotation = (elem) => {
+  const P = parentToDrawing(elem)
+  const tlist = getTransformList(elem)
+  const box = getBBox(elem)
+  const own = tlist?.numberOfItems ? toPlain(transformListToTransform(tlist).matrix) : identity()
+  return {
+    elem,
+    P,
+    Pinv: isIdentityMatrix(P) ? null : invert(P),
+    startTransform: elem.getAttribute('transform') || '',
+    kind: 'matrix',
+    angle: getRotationAngle(elem) || 0,
+    box,
+    center: box ? apply(own, box.x + box.width / 2, box.y + box.height / 2) : null
+  }
+}
+
+/**
+ * Temporary transform showing a rotation of the selection on top of an
+ * element's transform. A rotation item, not a matrix: the element's selector
+ * then reads the new angle and stays oriented along the element.
+ * @param {PlainObject} info
+ * @param {number} deg
+ * @param {{x: number, y: number}} center - Pivot, in the drawing's coordinates
+ * @returns {SVGTransform}
+ */
+const rotationPreview = (info, deg, center) => {
+  const local = angleInParent(deg, info)
+  if (local === null) { return toSVGTransform(inParent(rotateAbout(deg, center), info)) }
+  const pivot = info.Pinv ? apply(info.Pinv, center.x, center.y) : center
+  const xform = svgCanvas.getSvgRoot().createSVGTransform()
+  xform.setRotate(local, pivot.x, pivot.y)
+  return xform
+}
+
+const NUMBER = /-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi
+
+/**
+ * Checks that an element's geometry is the same as in `oldValues`, as the
+ * browser stores it: every number in single precision. A recalculation
+ * often rewrites a coordinate with a rounding difference that leaves the
+ * stored geometry, and so the box, unchanged.
+ * @param {Element} elem
+ * @param {Object<string, string>} oldValues - From rotateElementTo
+ * @returns {boolean}
+ */
+const sameStoredGeometry = (elem, oldValues) => Object.entries(oldValues).every(([name, old]) => {
+  if (name === 'transform') { return true }
+  const value = elem.getAttribute(name) || ''
+  if (value === old) { return true }
+  const a = old.match(NUMBER) || []
+  const b = value.match(NUMBER) || []
+  return a.length === b.length &&
+    old.replace(NUMBER, '#') === value.replace(NUMBER, '#') &&
+    a.every((n, i) => Math.fround(Number(n)) === Math.fround(Number(b[i])))
+})
+
+/**
+ * First step of the rotation of one element with the selection: it is given
+ * its angle plus the rotation, about its own center, as setRotationAngle
+ * does. The second step, moveElement, moves it as its center moves, as
+ * moveSelectedElements does. The SVG is the one these two single-element
+ * commands write.
+ * @param {PlainObject} info - From describeRotation
+ * @param {number} deg
+ * @param {{x: number, y: number}} center - Pivot, in the drawing's coordinates
+ * @param {Map<Element, module:utilities.BBoxObject>} boxes - Boxes read
+ *   beforehand, valid while the element's geometry is unchanged
+ * @returns {PlainObject} The step, for moveElement
+ */
+const turnElement = (info, deg, center, boxes) => {
+  const { elem } = info
+  const local = angleInParent(deg, info)
+  if (local === null || !info.center) {
+    // Angles are distorted by the parent: the matrix is applied as it is.
+    boxes.delete(elem)
+    return { info, done: true, cmd: commitElement(info, inParent(rotateAbout(deg, center), info)) }
+  }
+  const batch = new BatchCommand('Rotate')
+  const oldValues = rotateElementTo(elem, info.angle + local)
+  if (oldValues) {
+    // The box read beforehand is used only while the geometry is unchanged.
+    // A text's box also depends on its children: any change drops it.
+    const changed = recalculateDimensions(elem)
+    if (changed && (elem.tagName === 'text' || !sameStoredGeometry(elem, oldValues))) {
+      boxes.delete(elem)
+    }
+    if (hasGeometryChanged(elem, oldValues)) {
+      batch.addSubCommand(new ChangeElementCommand(elem, oldValues, 'transform'))
+    }
+  }
+  const pivot = info.Pinv ? apply(info.Pinv, center.x, center.y) : center
+  const target = apply(rotateAbout(local, pivot), info.center.x, info.center.y)
+  return { info, batch, tx: target.x - info.center.x, ty: target.y - info.center.y }
+}
+
+/**
+ * Second step of the rotation of one element: the move of its center.
+ * @param {PlainObject} step - From turnElement
+ * @returns {module:history.Command|null}
+ */
+const moveElement = (step) => {
+  if (step.done) { return step.cmd }
+  const { info: { elem }, batch, tx, ty } = step
+  const tlist = getTransformList(elem)
+  if (tlist && (Math.abs(tx) > EPSILON || Math.abs(ty) > EPSILON)) {
+    const before = elem.getAttribute('transform') || ''
+    const xform = svgCanvas.getSvgRoot().createSVGTransform()
+    xform.setTranslate(tx, ty)
+    if (tlist.numberOfItems) {
+      tlist.insertItemBefore(xform, 0)
+    } else {
+      tlist.appendItem(xform)
+    }
+    const cmd = withStartTransform(svgCanvas, before, () => recalculateDimensions(elem))
+    if (cmd) {
+      batch.addSubCommand(cmd)
+    } else if ((elem.getAttribute('transform') || '') !== before) {
+      batch.addSubCommand(new ChangeElementCommand(elem, { transform: before }))
+    }
+  }
+  return batch.isEmpty() ? null : batch
+}
+
+/**
+ * Turns elements about a point, as one undo step. Each element goes through
+ * the two steps of a single element, but the work is done in passes: every
+ * element is turned, the boxes this changed are read at once, then every
+ * element is moved. A box is never read between two writes of different
+ * elements, which would force one layout of the drawing per element.
+ * @param {Element[]} elements
+ * @param {number} deg
+ * @param {{x: number, y: number}} center
+ * @param {PlainObject[]} [infos] - Descriptions read beforehand
+ * @returns {module:history.BatchCommand}
+ */
+const rotateElements = (elements, deg, center, infos) => {
+  const described = infos || elements.map(describeRotation)
+  const boxes = new Map(described.filter((info) => info.box).map((info) => [info.elem, info.box]))
+  const batch = new BatchCommand('Rotate Elements')
+  withBBoxCache(boxes, () => {
+    const steps = described.map((info) => turnElement(info, deg, center, boxes))
+    steps.forEach(({ info, done }) => {
+      if (!done && info.box && !boxes.has(info.elem)) { boxes.set(info.elem, getBBox(info.elem)) }
+    })
+    steps.forEach((step) => {
+      const cmd = moveElement(step)
+      boxes.delete(step.info.elem)
+      if (cmd) { batch.addSubCommand(cmd) }
+    })
+  })
+  return batch
+}
+
+/**
+ * Resizes every selector after a change: every box is read, then every
+ * selector is written, for one layout.
+ * @param {Element[]} elements
+ * @returns {void}
+ */
+const resizeSelectorsOf = (elements) => {
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  const boxes = elements.map((elem) => (measure ? measure(elem) : undefined))
+  elements.forEach((elem, i) => {
+    svgCanvas.selectorManager.requestSelector(elem).resize(boxes[i], Boolean(boxes[i]))
+  })
+}
+
+/**
+ * Turns the selection about a point, as one undo step: the whole selection
+ * behaves as a single object.
+ * @function module:svgcanvas.SvgCanvas#rotateSelectedElements
+ * @param {number} angle - Degrees, clockwise on screen
+ * @param {PlainObject} [options]
+ * @param {number} [options.cx] - Pivot, the center of the selection's frame
+ *   by default
+ * @param {number} [options.cy]
+ * @param {boolean} [options.addToHistory=true]
+ * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @returns {module:history.BatchCommand|null}
+ */
+export const rotateSelectedElements = (angle, { cx, cy, addToHistory = true } = {}) => {
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  angle = normalizeRotationAngle(angle)
+  if (!elements.length || !angle) { return null }
+  const previous = getSelectionAngle()
+  const infos = elements.map(describeRotation)
+  if (cx === undefined || cy === undefined) {
+    const frame = frameOf(elements, infos)
+    cx = frame.x + frame.width / 2
+    cy = frame.y + frame.height / 2
+  }
+  const batch = rotateElements(elements, angle, { x: cx, y: cy }, infos)
+  advanceFrameAngle(elements, previous, angle)
+  if (!batch.isEmpty()) {
+    if (addToHistory) { svgCanvas.addCommandToHistory(batch) }
+    svgCanvas.call('changed', elements)
+  }
+  resizeSelectorsOf(elements)
+  return batch.isEmpty() ? null : batch
+}
+
+/**
+ * Sets the angle of the frame of a multi-selection, shown in the angle field
+ * (see getSelectionAngle): the selection turns about the center of its frame
+ * by the difference. Setting the same angle again changes nothing.
+ * @function module:svgcanvas.SvgCanvas#setSelectionAngle
+ * @param {number} angle
+ * @param {PlainObject} [options]
+ * @param {boolean} [options.addToHistory=true]
+ * @returns {module:history.BatchCommand|null}
+ */
+export const setSelectionAngle = (angle, { addToHistory = true } = {}) => {
+  const current = getSelectionAngle() ?? 0
+  return rotateSelectedElements(normalizeRotationAngle(angle) - current, { addToHistory })
+}
+
+// ---------------------------------------------------------------------------
+// Gestures on the common frame.
 
 let gesture = null
 
 /**
+ * @returns {boolean} True during a gesture on the common frame of a
+ *   multi-selection (a resize or a rotation)
+ */
+export const isGroupGesture = () => Boolean(gesture)
+
+/**
  * @returns {boolean} True while the frame of a multi-selection is resized
  */
-export const isGroupResizing = () => Boolean(gesture)
+export const isGroupResizing = () => gesture?.type === 'resize'
+
+/**
+ * @returns {boolean} True while a multi-selection is turned by its handle
+ */
+export const isGroupRotating = () => gesture?.type === 'rotate'
+
+/**
+ * Inserts a temporary transform at the start of each element's list, which
+ * the gesture then replaces.
+ * @param {PlainObject[]} infos
+ * @param {boolean} keepStroke - Keeps the stroke width in the preview, as the
+ *   rules keep it in the result
+ * @returns {void}
+ */
+const insertTemporaryTransforms = (infos, keepStroke) => {
+  infos.forEach((info) => {
+    const tlist = getTransformList(info.elem)
+    if (!tlist) { return }
+    const xform = svgCanvas.getSvgRoot().createSVGTransform()
+    if (tlist.numberOfItems) {
+      tlist.insertItemBefore(xform, 0)
+    } else {
+      tlist.appendItem(xform)
+    }
+    if (keepStroke && KEEPS_STROKE.has(info.elem.tagName) && !info.elem.hasAttribute('vector-effect')) {
+      info.elem.setAttribute('vector-effect', 'non-scaling-stroke')
+      info.addedVectorEffect = true
+    }
+  })
+}
 
 /**
  * Starts resizing the selection by a grip of its common frame. Every box is
@@ -634,23 +985,9 @@ export const beginGroupResize = (elements, dir, startX, startY) => {
   const boxes = elements.map((elem) => (measure ? measure(elem) : undefined))
   const frame = frameOf(elements, infos)
   const mgr = svgCanvas.selectorManager
-  // Temporary transforms, and strokes that keep their width in the preview
-  // as they will in the result.
-  infos.forEach((info) => {
-    const tlist = getTransformList(info.elem)
-    if (!tlist) { return }
-    const xform = svgCanvas.getSvgRoot().createSVGTransform()
-    if (tlist.numberOfItems) {
-      tlist.insertItemBefore(xform, 0)
-    } else {
-      tlist.appendItem(xform)
-    }
-    if (KEEPS_STROKE.has(info.elem.tagName) && !info.elem.hasAttribute('vector-effect')) {
-      info.elem.setAttribute('vector-effect', 'non-scaling-stroke')
-      info.addedVectorEffect = true
-    }
-  })
+  insertTemporaryTransforms(infos, true)
   gesture = {
+    type: 'resize',
     elements,
     infos,
     boxes,
@@ -726,6 +1063,7 @@ const restoreElements = () => {
     if (info.addedVectorEffect) { info.elem.removeAttribute('vector-effect') }
   })
   svgCanvas.selectorManager.lockFrame(null)
+  svgCanvas.selectorManager.setFrameRotation?.(0)
 }
 
 /**
@@ -733,7 +1071,7 @@ const restoreElements = () => {
  * @returns {module:history.BatchCommand|null} Null when nothing changed
  */
 export const commitGroupResize = () => {
-  if (!gesture) { return null }
+  if (gesture?.type !== 'resize') { return null }
   const { elements, infos, M } = gesture
   restoreElements()
   gesture = null
@@ -742,11 +1080,98 @@ export const commitGroupResize = () => {
   return batch.isEmpty() ? null : batch
 }
 
+// ---------------------------------------------------------------------------
+// The rotation gesture.
+
+const pointerAngle = (center, x, y) => Math.atan2(y - center.y, x - center.x) * 180 / Math.PI
+
 /**
- * Ends the gesture and puts every element back, without history.
+ * Starts turning the selection by the handle of its common frame, about the
+ * frame's center. Every box is read here, once.
+ * @param {Element[]} elements
+ * @param {number} startX - Pointer, in the drawing's coordinates
+ * @param {number} startY
  * @returns {void}
  */
-export const cancelGroupResize = () => {
+export const beginGroupRotate = (elements, startX, startY) => {
+  const infos = elements.map(describeRotation)
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  const boxes = elements.map((elem) => (measure ? measure(elem) : undefined))
+  const frame = frameOf(elements, infos)
+  const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 }
+  const mgr = svgCanvas.selectorManager
+  const previousAngle = getSelectionAngle()
+  insertTemporaryTransforms(infos, false)
+  gesture = {
+    type: 'rotate',
+    previousAngle,
+    elements,
+    infos,
+    boxes,
+    center,
+    startAngle: pointerAngle(center, startX, startY),
+    angle: 0,
+    screenFrame: mgr.frameBox ? { ...mgr.frameBox } : null
+  }
+}
+
+/**
+ * Follows the pointer: the angle turned since the mouse went down, about the
+ * frame's center, written once per element.
+ * @param {number} x - Pointer, in the drawing's coordinates
+ * @param {number} y
+ * @param {PlainObject} [modifiers]
+ * @param {boolean} [modifiers.shift] - Steps of 15 degrees
+ * @param {Function} [modifiers.snap] - Rounds an angle to the grid, as for a
+ *   single element
+ * @returns {number} The angle, in degrees
+ */
+export const updateGroupRotate = (x, y, { shift = false, snap } = {}) => {
+  if (gesture?.type !== 'rotate') { return 0 }
+  const { center } = gesture
+  let angle = normalizeRotationAngle(pointerAngle(center, x, y) - gesture.startAngle)
+  if (snap) { angle = snap(angle) }
+  if (shift) { angle = Math.round(angle / 15) * 15 }
+  angle = normalizeRotationAngle(angle)
+  gesture.angle = angle
+  gesture.infos.forEach((info, i) => {
+    const tlist = getTransformList(info.elem)
+    if (!tlist?.numberOfItems) { return }
+    tlist.replaceItem(rotationPreview(info, angle, center), 0)
+    svgCanvas.selectorManager.requestSelector(info.elem).resize(gesture.boxes[i], Boolean(gesture.boxes[i]))
+  })
+  // The frame turns with the selection, about its center.
+  if (gesture.screenFrame) {
+    const zoom = svgCanvas.getZoom()
+    const mgr = svgCanvas.selectorManager
+    mgr.lockFrame(gesture.screenFrame)
+    mgr.setFrameRotation(angle, { x: center.x * zoom, y: center.y * zoom })
+    mgr.updateMultiFrame(gesture.screenFrame)
+  }
+  return angle
+}
+
+/**
+ * Ends the rotation and writes the result, as one undo step.
+ * @returns {module:history.BatchCommand|null} Null when nothing changed
+ */
+export const commitGroupRotate = () => {
+  if (gesture?.type !== 'rotate') { return null }
+  const { elements, infos, angle, center, previousAngle } = gesture
+  restoreElements()
+  gesture = null
+  if (!angle) { return null }
+  const batch = rotateElements(elements, angle, center, infos)
+  advanceFrameAngle(elements, previousAngle, angle)
+  return batch.isEmpty() ? null : batch
+}
+
+/**
+ * Ends the gesture on the frame, resize or rotation, and puts every element
+ * back, without history.
+ * @returns {void}
+ */
+export const cancelGroupGesture = () => {
   if (!gesture) { return }
   restoreElements()
   gesture = null

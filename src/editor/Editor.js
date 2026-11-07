@@ -804,8 +804,10 @@ class Editor extends EditorStartup {
     }
 
     this.multiselected = elems.length >= 2 && elems[1]
-    // Only updating fields for single elements for now
-    if (!this.multiselected) {
+    if (this.multiselected && mode === 'rotate') {
+      // The angle the elements share follows the rotation.
+      this.topPanel.updateSelectionAngle()
+    } else if (!this.multiselected) {
       switch (mode) {
         case 'rotate': {
           const ang = this.svgCanvas.getRotationAngle(elem)
@@ -848,8 +850,10 @@ class Editor extends EditorStartup {
           this.updateCanvas()
         }
         // Update selectedElement if element is no longer part of the image.
-        // This occurs for the text elements in Firefox
-      } else if (elem && !this.selectedElement?.parentNode) {
+        // This occurs for the text elements in Firefox. Not for a
+        // multi-selection: the panel would show the last changed element alone
+        // (and, in the angle field, its own angle).
+      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode) {
         this.selectedElement = elem
       }
     })
@@ -1248,11 +1252,17 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   rotateSelected (cw, step) {
-    if (!this.selectedElement || this.multiselected) {
-      return
-    }
     if (!cw) {
       step *= -1
+    }
+    if (this.multiselected) {
+      // The whole selection turns about the center of its frame.
+      this.svgCanvas.rotateSelectedElements(step)
+      this.topPanel.updateContextPanel()
+      return
+    }
+    if (!this.selectedElement) {
+      return
     }
     const angle = Number.parseFloat($id('angle').value) + step
     this.svgCanvas.setRotationAngle(angle)

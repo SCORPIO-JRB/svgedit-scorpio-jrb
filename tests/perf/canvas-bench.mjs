@@ -44,7 +44,9 @@ const MEASURES = [
   ['marquee', 'Rectangle de sélection couvrant tout (un mouvement)'],
   ['singleDragMove', 'Un mouvement de glisser (un seul élément)'],
   ['groupResizeMove', 'Redimensionner tout, un mouvement (cadre commun)'],
-  ['groupResizeRelease', 'Relâchement du redimensionnement collectif']
+  ['groupResizeRelease', 'Relâchement du redimensionnement collectif'],
+  ['groupRotateMove', 'Pivoter tout, un mouvement (poignée du cadre commun)'],
+  ['groupRotateRelease', 'Relâchement de la rotation collective']
 ]
 
 const launchOptions = process.env.PW_CHROMIUM_PATH
@@ -159,6 +161,19 @@ async function benchSize (size) {
     await frame()
     out.groupResizeMove = await time(() => mouse('mousemove', grip, gripPoint.x + 20, gripPoint.y + 15))
     out.groupResizeRelease = await time(() => mouse('mouseup', grip, gripPoint.x + 20, gripPoint.y + 15))
+    canvas.undoMgr.undo()
+    await frame()
+
+    // Rotation of the whole selection by the handle of its common frame.
+    canvas.selectAllInCurrentLayer()
+    await frame()
+    const rotateGrip = document.getElementById('selectorGrip_rotate')
+    const rotatePoint = center(rotateGrip)
+    mouse('mousedown', rotateGrip, rotatePoint.x, rotatePoint.y)
+    mouse('mousemove', rotateGrip, rotatePoint.x + 10, rotatePoint.y)
+    await frame()
+    out.groupRotateMove = await time(() => mouse('mousemove', rotateGrip, rotatePoint.x + 20, rotatePoint.y + 5))
+    out.groupRotateRelease = await time(() => mouse('mouseup', rotateGrip, rotatePoint.x + 20, rotatePoint.y + 5))
     canvas.undoMgr.undo()
     await frame()
 

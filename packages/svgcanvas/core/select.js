@@ -161,6 +161,7 @@ export class Selector {
       })
       mgr.multiGrips = false
       mgr.showRotateGrip(true)
+      mgr.selectorGripsGroup.removeAttribute('transform')
       this.selectorGroup.append(mgr.selectorGripsGroup)
       Selector.updateGripCursors(getRotationAngle(elem))
       this.updateGripPositions()
@@ -385,6 +386,8 @@ export class SelectorManager {
     this.frameBox = null
     this.lockedFrame = null
     this.frameUpdatePending = false
+    this.frameAngle = 0
+    this.framePivot = null
 
     this.initGroup()
   }
@@ -420,8 +423,7 @@ export class SelectorManager {
   }
 
   /**
-  * Shows or hides the rotation grip, which a multi-selection does not have
-  * yet (rotation of the whole selection comes with M3).
+  * Shows or hides the rotation grip.
   * @param {boolean} show
   * @returns {void}
   */
@@ -444,6 +446,25 @@ export class SelectorManager {
   */
   lockFrame (box) {
     this.lockedFrame = box
+  }
+
+  /**
+  * Turns the common frame and its grips during a rotation of the whole
+  * selection; 0 puts them back on the axes.
+  * @param {number} angle - Degrees
+  * @param {{x: number, y: number}} [pivot] - Screen coordinates
+  * @returns {void}
+  */
+  setFrameRotation (angle, pivot) {
+    this.frameAngle = angle || 0
+    this.framePivot = this.frameAngle ? pivot : null
+    if (!this.frameAngle) {
+      this.multiFrame?.removeAttribute('transform')
+      if (this.multiGrips) {
+        this.selectorGripsGroup?.removeAttribute('transform')
+        Selector.updateGripCursors(0)
+      }
+    }
   }
 
   /**
@@ -509,7 +530,19 @@ export class SelectorManager {
       this.selectorParentGroup.append(this.selectorGripsGroup)
       Selector.updateGripCursors(0)
     }
-    this.showRotateGrip(false)
+    this.showRotateGrip(true)
+    // During a rotation, the frame and its grips turn about the pivot.
+    const transform = this.frameAngle && this.framePivot
+      ? `rotate(${this.frameAngle} ${this.framePivot.x} ${this.framePivot.y})`
+      : null
+    ;[this.multiFrame, this.selectorGripsGroup].forEach((element) => {
+      if (transform) {
+        element.setAttribute('transform', transform)
+      } else {
+        element.removeAttribute('transform')
+      }
+    })
+    if (transform) { Selector.updateGripCursors(this.frameAngle) }
     this.positionGrips({
       nw: [x, y],
       ne: [x + w, y],

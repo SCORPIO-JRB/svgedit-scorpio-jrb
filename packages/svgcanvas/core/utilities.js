@@ -506,6 +506,32 @@ export const getPathBBox = (path) => {
   }
 }
 
+// Boxes read beforehand, returned instead of a new reading while a batch of
+// writes runs (see withBBoxCache).
+let bboxCache = null
+
+/**
+ * Runs `fn` with boxes read beforehand: getBBox returns a copy of an element's
+ * box from `cache` instead of reading it. Reading a box after a write forces
+ * a layout of the whole drawing; a batch that writes many elements, and only
+ * needs boxes of geometry it has not changed yet, avoids one layout per
+ * element. The caller removes an element from `cache` once its geometry may
+ * have changed.
+ * @function module:utilities.withBBoxCache
+ * @param {Map<Element, module:utilities.BBoxObject>} cache
+ * @param {Function} fn
+ * @returns {any} The result of `fn`
+ */
+export const withBBoxCache = (cache, fn) => {
+  const previous = bboxCache
+  bboxCache = cache
+  try {
+    return fn()
+  } finally {
+    bboxCache = previous
+  }
+}
+
 /**
  * Get the given/selected element's bounding box object, convert it to be more
  * usable when necessary.
@@ -514,6 +540,10 @@ export const getPathBBox = (path) => {
  * @returns {module:utilities.BBoxObject|null} Bounding box object
  */
 export const getBBox = (elem) => {
+  if (bboxCache?.has(elem)) {
+    const cached = bboxCache.get(elem)
+    return cached ? { ...cached } : cached
+  }
   const selected = elem ?? svgCanvas.getSelectedElements()[0]
   if (elem.nodeType !== 1) return null
 

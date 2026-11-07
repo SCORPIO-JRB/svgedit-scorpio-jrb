@@ -228,6 +228,7 @@ class TopPanel {
     const isNode = currentMode === 'pathedit'
     const menuItems = document.getElementById('se-cmenu_canvas')
     this.hideTool('selected_panel')
+    this.hideTool('angle_panel')
     this.hideTool('multiselected_panel')
     this.hideTool('g_panel')
     this.hideTool('rect_panel')
@@ -260,6 +261,7 @@ class TopPanel {
 
       if (!isNode && currentMode !== 'pathedit') {
         this.displayTool('selected_panel')
+        this.displayTool('angle_panel')
         // Elements in this array already have coord fields
         if (['line', 'circle', 'ellipse', 'polygon'].includes(elname)) {
           this.hideTool('xy_panel')
@@ -468,6 +470,10 @@ class TopPanel {
       }
 
       this.displayTool('multiselected_panel')
+      // The angle of the frame: a value typed turns the whole selection
+      // about its center.
+      this.displayTool('angle_panel')
+      this.updateSelectionAngle()
       menuItems.setAttribute('enablemenuitems', '#group')
       menuItems.setAttribute('disablemenuitems', '#ungroup')
     } else {
@@ -577,6 +583,17 @@ class TopPanel {
    */
   changeFontSize (e) {
     this.editor.svgCanvas.setFontSize(e.target.value)
+  }
+
+  /**
+   * Shows in the angle field the angle of the frame of a multi-selection: the
+   * angle its elements share, otherwise the rotations applied since it was
+   * selected, or nothing.
+   * @returns {void}
+   */
+  updateSelectionAngle () {
+    const angle = this.editor.svgCanvas.getSelectionAngle?.()
+    $id('angle').value = angle ?? ''
   }
 
   /**

@@ -8,6 +8,8 @@
     "zoom": 100,
     "marquee": 100,
     "groupResizeMove": 100,
-    "groupResizeRelease": 300
+    "groupResizeRelease": 300,
+    "groupRotateMove": 100,
+    "groupRotateRelease": 300
   }
 }

@@ -23,8 +23,13 @@ import {
   beginGroupResize,
   updateGroupResize,
   commitGroupResize,
-  cancelGroupResize,
+  beginGroupRotate,
+  updateGroupRotate,
+  commitGroupRotate,
+  cancelGroupGesture,
+  isGroupGesture,
   isGroupResizing,
+  isGroupRotating,
   isScalableText,
   commitSingleTextResize,
   singleTextPreview
@@ -203,8 +208,8 @@ const cancelGesture = () => {
       break
     case 'resize':
     case 'rotate':
-      if (isGroupResizing()) {
-        cancelGroupResize()
+      if (isGroupGesture()) {
+        cancelGroupGesture()
         break
       }
       // Otherwise the handles belong to a single element.
@@ -712,6 +717,15 @@ const mouseMoveEvent = (evt) => {
       break
     }
     case 'rotate': {
+      if (isGroupRotating()) {
+        // The handle of the common frame: the whole selection turns.
+        updateGroupRotate(x, y, {
+          shift: evt.shiftKey,
+          snap: svgCanvas.getCurConfig().gridSnapping ? snapToGrid : undefined
+        })
+        svgCanvas.call('transition', selectedElements)
+        break
+      }
       box = getBBox(selected)
       cx = box.x + box.width / 2
       cy = box.y + box.height / 2
@@ -822,9 +836,10 @@ const mouseUpEvent = (evt) => {
   svgCanvas.setStarted(false)
   let t
   const mouseUpMode = svgCanvas.getCurrentMode()
-  if (mouseUpMode === 'resize' && isGroupResizing()) {
-    // Resize of a multi-selection: one undo step for all the elements.
-    const batch = commitGroupResize()
+  if ((mouseUpMode === 'resize' && isGroupResizing()) || (mouseUpMode === 'rotate' && isGroupRotating())) {
+    // Resize or rotation of a multi-selection: one undo step for all the
+    // elements.
+    const batch = mouseUpMode === 'resize' ? commitGroupResize() : commitGroupRotate()
     svgCanvas.setCurrentMode('select')
     if (batch) {
       svgCanvas.addCommandToHistory(batch)
@@ -1634,6 +1649,12 @@ const mouseDownEvent = (evt) => {
       break
     case 'rotate':
       svgCanvas.setStarted(true)
+      if (selectedElements.filter(Boolean).length > 1) {
+        // The handle of the common frame: the whole selection turns, as one
+        // undo step written on mouseup.
+        beginGroupRotate(selectedElements.filter(Boolean), x, y)
+        break
+      }
       // we are starting an undoable change (a drag-rotation)
       svgCanvas.undoMgr.beginUndoableChange('transform', selectedElements)
       break

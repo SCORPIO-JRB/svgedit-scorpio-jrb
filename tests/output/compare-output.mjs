@@ -61,14 +61,18 @@ const SCENARIOS = {
   'convert to path': `c.selectOnly(${byId(['e1'])}); c.convertToPath()`,
   'flip (multi)': `c.selectOnly(${byId(['r1', 'e1'])}); c.flipSelectedElements(-1, 1)`,
   'align largest (multi)': `c.selectOnly(${byId(['r1', 'e1', 'p1'])}); c.alignSelectedElements('t', 'largest')`,
+  'setRotationAngle (multi)': `c.selectOnly(${byId(['r1', 'e1', 'r2'])}); c.setRotationAngle(30)`,
   'undo everything': `c.selectAllInCurrentLayer(); c.moveSelectedElements(5, 5); c.selectOnly(${byId(['r1'])}); c.changeSelectedAttribute('width', 10); while (c.undoMgr.getUndoStackSize()) c.undoMgr.undo()`
 }
-// Every element type alone: flip, rotation by the API, resize by a grip.
+// Every element type alone: flip, rotation by the API, resize by a grip,
+// rotation by the handle.
 for (const id of ['r1', 'r2', 'e1', 'c1', 'p1', 't1', 'grp', 'l1']) {
   SCENARIOS[`flip ${id}`] = `c.selectOnly(${byId([id])}); c.flipSelectedElements(-1, 1)`
   SCENARIOS[`rotate ${id}`] = `c.selectOnly(${byId([id])}); c.setRotationAngle(25)`
   SCENARIOS[`grip resize ${id}`] = { grip: id }
+  SCENARIOS[`handle rotate ${id}`] = { rotate: [id] }
 }
+SCENARIOS['handle rotate (multi)'] = { rotate: ['r1', 'e1', 'r2'] }
 
 const browser = await chromium.launch(process.env.PW_CHROMIUM_PATH
   ? { executablePath: process.env.PW_CHROMIUM_PATH }
@@ -121,6 +125,22 @@ const runScenario = (page, scenario) => page.evaluate(async ({ svg, scenario }) 
       ev('mousemove', 10, 5)
       ev('mousemove', 30, 20)
       ev('mouseup', 30, 20)
+    } else if (scenario.rotate) {
+      // Drag the rotation handle by a quarter turn, in three moves.
+      c.selectOnly(scenario.rotate.map((id) => document.getElementById(id)), true)
+      await frame()
+      const grip = document.getElementById('selectorGrip_rotate')
+      const box = grip.getBoundingClientRect()
+      const x = box.x + box.width / 2
+      const y = box.y + box.height / 2
+      const ev = (type, dx, dy) => grip.dispatchEvent(new MouseEvent(type, {
+        bubbles: true, cancelable: true, clientX: x + dx, clientY: y + dy, button: 0, buttons: type === 'mouseup' ? 0 : 1, view: window
+      }))
+      ev('mousedown', 0, 0)
+      ev('mousemove', 15, 4)
+      ev('mousemove', 30, 12)
+      ev('mousemove', 37, 21)
+      ev('mouseup', 37, 21)
     } else if (scenario.drag) {
       // Drag the whole selection, optionally with Alt.
       if (scenario.selectAll) { c.selectAllInCurrentLayer() }

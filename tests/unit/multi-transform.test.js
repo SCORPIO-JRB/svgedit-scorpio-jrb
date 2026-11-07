@@ -5,6 +5,7 @@ import {
   invert,
   multiply,
   rotate,
+  rotateAbout,
   scale,
   shearFreeMatrix,
   singleTextPreview,
@@ -61,6 +62,27 @@ describe('multi-transform geometry (M2)', () => {
     it('inverts and multiplies', () => {
       const m = multiply(translate(10, -4), rotate(33), scale(2, 0.5))
       close(multiply(m, invert(m)), { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 })
+    })
+  })
+
+  describe('rotateAbout (M3)', () => {
+    it('keeps the pivot in place and turns clockwise on screen', () => {
+      const m = rotateAbout(90, { x: 210, y: 130 })
+      close(apply(m, 210, 130), { x: 210, y: 130 })
+      // The center of the left element of a row goes above the pivot.
+      close(apply(m, 140, 130), { x: 210, y: 60 })
+    })
+
+    it('makes centers follow a scale by 2 then a rotation by 30 degrees', () => {
+      const s2 = multiply(translate(100, 50), scale(2, 2), translate(-100, -50))
+      const total = multiply(rotateAbout(30, { x: 300, y: 200 }), s2)
+      const p = apply(total, 140, 130)
+      // By hand: (140, 130) -> (180, 210) -> rotated by 30 degrees about (300, 200).
+      const r = Math.PI / 6
+      close(p, {
+        x: 300 + Math.cos(r) * -120 - Math.sin(r) * 10,
+        y: 200 + Math.sin(r) * -120 + Math.cos(r) * 10
+      }, 9)
     })
   })
 
