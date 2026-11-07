@@ -1078,7 +1078,9 @@ const convertToGroup = elem => {
     // $(elem.firstChild.firstChild).unwrap();
     const firstChild = elem.firstChild.firstChild
     if (firstChild) {
-      firstChild.outerHTML = firstChild.innerHTML
+      // Move the nodes instead of re-serializing them: re-parsing imported
+      // markup with the HTML parser could turn inert content into live markup.
+      firstChild.replaceWith(...firstChild.childNodes)
     }
     dataStorage.remove(elem, 'gsvg')
 

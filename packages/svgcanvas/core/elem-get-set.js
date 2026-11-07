@@ -14,6 +14,8 @@ import {
   convertToNum
 } from './units.js'
 import { getParents } from '../common/util.js'
+import { isSafeHref } from './sanitize.js'
+import { warn } from '../common/logger.js'
 
 let svgCanvas = null
 
@@ -1047,6 +1049,10 @@ const setImageURLMethod = (val) => {
 * @returns {void}
 */
 const setLinkURLMethod = (val) => {
+  if (!isSafeHref('a', val)) {
+    warn('Refusing a link URL with a script-capable scheme', null, 'elem-get-set')
+    return
+  }
   const { ChangeElementCommand, BatchCommand } = svgCanvas.history
   const selectedElements = svgCanvas.getSelectedElements()
   let elem = selectedElements[0]
@@ -1117,6 +1123,10 @@ const setRectRadiusMethod = (val) => {
 * @returns {void}
 */
 const makeHyperlinkMethod = (url) => {
+  if (!isSafeHref('a', url)) {
+    warn('Refusing a link URL with a script-capable scheme', null, 'elem-get-set')
+    return
+  }
   svgCanvas.groupSelectedElements('a', url)
 }
 

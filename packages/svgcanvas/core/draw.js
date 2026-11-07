@@ -9,7 +9,7 @@ import Layer from './layer.js'
 import HistoryRecordingService from './historyrecording.js'
 
 import { NS } from './namespaces.js'
-import { toXml, getElement } from './utilities.js'
+import { toXml, getElement, escapeCssIdent } from './utilities.js'
 import { copyElem as utilCopyElem } from './copy-elem.js'
 import { getParentsUntil } from '../common/util.js'
 import { warn } from '../common/logger.js'
@@ -164,7 +164,7 @@ export class Drawing {
   getElem_ (id) {
     if (this.svgElem_.querySelector) {
       // querySelector lookup
-      return this.svgElem_.querySelector(`#${id}`)
+      return this.svgElem_.querySelector(`#${escapeCssIdent(id)}`)
     }
     // jQuery lookup: twice as slow as xpath in FF
     return this.svgElem_.querySelector(`[id=${id}]`)

@@ -1269,14 +1269,62 @@ export const getFeGaussianBlur = ele => {
 }
 
 /**
+ * Escapes a string for use as a CSS identifier, following the `CSS.escape()` specification.
+ * Used as a fallback where `CSS.escape` is not available (e.g. jsdom).
+ * @param {string} value
+ * @returns {string}
+ */
+const cssEscapeFallback = (value) => {
+  const string = String(value)
+  const first = string.charCodeAt(0)
+  let result = ''
+  for (let i = 0; i < string.length; i++) {
+    const code = string.charCodeAt(i)
+    if (code === 0) {
+      result += '�'
+    } else if (
+      (code >= 0x1 && code <= 0x1F) || code === 0x7F ||
+      (i === 0 && code >= 0x30 && code <= 0x39) ||
+      (i === 1 && code >= 0x30 && code <= 0x39 && first === 0x2D)
+    ) {
+      result += `\\${code.toString(16)} `
+    } else if (i === 0 && string.length === 1 && code === 0x2D) {
+      result += `\\${string.charAt(i)}`
+    } else if (
+      code >= 0x80 || code === 0x2D || code === 0x5F ||
+      (code >= 0x30 && code <= 0x39) || (code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A)
+    ) {
+      result += string.charAt(i)
+    } else {
+      result += `\\${string.charAt(i)}`
+    }
+  }
+  return result
+}
+
+/**
+ * Escapes a string so it can be used as an id in a CSS selector (`#${escapeCssIdent(id)}`).
+ * Ids that start with a digit or contain quotes, spaces or brackets would otherwise
+ * make `querySelector` throw.
+ * @function module:utilities.escapeCssIdent
+ * @param {string} value
+ * @returns {string}
+ */
+export const escapeCssIdent = (value) => (
+  typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(String(value))
+    : cssEscapeFallback(value)
+)
+
+/**
  * Get a DOM element by ID within the SVG root element.
  * @function module:utilities.getElement
  * @param {string} id - String with the element's new ID
  * @returns {?Element}
  */
 export const getElement = id => {
-  // querySelector lookup
-  return svgroot_.querySelector(`#${id}`)
+  // querySelector lookup (escaped: ids come from imported documents)
+  return svgroot_.querySelector(`#${escapeCssIdent(id)}`)
 }
 
 /**

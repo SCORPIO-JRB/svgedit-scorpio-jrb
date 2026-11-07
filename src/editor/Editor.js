@@ -889,21 +889,30 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   contextChanged (win, context) {
-    let linkStr = ''
+    const panel = $id('cur_context_panel')
+    // Layer names and group ids come from the edited document: the breadcrumb
+    // is built with DOM nodes so they are never parsed as HTML.
+    panel.replaceChildren()
     if (context) {
       let str = ''
-      linkStr =
-        '<a href="#" data-root="y">' +
-        this.svgCanvas.getCurrentDrawing().getCurrentLayerName() +
-        '</a>'
+      const rootLink = document.createElement('a')
+      rootLink.href = '#'
+      rootLink.dataset.root = 'y'
+      rootLink.textContent = this.svgCanvas.getCurrentDrawing().getCurrentLayerName()
+      panel.append(rootLink)
       const parentsUntil = getParentsUntil(context, '#svgcontent')
       parentsUntil.forEach(function (parent) {
         if (parent.id) {
           str += ' > ' + parent.id
-          linkStr +=
-            parent !== context
-              ? ` > <a href="#">${parent.id}</a>`
-              : ` > ${parent.id}`
+          panel.append(' > ')
+          if (parent !== context) {
+            const link = document.createElement('a')
+            link.href = '#'
+            link.textContent = parent.id
+            panel.append(link)
+          } else {
+            panel.append(parent.id)
+          }
         }
       })
 
@@ -911,8 +920,7 @@ class Editor extends EditorStartup {
     } else {
       this.curContext = null
     }
-    $id('cur_context_panel').style.display = context ? 'block' : 'none'
-    $id('cur_context_panel').innerHTML = linkStr
+    panel.style.display = context ? 'block' : 'none'
   }
 
   /**

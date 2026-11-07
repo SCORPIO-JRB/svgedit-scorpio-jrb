@@ -557,8 +557,12 @@ class EditorStartup {
 
     // Select given tool
     this.ready(function () {
-      const preTool = $id(`tool_${this.configObj.curConfig.initTool}`)
-      const regTool = $id(this.configObj.curConfig.initTool)
+      // `initTool` can come from the URL: only accept the editor's own tool buttons,
+      // never an arbitrary element of the host page.
+      const toolsLeft = $id('tools_left')
+      const asTool = (el) => (el && toolsLeft?.contains(el) ? el : null)
+      const preTool = asTool($id(`tool_${this.configObj.curConfig.initTool}`))
+      const regTool = asTool($id(this.configObj.curConfig.initTool))
       const selectTool = $id('tool_select')
       const $editDialog = $id('se-edit-prefs')
 
