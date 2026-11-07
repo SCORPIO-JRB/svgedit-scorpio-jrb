@@ -198,6 +198,8 @@ export default {
     select_same_symbol: 'Select Same Symbol',
     select_same_fill: 'Select Same Fill',
     select_same_stroke: 'Select Same Stroke',
+    copy_properties: 'Copy Properties',
+    paste_properties: 'Paste Properties',
     tool_unlink_use: 'Розірвати посилання на еталонний елемент (зробити унікальним)',
     ellipse_circle_tool: 'Еліпс/Коло',
     square_rect_tool: 'Квадрат/Прямокутник',

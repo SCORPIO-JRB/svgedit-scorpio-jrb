@@ -27,6 +27,7 @@ import TopPanel from './panels/TopPanel.js'
 import BottomPanel from './panels/BottomPanel.js'
 import LayersPanel from './panels/LayersPanel.js'
 import MainMenu from './MainMenu.js'
+import SystemClipboard from './SystemClipboard.js'
 import { getParentsUntil } from '@svgedit/svgcanvas/common/util.js'
 
 // Zoom bounds and ladder shared by every zoom gesture (1 = 100 %).
@@ -233,11 +234,12 @@ class Editor extends EditorStartup {
       { key: ['ctrl+home', true], fn: () => { this.topPanel.moveToTopSelected() } },
       { key: ['ctrl+end', true], fn: () => { this.topPanel.moveToBottomSelected() } },
       {
-        // Duplicate the selection (Mod+D), like the D / C buttons
+        // Duplicate the selection (Mod+D), like the D / C buttons. After the
+        // copy has been moved, Mod+D repeats that offset (M7).
         key: ['ctrl+d', true],
         fn: () => {
           if (this.selectedElement || this.multiselected) {
-            this.svgCanvas.cloneSelectedElements(20, 20)
+            this.svgCanvas.duplicateSelectedElements()
           }
         }
       },
@@ -315,49 +317,49 @@ class Editor extends EditorStartup {
       {
         key: ['alt+arrowup', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(0, -1)
+          this.svgCanvas.duplicateSelectedElements({ x: 0, y: -1 })
         }
       },
       {
         key: ['alt+arrowdown', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(0, 1)
+          this.svgCanvas.duplicateSelectedElements({ x: 0, y: 1 })
         }
       },
       {
         key: ['alt+arrowleft', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(-1, 0)
+          this.svgCanvas.duplicateSelectedElements({ x: -1, y: 0 })
         }
       },
       {
         key: ['alt+arrowright', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(1, 0)
+          this.svgCanvas.duplicateSelectedElements({ x: 1, y: 0 })
         }
       },
       {
         key: ['alt+shift+arrowup', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(0, -10)
+          this.svgCanvas.duplicateSelectedElements({ x: 0, y: -10 })
         }
       },
       {
         key: ['alt+shift+arrowdown', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(0, 10)
+          this.svgCanvas.duplicateSelectedElements({ x: 0, y: 10 })
         }
       },
       {
         key: ['alt+shift+arrowleft', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(-10, 0)
+          this.svgCanvas.duplicateSelectedElements({ x: -10, y: 0 })
         }
       },
       {
         key: ['alt+shift+arrowright', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(10, 0)
+          this.svgCanvas.duplicateSelectedElements({ x: 10, y: 0 })
         }
       },
       {
@@ -380,22 +382,45 @@ class Editor extends EditorStartup {
           this.svgCanvas.selectAllInCurrentLayer()
         }
       },
+      // Cut, copy and paste go through the system clipboard (M7): the key
+      // announces the action, the browser's clipboard event carries it out.
+      // The key must not be prevented, or the event would not follow.
       {
         key: modKey + 'x',
         fn: () => {
-          this.cutSelected()
+          this.systemClipboard.request('cut')
         }
       },
       {
         key: modKey + 'c',
         fn: () => {
-          this.copySelected()
+          this.systemClipboard.request('copy')
         }
       },
       {
         key: modKey + 'v',
         fn: () => {
-          this.pasteInCenter()
+          this.systemClipboard.request('paste', { center: true })
+        }
+      },
+      {
+        // Paste in place: the objects keep their coordinates.
+        key: modKey + 'shift+v',
+        fn: () => {
+          this.systemClipboard.request('paste', { type: 'in_place' })
+        }
+      },
+      {
+        // Copy, paste the properties: fill, stroke, opacity, font (M7)
+        key: [modKey + 'alt+c', true],
+        fn: () => {
+          this.copyProperties()
+        }
+      },
+      {
+        key: [modKey + 'alt+v', true],
+        fn: () => {
+          this.pasteProperties()
         }
       },
       {
@@ -427,6 +452,7 @@ class Editor extends EditorStartup {
         }
       }
     ]
+    this.systemClipboard = new SystemClipboard(this)
     this.leftPanel = new LeftPanel(this)
     this.bottomPanel = new BottomPanel(this)
     this.topPanel = new TopPanel(this)
@@ -538,6 +564,8 @@ class Editor extends EditorStartup {
       }
       return true
     })
+    // Copy, cut and paste events of the system clipboard (M7)
+    this.systemClipboard.init()
     // register the keydown event
     document.addEventListener('keydown', (e) => {
       // only track keyboard shortcuts for the body containing the SVG-Editor
@@ -1200,6 +1228,16 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   pasteInCenter () {
+    const { x, y } = this.getViewCenter()
+    this.svgCanvas.pasteElements('point', x, y)
+  }
+
+  /**
+   * The middle of the visible part of the canvas, in drawing coordinates:
+   * where Mod+V pastes.
+   * @returns {{x: number, y: number}}
+   */
+  getViewCenter () {
     const { workarea } = this
     const zoom = this.svgCanvas.getZoom()
     const x =
@@ -1214,7 +1252,27 @@ class Editor extends EditorStartup {
           2) /
         zoom -
       this.svgCanvas.contentH
-    this.svgCanvas.pasteElements('point', x, y)
+    return { x, y }
+  }
+
+  /**
+   * Copies the fill, stroke, opacity and font of the first selected object.
+   * @returns {void}
+   */
+  copyProperties () {
+    if (this.selectedElement || this.multiselected) {
+      this.svgCanvas.copySelectedProperties()
+    }
+  }
+
+  /**
+   * Gives the copied properties to the selected objects.
+   * @returns {void}
+   */
+  pasteProperties () {
+    if (this.selectedElement || this.multiselected) {
+      this.svgCanvas.pasteProperties()
+    }
   }
 
   /**
@@ -1367,10 +1425,29 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   enableOrDisableClipboard () {
-    const hasClipboardData = this.svgCanvas.hasClipboardData()
+    // The system clipboard may hold SVG from another application (M7).
+    const canPaste = this.systemClipboard.canPaste()
     this.canvMenu.setAttribute(
-      (hasClipboardData ? 'en' : 'dis') + 'ablemenuitems',
+      (canPaste ? 'en' : 'dis') + 'ablemenuitems',
       '#paste,#paste_in_place'
+    )
+    this.updatePropertiesMenu()
+  }
+
+  /**
+   * Enables "Copy properties" when an object can give them, and "Paste
+   * properties" when some have been copied and objects are selected.
+   * @returns {void}
+   */
+  updatePropertiesMenu () {
+    const menu = this.canvMenu
+    if (!menu?.setItemEnabled) return
+    const selected = this.svgCanvas.getSelectedElements().some(Boolean)
+    const editingNodes = this.svgCanvas.getMode() === 'pathedit'
+    menu.setItemEnabled('copy_properties', selected && !editingNodes)
+    menu.setItemEnabled(
+      'paste_properties',
+      selected && !editingNodes && this.svgCanvas.hasCopiedProperties()
     )
   }
 

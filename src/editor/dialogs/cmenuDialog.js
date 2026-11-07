@@ -20,6 +20,11 @@ export class SeCMenuDialog extends HTMLElement {
     this.$cutLink = this._shadowRoot.querySelector('#se-cut')
     this.$pasteLink = this._shadowRoot.querySelector('#se-paste')
     this.$pasteInPlaceLink = this._shadowRoot.querySelector('#se-paste-in-place')
+    // Copy and paste the properties of an object (M7)
+    this.$propertiesLinks = {
+      copy_properties: this._shadowRoot.querySelector('#se-copy-properties'),
+      paste_properties: this._shadowRoot.querySelector('#se-paste-properties')
+    }
     this.$deleteLink = this._shadowRoot.querySelector('#se-delete')
     this.$groupLink = this._shadowRoot.querySelector('#se-group')
     this.$ungroupLink = this._shadowRoot.querySelector('#se-ungroup')
@@ -54,6 +59,9 @@ export class SeCMenuDialog extends HTMLElement {
     this.setAttribute('tools-move_back', i18next.t('tools.move_back'))
     Object.entries(this.$similarLinks).forEach(([action, link]) => {
       link.textContent = i18next.t(`tools.${action}`)
+    })
+    Object.entries(this.$propertiesLinks).forEach(([action, link]) => {
+      link.prepend(document.createTextNode(i18next.t(`tools.${action}`)))
     })
   }
 
@@ -111,10 +119,12 @@ export class SeCMenuDialog extends HTMLElement {
         this.$copyLink.prepend(textnode)
         break
       case 'tools-paste':
-        this.$pasteLink.textContent = newValue
+        textnode = document.createTextNode(newValue)
+        this.$pasteLink.prepend(textnode)
         break
       case 'tools-paste_in_place':
-        this.$pasteInPlaceLink.textContent = newValue
+        textnode = document.createTextNode(newValue)
+        this.$pasteInPlaceLink.prepend(textnode)
         break
       case 'tools-delete':
         textnode = document.createTextNode(newValue)
@@ -275,6 +285,10 @@ export class SeCMenuDialog extends HTMLElement {
       }
     }
     const onMenuClickHandler = (e, action) => {
+      // The clicked item takes the focus: give it back to the page, or the
+      // keyboard shortcuts (Mod+V, Delete...) stop working until the canvas
+      // is clicked.
+      this._shadowRoot.activeElement?.blur()
       const triggerEvent = new CustomEvent('change', {
         detail: {
           trigger: action
@@ -288,6 +302,9 @@ export class SeCMenuDialog extends HTMLElement {
     svgEditor.$click(this.$copyLink, (evt) => onMenuClickHandler(evt, 'copy'))
     svgEditor.$click(this.$pasteLink, (evt) => onMenuClickHandler(evt, 'paste'))
     svgEditor.$click(this.$pasteInPlaceLink, (evt) => onMenuClickHandler(evt, 'paste_in_place'))
+    Object.entries(this.$propertiesLinks).forEach(([action, link]) => {
+      svgEditor.$click(link, (evt) => onMenuClickHandler(evt, action))
+    })
     svgEditor.$click(this.$deleteLink, (evt) => onMenuClickHandler(evt, 'delete'))
     svgEditor.$click(this.$groupLink, (evt) => onMenuClickHandler(evt, 'group'))
     svgEditor.$click(this.$ungroupLink, (evt) => onMenuClickHandler(evt, 'ungroup'))

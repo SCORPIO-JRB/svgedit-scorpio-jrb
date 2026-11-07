@@ -62,6 +62,9 @@ export const init = canvas => {
   svgCanvas.moveUpDownSelected = moveUpDownSelected // Moves the select element up or down the stack, based on the visibly
   svgCanvas.moveSelectedElements = moveSelectedElements // Moves selected elements on the X/Y axis.
   svgCanvas.cloneSelectedElements = cloneSelectedElements // Create deep DOM copies (clones) of all selected elements and move them slightly
+  svgCanvas.duplicateSelectedElements = duplicateSelectedElements // Mod+D: clone the selection, repeating the last offset (M7)
+  svgCanvas.getDuplicateOffset = getDuplicateOffset
+  svgCanvas.rememberDuplicate = rememberDuplicate
   svgCanvas.alignSelectedElements = alignSelectedElements // Aligns selected elements.
   svgCanvas.updateCanvas = updateCanvas // Updates the editor canvas width/height/position after a zoom has occurred.
   svgCanvas.cycleElement = cycleElement // Select the next/previous element within the current layer.
@@ -375,6 +378,111 @@ const cloneSelectedElements = (x, y, { addToHistory = true } = {}) => {
   }
   return undefined
 }
+
+// ---------------------------------------------------------------------------
+// Duplication that repeats its offset (M7).
+
+/** Offset of a first copy: Mod+D, the D and C keys and buttons. */
+const DUPLICATE_OFFSET = 20
+/** Below this, an offset is zero: the copies would hide the originals. */
+const DUPLICATE_EPSILON = 1e-9
+
+/**
+ * The last duplication: its copies, the offset they were made with, and the
+ * box they had then, to tell how far they have been moved since.
+ * @type {{copies: Set<Element>, offset: {x: number, y: number}, box: module:utilities.BBoxObject}|null}
+ */
+let lastDuplicate = null
+
+/**
+ * Rounds a distance measured on boxes. Boxes are read in single precision
+ * (77.1 reads 77.09999847): the document's number of decimals, the one of the
+ * saved file, removes that noise.
+ * @param {number} value
+ * @returns {number}
+ */
+const roundDistance = (value) => {
+  const digits = svgCanvas.getRoundDigits?.() ?? 2
+  return Number(value.toFixed(Math.max(0, Math.min(digits, 10))))
+}
+
+/**
+ * Remembers a duplication so that Mod+D can repeat its offset. Copies made at
+ * the place of their originals are not remembered: repeating a zero offset
+ * would pile up copies the user cannot see.
+ * @function module:selected-elem.SvgCanvas#rememberDuplicate
+ * @param {Element[]} copies - The copies, as selected after the duplication
+ * @param {{x: number, y: number}|Element[]} offsetOrOriginals - The offset of
+ *   the copies, or the originals to measure it on (after an Alt+drag)
+ * @returns {void}
+ */
+const rememberDuplicate = (copies, offsetOrOriginals) => {
+  const elements = copies.filter(Boolean)
+  const box = elements.length ? svgCanvas.getSelectionBox(elements) : null
+  let offset = offsetOrOriginals
+  if (Array.isArray(offsetOrOriginals)) {
+    const from = svgCanvas.getSelectionBox(offsetOrOriginals.filter(Boolean))
+    offset = from && box
+      ? { x: roundDistance(box.x - from.x), y: roundDistance(box.y - from.y) }
+      : null
+  }
+  const isZero = !offset ||
+    (Math.abs(offset.x) < DUPLICATE_EPSILON && Math.abs(offset.y) < DUPLICATE_EPSILON)
+  lastDuplicate = box && !isZero ? { copies: new Set(elements), offset, box } : null
+}
+
+/**
+ * The offset Mod+D gives to copies of the given elements. When they are the
+ * copies of the last duplication, it is the offset of that duplication plus
+ * the distance they were moved since: duplicate, move the copy, then Mod+D
+ * makes a regular series. Otherwise, 20 to the right and 20 down.
+ * @function module:selected-elem.SvgCanvas#getDuplicateOffset
+ * @param {Element[]} [elements] - The selected elements by default
+ * @returns {{x: number, y: number}}
+ */
+const getDuplicateOffset = (elements) => {
+  const fallback = { x: DUPLICATE_OFFSET, y: DUPLICATE_OFFSET }
+  const current = (elements || svgCanvas.getSelectedElements()).filter(Boolean)
+  const last = lastDuplicate
+  if (
+    !last ||
+    current.length !== last.copies.size ||
+    !current.every((elem) => last.copies.has(elem) && elem.isConnected)
+  ) {
+    return fallback
+  }
+  const box = svgCanvas.getSelectionBox(current)
+  if (!box) { return fallback }
+  // Unmoved copies give exactly the remembered offset, with no rounding.
+  const dx = box.x === last.box.x ? 0 : roundDistance(box.x - last.box.x)
+  const dy = box.y === last.box.y ? 0 : roundDistance(box.y - last.box.y)
+  const offset = { x: last.offset.x + dx, y: last.offset.y + dy }
+  if (Math.abs(offset.x) < DUPLICATE_EPSILON && Math.abs(offset.y) < DUPLICATE_EPSILON) {
+    return fallback
+  }
+  return offset
+}
+
+/**
+ * Duplicates the selection, as one undo step, and selects the copies: Mod+D,
+ * the D and C keys and buttons, Alt+arrows. Without an offset, the copies go
+ * where getDuplicateOffset() says, so that repeating Mod+D after moving a copy
+ * continues the series.
+ * @function module:selected-elem.SvgCanvas#duplicateSelectedElements
+ * @param {{x: number, y: number}} [offset] - A fixed offset (Alt+arrows)
+ * @returns {module:history.BatchCommand|undefined}
+ */
+const duplicateSelectedElements = (offset) => {
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  if (!elements.length) { return undefined }
+  const { x, y } = offset || getDuplicateOffset(elements)
+  const cmd = cloneSelectedElements(x, y)
+  if (cmd) {
+    rememberDuplicate(svgCanvas.getSelectedElements(), { x, y })
+  }
+  return cmd
+}
+
 /**
  * Aligns selected elements.
  * @function module:selected-elem.SvgCanvas#alignSelectedElements
@@ -769,9 +877,17 @@ const flipSelectedElements = (scaleX, scaleY) => {
  */
 const copySelectedElements = () => {
   const selectedElements = svgCanvas.getSelectedElements().filter(Boolean)
-  const data = JSON.stringify(createClipboardPayload(svgCanvas, selectedElements))
+  const payload = createClipboardPayload(svgCanvas, selectedElements)
   // Use sessionStorage for the clipboard data.
-  sessionStorage.setItem(svgCanvas.getClipboardID(), data)
+  try {
+    sessionStorage.setItem(svgCanvas.getClipboardID(), JSON.stringify(payload))
+  } catch (err) {
+    // The SVG text for the system clipboard (M7) doubles the size of the
+    // data: when the storage is full, keep the copy without it.
+    if (!payload.svg) throw err
+    delete payload.svg
+    sessionStorage.setItem(svgCanvas.getClipboardID(), JSON.stringify(payload))
+  }
   svgCanvas.call('clipboardChanged')
   svgCanvas.flashStorage()
 }

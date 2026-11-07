@@ -198,6 +198,8 @@ export default {
     select_same_symbol: 'Select Same Symbol',
     select_same_fill: 'Select Same Fill',
     select_same_stroke: 'Select Same Stroke',
+    copy_properties: 'Copy Properties',
+    paste_properties: 'Paste Properties',
     tool_unlink_use: 'Bryt länk till referenselement (gör unik)',
     ellipse_circle_tool: 'Ellips/Cirkel Verktyg',
     square_rect_tool: 'Fyrkant/Rect Verktyg',

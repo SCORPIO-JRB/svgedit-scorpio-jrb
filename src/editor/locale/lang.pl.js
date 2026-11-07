@@ -202,6 +202,8 @@ export default {
     select_same_symbol: 'Select Same Symbol',
     select_same_fill: 'Select Same Fill',
     select_same_stroke: 'Select Same Stroke',
+    copy_properties: 'Copy Properties',
+    paste_properties: 'Paste Properties',
     tool_unlink_use: 'Break link to reference element (make unique)',
     ellipse_circle_tool: 'Ellipse/Circle Tool',
     square_rect_tool: 'Square/Rect Tool',

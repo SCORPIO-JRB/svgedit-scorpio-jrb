@@ -201,6 +201,8 @@ export default {
     select_same_symbol: 'Sélectionner le même symbole',
     select_same_fill: 'Sélectionner le même remplissage',
     select_same_stroke: 'Sélectionner le même trait',
+    copy_properties: 'Copier les propriétés',
+    paste_properties: 'Coller les propriétés',
     tool_unlink_use: 'Break link to reference element (make unique)',
     ellipse_circle_tool: 'Outil Ellipse/Cercle',
     square_rect_tool: 'Square/Rect Tool',

@@ -16,8 +16,11 @@ import * as draw from './core/draw.js'
 import { init as pasteInit, pasteElementsMethod } from './core/paste-elem.js'
 import {
   hasClipboardElements,
+  normalizeClipboardData,
   resetClipboardDocumentId
 } from './core/clipboard.js'
+import { init as svgPasteInit } from './core/svg-paste.js'
+import { init as pastePropertiesInit } from './core/paste-properties.js'
 import { init as touchInit } from './core/touch.js'
 import { svgRootElement } from './core/svgroot.js'
 import {
@@ -329,6 +332,8 @@ class SvgCanvas {
     localStorage.setItem(`${CLIPBOARD_ID}_startup`, Math.random())
 
     pasteInit(this)
+    svgPasteInit(this)
+    pastePropertiesInit(this)
 
     this.contentW = this.getResolution().w
     this.contentH = this.getResolution().h
@@ -808,6 +813,19 @@ class SvgCanvas {
       return hasClipboardElements(data)
     } catch {
       return false
+    }
+  }
+
+  /**
+   * The SVG text of this tab's clipboard, as written to the system clipboard
+   * by the last copy (M7).
+   * @returns {string|null}
+   */
+  getClipboardSvg () {
+    try {
+      return normalizeClipboardData(JSON.parse(sessionStorage.getItem(CLIPBOARD_ID)))?.svg ?? null
+    } catch {
+      return null
     }
   }
 

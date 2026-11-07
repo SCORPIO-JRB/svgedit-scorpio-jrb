@@ -532,17 +532,24 @@ class EditorStartup {
         case 'delete':
           this.svgCanvas.deleteSelectedElements()
           break
+        // Through the system clipboard (M7)
         case 'cut':
-          this.cutSelected()
+          this.systemClipboard.copyFromMenu('cut')
           break
         case 'copy':
-          this.copySelected()
+          this.systemClipboard.copyFromMenu('copy')
           break
         case 'paste':
-          this.svgCanvas.pasteElements()
+          this.systemClipboard.pasteFromMenu()
           break
         case 'paste_in_place':
-          this.svgCanvas.pasteElements('in_place')
+          this.systemClipboard.pasteFromMenu({ type: 'in_place' })
+          break
+        case 'copy_properties':
+          this.copyProperties()
+          break
+        case 'paste_properties':
+          this.pasteProperties()
           break
         case 'group':
         case 'group_elements':

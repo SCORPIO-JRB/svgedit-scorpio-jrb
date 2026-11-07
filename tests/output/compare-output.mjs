@@ -65,7 +65,12 @@ const SCENARIOS = {
   'undo everything': `c.selectAllInCurrentLayer(); c.moveSelectedElements(5, 5); c.selectOnly(${byId(['r1'])}); c.changeSelectedAttribute('width', 10); while (c.undoMgr.getUndoStackSize()) c.undoMgr.undo()`,
   // Opening a group dims the other objects; closing it must leave no trace.
   'open group, move inside, close': `c.setContext(document.getElementById('grp')); c.selectOnly(${byId(['g1'])}); c.moveSelectedElements(15, 5); c.leaveContext()`,
-  'open a rotated group (double click)': `c.selectOnly(${byId(['grp'])}); c.setRotationAngle(30); document.getElementById('g1').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window })); c.leaveContext()`
+  'open a rotated group (double click)': `c.selectOnly(${byId(['grp'])}); c.setRotationAngle(30); document.getElementById('g1').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window })); c.leaveContext()`,
+  // The editor's clipboard and duplication, which M7 extends: an unmoved
+  // copy and the editor's own clipboard give the same SVG as before.
+  'copy, paste in place': `c.selectOnly(${byId(['r1', 'c1'])}); c.copySelectedElements(); c.pasteElements('in_place')`,
+  'cut, paste at a point': `c.selectOnly(${byId(['e1', 't1'])}); c.cutSelectedElements(); c.pasteElements('point', 200, 220)`,
+  'Mod+D twice, Alt+right arrow (keys)': `c.selectOnly(${byId(['r1', 'p1'])}); const key = (init) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })); key({ key: 'd', code: 'KeyD', ctrlKey: true }); key({ key: 'd', code: 'KeyD', ctrlKey: true }); key({ key: 'ArrowRight', code: 'ArrowRight', altKey: true })`
 }
 // Every element type alone: flip, rotation by the API, resize by a grip,
 // rotation by the handle.

@@ -76,6 +76,13 @@ export const eventShortcut = (event, mac = isMac()) => {
     // The Windows key is not used by the editor.
   }
   let key = String(event.key || '').toLowerCase()
+  if (event.altKey && !/^[a-z]$/.test(key)) {
+    // Alt changes the character of letter keys (Option+C types "ç" on macOS,
+    // AltGr+C a letter on some layouts): read them by physical key, so that
+    // Mod+Alt+C stays Mod+Alt+C.
+    const letter = /^Key([A-Z])$/.exec(event.code || '')
+    if (letter) key = letter[1].toLowerCase()
+  }
   if (event.shiftKey) {
     // Shift changes the character of digit and bracket keys ("!" on QWERTY,
     // "1" on AZERTY): read them by physical key. Without Shift the typed

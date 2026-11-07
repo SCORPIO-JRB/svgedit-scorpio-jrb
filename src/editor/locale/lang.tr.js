@@ -198,6 +198,8 @@ export default {
     select_same_symbol: 'Select Same Symbol',
     select_same_fill: 'Select Same Fill',
     select_same_stroke: 'Select Same Stroke',
+    copy_properties: 'Copy Properties',
+    paste_properties: 'Paste Properties',
     tool_unlink_use: 'Ana nesneye bağını kopar (bağımsız yap)',
     ellipse_circle_tool: 'Elips/Çember Aracı',
     square_rect_tool: 'Kare/Dörtgen Aracı',

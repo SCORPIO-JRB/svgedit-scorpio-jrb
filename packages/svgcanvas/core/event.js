@@ -1106,6 +1106,8 @@ const mouseUpEvent = (evt) => {
             if (!batchCmd.isEmpty()) {
               duplicateCmd.addSubCommand(batchCmd)
             }
+            // Mod+D on the copies repeats the offset of the drag (M7).
+            svgCanvas.rememberDuplicate?.(svgCanvas.getSelectedElements(), selectionBeforeClone || [])
             pendingCloneCmd = null
             selectionBeforeClone = null
             svgCanvas.addCommandToHistory(duplicateCmd)

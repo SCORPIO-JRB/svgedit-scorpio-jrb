@@ -521,6 +521,8 @@ class TopPanel {
         !isNode && this.editor.svgCanvas.canSelectSimilar(criterion)
       )
     })
+    // Copy and paste properties (M7)
+    this.editor.updatePropertiesMenu?.()
 
     // update history buttons
     $id('tool_undo').disabled =
@@ -908,7 +910,8 @@ class TopPanel {
    * @returns {void}
    */
   clickClone () {
-    this.editor.svgCanvas.cloneSelectedElements(20, 20)
+    // Repeats the offset of the last duplicate once its copy has been moved (M7)
+    this.editor.svgCanvas.duplicateSelectedElements()
   }
 
   /**
