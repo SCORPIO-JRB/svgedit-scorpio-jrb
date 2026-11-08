@@ -614,3 +614,68 @@ test.describe('Contextual bar (V4): place, gestures, focus and preference', () =
     expect(await selection(page)).toEqual(['under'])
   })
 })
+
+test.describe('Text styles (V4, N10)', () => {
+  test.beforeEach(async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await loadDrawing(page, BAR_DRAWING)
+  })
+
+  test('a style writes only font, size, weight and fill, in one undo step, and the bar names it', async ({ page }) => {
+    await selectIds(page, ['t'])
+    expect((await barState(page)).entries[0]).toBe('textstyle')
+    const custom = await page.evaluate(() => window.svgEditor.i18next.t('textstyles.custom'))
+    await expect(page.locator('#se-context-bar .se-ctx-textstyle-name')).toHaveText(custom)
+    const before = await svgOf(page)
+    const attributesBefore = await page.evaluate(() => [...document.getElementById('t').attributes].map((a) => a.name).sort())
+
+    await entry(page, 'textstyle').click()
+    await expect(page.locator('#se-textstyles [data-style]')).toHaveCount(11)
+    await page.click('#se-textstyles [data-style="page_title"]')
+    const written = await page.evaluate(() => {
+      const t = document.getElementById('t')
+      return ['font-family', 'font-size', 'font-weight', 'fill'].map((name) => t.getAttribute(name))
+    })
+    expect(written).toEqual(["'Space Grotesk', sans-serif", '34', '500', '#CEB8FF'])
+    // Nothing else in the file: no class, no data-*.
+    const attributesAfter = await page.evaluate(() => [...document.getElementById('t').attributes].map((a) => a.name).sort())
+    expect(attributesAfter.filter((name) => !attributesBefore.includes(name)).sort()).toEqual(['font-family', 'font-weight'])
+    const title = await page.evaluate(() => window.svgEditor.i18next.t('textstyles.page_title'))
+    await expect(page.locator('#se-context-bar .se-ctx-textstyle-name')).toHaveText(title)
+
+    await undoAndSelect(page, ['t'])
+    expect(await svgOf(page)).toBe(before)
+  })
+
+  test('a style is recognised by its values, written as attributes or by a stylesheet', async ({ page }) => {
+    await loadDrawing(page, `<svg xmlns="${NS}" width="640" height="480">
+      <style>.mesure { font-family: 'Roboto Flex', sans-serif; font-size: 20px; fill: #C9C5D1 }</style>
+      <g class="layer"><title>Layer 1</title>
+        <text id="a" x="40" y="60" font-family="Space Grotesk" font-size="34" font-weight="500" fill="#ceb8ff">Chaufferie</text>
+        <text id="b" x="40" y="160" class="mesure">21,1</text>
+        <text id="c" x="40" y="260" font-size="34" fill="#ceb8ff">Autre</text>
+      </g></svg>`)
+    const names = {}
+    for (const id of ['a', 'b', 'c']) {
+      await selectIds(page, [id])
+      names[id] = await page.locator('#se-context-bar .se-ctx-textstyle-name').textContent()
+    }
+    const t = (key) => page.evaluate((key) => window.svgEditor.i18next.t(key), key)
+    expect(names).toEqual({ a: await t('textstyles.page_title'), b: await t('textstyles.value'), c: await t('textstyles.custom') })
+  })
+
+  test('the Custom tab: weight, font and size, through the commands of the inspector', async ({ page }) => {
+    await selectIds(page, ['t'])
+    await entry(page, 'textstyle').click()
+    await page.click('#se-textstyles-tab-custom')
+    await page.selectOption('#se-textstyles-weight', '600')
+    expect(await attrOf(page, 't', 'font-weight')).toBe('600')
+    await page.selectOption('#se-textstyles-font', { index: 1 })
+    expect(await attrOf(page, 't', 'font-family')).toBe("'Roboto Flex', sans-serif")
+    const size = page.locator('#se-textstyles-font_size input')
+    await size.fill('26')
+    await size.press('Enter')
+    expect(await attrOf(page, 't', 'font-size')).toBe('26')
+    expect(await page.evaluate(() => String(document.getElementById('font_size').value))).toBe('26')
+  })
+})

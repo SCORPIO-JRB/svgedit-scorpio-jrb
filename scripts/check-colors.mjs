@@ -38,6 +38,7 @@ const EXEMPT_FILES = {
   'src/editor/tokens.css': 'the token file',
   'src/editor/ConfigObj.js': 'default paint and grid colour of the document',
   'src/editor/components/sePalette.js': 'palette of document colours',
+  'src/editor/text-styles.js': 'colours of the text styles written in the document (lot V4)',
   'src/editor/components/PaintBox.js': 'swatch of the document paint',
   'src/editor/dialogs/editorPreferencesDialog.js': 'canvas backgrounds offered to the user',
   'src/editor/extensions/ext-eyedropper/ext-eyedropper.js': 'default paint copied by the eyedropper'

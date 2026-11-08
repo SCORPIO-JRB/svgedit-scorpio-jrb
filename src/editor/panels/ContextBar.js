@@ -752,6 +752,9 @@ export class ContextBar {
           el.disabled = original.hasAttribute('disabled')
           break
         }
+        case 'textstyle':
+          this.editor.textStyles?.syncButton(el)
+          break
         case 'paint': {
           const original = this.original(`${id}_color`)
           const name = holder.querySelector('.se-ctx-paint-name')
@@ -797,6 +800,9 @@ export class ContextBar {
         return
       case 'more':
         this.openContextMenu(el)
+        return
+      case 'textstyle':
+        this.editor.textStyles?.open(el)
         return
       default:
         return

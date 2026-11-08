@@ -123,6 +123,7 @@ export default class ConfigObj {
       * @property {"canvas"|"classic"} [layout="canvas"] The layout of the editor (lot V3): "canvas" puts the canvas under a top bar of 40 px, the tools in a floating bar and properties, layers and code in a right panel that Ctrl+\ hides; "classic" is the layout of SVG-Edit, kept until the end of V4. Read at start; `?layout=classic` in the URL.
       * @property {string} [homeUrl=""] Link of the home button of the top bar, given by the host application (canvas layout); http(s) only, never from the URL.
       * @property {Array<string|{label: string, href?: string}>} [breadcrumb=[]] Breadcrumb of the host application before the name of the document, such as `["Le Perreux", {label: "Synoptiques", href: "/synoptiques"}]` (canvas layout); never from the URL.
+      * @property {Array<{id: string, label: string, fontFamily: string, fontSize: number, fontWeight: number, fill: string}>|null} [textStyles=null] Named text styles of the Style ▾ window (lot V4): each writes font-family, font-size, font-weight and fill, and is recognised by these values. Null for the styles of the SCorp-io synoptics; never from the URL.
       * @property {"borderless"|"scroll"} [view="borderless"] The view of the drawing (lot V2): "borderless" has no edge and no scroll bar, the wheel scrolls it and Ctrl+wheel zooms from 1 % to 6 400 %; "scroll" is the canvas of SVG-Edit with scroll bars, kept until the end of V3. Read at start.
       * @property {PlainObject} [initFill] Init fill properties
       * @property {string} [initFill.color="FF0000"] The initial fill color. Must be a hex code string. Defaults to solid red.
@@ -168,6 +169,7 @@ export default class ConfigObj {
       layout: 'canvas',
       homeUrl: '',
       breadcrumb: [],
+      textStyles: null,
       initFill: {
         color: 'FF0000', // solid red
         opacity: 1

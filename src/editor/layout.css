@@ -1434,3 +1434,116 @@
   align-items: center;
   gap: 8px;
 }
+
+/* Text styles: Style ▾ of the contextual bar (lot V4) */
+#se-textstyles {
+  width: 280px;
+  padding: 8px;
+}
+
+#se-textstyles .se-textstyles-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+#se-textstyles [role="tab"] {
+  height: var(--se-control-size);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: transparent;
+  color: var(--se-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+#se-textstyles [role="tab"][aria-selected="true"] {
+  background: var(--se-surface-tab-active);
+  color: var(--se-text);
+}
+
+#se-textstyles [role="tab"]:focus-visible,
+#se-textstyles .se-textstyle-item:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+}
+
+#se-textstyles .se-textstyle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: transparent;
+  color: var(--se-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+#se-textstyles .se-textstyle-item:hover {
+  background: var(--se-control-hover);
+}
+
+#se-textstyles .se-textstyle-item[aria-checked="true"] {
+  background: var(--se-accent-bg);
+}
+
+#se-textstyles .se-textstyle-sample {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#se-textstyles .se-textstyle-values {
+  flex: none;
+  color: var(--se-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+#se-textstyles .se-textstyles-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+#se-textstyles .se-textstyles-row span {
+  color: var(--se-text-label);
+}
+
+#se-textstyles select {
+  flex: 0 1 170px;
+  height: var(--se-control-size);
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text);
+  font: inherit;
+}
+
+#se-textstyles .se-textstyles-fields {
+  display: flex;
+  gap: 8px;
+}
+
+#se-textstyles .se-textstyles-fields se-spin-input::part(field) {
+  box-sizing: border-box;
+  gap: 4px;
+  height: var(--se-control-size);
+  margin: 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+#se-textstyles .se-textstyles-fields se-spin-input::part(spin-button),
+#se-textstyles .se-textstyles-fields se-spin-input::part(label) {
+  display: none;
+}

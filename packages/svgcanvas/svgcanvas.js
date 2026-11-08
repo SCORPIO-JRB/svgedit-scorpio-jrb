@@ -27,7 +27,8 @@ import {
   init as undoInit,
   changeSelectedAttributeNoUndoMethod,
   changeSelectedAttributeMethod,
-  changeSelectedAttributeEachMethod
+  changeSelectedAttributeEachMethod,
+  changeSelectedAttributesMethod
 } from './core/undo.js'
 import { init as selectionInit } from './core/selection.js'
 import { init as textActionsInit, textActionsMethod } from './core/text-actions.js'
@@ -1440,6 +1441,7 @@ class SvgCanvas {
     this.changeSelectedAttributeNoUndo = changeSelectedAttributeNoUndoMethod // This function makes the changes to the elements. It does not add the change to the history stack.
     this.changeSelectedAttribute = changeSelectedAttributeMethod // Change the given/selected element and add the original value to the history stack.
     this.changeSelectedAttributeEach = changeSelectedAttributeEachMethod // Give each element its own new value, as one undo step.
+    this.changeSelectedAttributes = changeSelectedAttributesMethod // Several attributes, as one undo step.
     this.setBlurNoUndo = setBlurNoUndo // Sets the `stdDeviation` blur value on the selected element without being undoable.
     this.setBlurOffsets = setBlurOffsets // Sets the `x`, `y`, `width`, `height` values of the filter element in order to make the blur not be clipped. Removes them if not neeeded.
     this.setBlur = setBlur // Adds/updates the blur filter to the selected element.

@@ -350,6 +350,32 @@ export const changeSelectedAttributeMethod = (attr, val, elems) => {
 }
 
 /**
+ * Changes several attributes of the given or selected elements as one undo
+ * step: a text style (lot V4) writes its font, size, weight and fill at once.
+ * @function module:svgcanvas.SvgCanvas#changeSelectedAttributes
+ * @param {Object<string, string|number>} attrs - New values by attribute
+ * @param {Element[]} [elems] - The selected elements by default
+ * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @returns {void}
+ */
+export const changeSelectedAttributesMethod = (attrs, elems) => {
+  elems = (elems || svgCanvas.getSelectedElements()).filter(Boolean)
+  const entries = Object.entries(attrs ?? {})
+  if (!elems.length || !entries.length) { return }
+  const batchCmd = new hstry.BatchCommand('Change attributes')
+  for (const [attr, val] of entries) {
+    svgCanvas.undoMgr.beginUndoableChange(attr, elems)
+    changeSelectedAttributeNoUndoMethod(attr, val, elems)
+    const cmd = svgCanvas.undoMgr.finishUndoableChange()
+    if (!cmd.isEmpty()) { batchCmd.addSubCommand(cmd) }
+  }
+  if (!batchCmd.isEmpty()) {
+    svgCanvas.undoMgr.addCommandToHistory(batchCmd)
+    svgCanvas.call('changed', elems)
+  }
+}
+
+/**
  * Gives each element its own new value of an attribute, as one undo step:
  * the change a field showing "Mixed" makes with an expression such as +10.
  * @function module:svgcanvas.SvgCanvas#changeSelectedAttributeEach
