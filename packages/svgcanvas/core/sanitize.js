@@ -152,6 +152,69 @@ for (const [elt, atts] of Object.entries(svgWhiteList_)) {
 }
 
 /**
+ * Properties of a `style` attribute that must never be turned into attributes.
+ * @type {string[]}
+ */
+const STYLE_FORBIDDEN_PROPS = ['href', 'xlink:href', 'id', 'class', 'style']
+
+/**
+ * Tells whether a link or resource URL is safe to keep in the document.
+ * Script-capable schemes (`javascript:`, `vbscript:`) are always rejected;
+ * `data:` URLs are only kept for images (`<image href="data:image/...">`).
+ * @function module:sanitize.isSafeHref
+ * @param {string} nodeName - Name of the element that carries the URL
+ * @param {string} href - URL to check
+ * @returns {boolean}
+ */
+export const isSafeHref = (nodeName, href) => {
+  if (typeof href !== 'string') return true
+  // Browsers ignore whitespace and control characters inside a scheme ("java\tscript:")
+  // eslint-disable-next-line no-control-regex
+  const value = href.replace(/[\u0000- \u007F]/g, '').toLowerCase()
+  if (value.startsWith('javascript:') || value.startsWith('vbscript:')) return false
+  if (value.startsWith('data:')) return nodeName === 'image' && value.startsWith('data:image/')
+  return true
+}
+
+const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gis
+const CSS_IMPORT = /@import\b[^;]*;?/gi
+const CSS_SCRIPTING = /expression\s*\(|javascript:|vbscript:|-moz-binding|behavior\s*:/gi
+const CSS_ESCAPE = /\\(?:([0-9a-f]{1,6})\s?|(.))/gis
+
+const isSafeCssUrl = (url) => {
+  const value = url.trim().toLowerCase()
+  return value.startsWith('#') || value.startsWith('data:image/')
+}
+
+const decodeCssEscapes = (css) => css.replace(CSS_ESCAPE, (match, hex, char) => {
+  if (!hex) return char
+  const codePoint = parseInt(hex, 16)
+  return codePoint > 0 && codePoint <= 0x10FFFF ? String.fromCodePoint(codePoint) : '�'
+})
+
+const hasUnsafeCss = (css) => {
+  if (/@import\b/i.test(css) || new RegExp(CSS_SCRIPTING.source, 'i').test(css)) return true
+  return [...css.matchAll(CSS_URL)].some(([, , url]) => !isSafeCssUrl(url))
+}
+
+/**
+ * Neutralizes the parts of a stylesheet that can load external resources or run code:
+ * `@import` rules, `url()` references that are neither local (`#id`) nor image data,
+ * and legacy scripting constructs. The rest of the stylesheet is kept as is.
+ * When CSS escapes hide such a construct, the whole stylesheet is dropped.
+ * @function module:sanitize.sanitizeCss
+ * @param {string} css
+ * @returns {string}
+ */
+export const sanitizeCss = (css) => {
+  const cleaned = String(css)
+    .replace(CSS_IMPORT, '')
+    .replace(CSS_URL, (match, quote, url) => (isSafeCssUrl(url) ? match : 'none'))
+    .replace(CSS_SCRIPTING, '')
+  return hasUnsafeCss(decodeCssEscapes(cleaned)) ? '' : cleaned
+}
+
+/**
 * Sanitizes the input node and its children.
 * It only keeps what is allowed from our whitelist defined above.
 * @function module:sanitize.sanitizeSvg
@@ -185,7 +248,8 @@ export const sanitizeSvg = (node) => {
     return
   }
 
-  const allowedAttrs = svgWhiteList_[node.nodeName]
+  // Own properties only: element names such as "constructor" must not match Object.prototype
+  const allowedAttrs = {}.hasOwnProperty.call(svgWhiteList_, node.nodeName) ? svgWhiteList_[node.nodeName] : undefined
   const allowedAttrsNS = svgWhiteListNS_[node.nodeName]
   // if this element is supported, sanitize it
   if (typeof allowedAttrs !== 'undefined') {
@@ -227,7 +291,7 @@ export const sanitizeSvg = (node) => {
           const styleAttrName = (name || '').trim()
           const styleAttrVal = (val || '').trim()
           // Now check that this attribute is supported
-          if (allowedAttrs.includes(styleAttrName)) {
+          if (allowedAttrs.includes(styleAttrName) && !STYLE_FORBIDDEN_PROPS.includes(styleAttrName)) {
             node.setAttribute(styleAttrName, styleAttrVal)
           }
         }
@@ -245,6 +309,24 @@ export const sanitizeSvg = (node) => {
     Object.values(seAttrs).forEach(([att, val, ns]) => {
       node.setAttributeNS(ns, att, val)
     })
+
+    // Never keep script-capable URLs (javascript:, vbscript:, non-image data:)
+    const rawHref = getHref(node)
+    if (rawHref && !isSafeHref(node.nodeName, rawHref)) {
+      warn(`unsafe href removed from element ${node.nodeName}`, null, 'sanitize')
+      node.removeAttribute('href')
+      node.removeAttributeNS(NS.XLINK, 'href')
+    }
+
+    // Stylesheets must not load external resources or run code
+    if (node.nodeName === 'style') {
+      const css = node.textContent
+      const safeCss = sanitizeCss(css)
+      if (safeCss !== css) {
+        warn('unsafe CSS removed from a style element', null, 'sanitize')
+        node.textContent = safeCss
+      }
+    }
 
     // for some elements that have a xlink:href or href, ensure the URI refers to a local element
     // (but not for links and other elements where external hrefs are allowed)

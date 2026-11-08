@@ -63,7 +63,7 @@ describe('MainMenu', () => {
       i18next: { t: (key) => key },
       $svgEditor: document.getElementById('app'),
       docprops: false,
-      rulers: { updateRulers: vi.fn() },
+      rulers: { updateRulers: vi.fn(), display: vi.fn() },
       setBackground: vi.fn(),
       updateCanvas: vi.fn(),
       customExportPDF: false,
@@ -120,6 +120,7 @@ describe('MainMenu', () => {
     expect(editor.configObj.curConfig.showRulers).toBe(true)
     expect(editor.configObj.curConfig.baseUnit).toBe('cm')
     expect(editor.rulers.updateRulers).toHaveBeenCalled()
+    expect(editor.rulers.display).toHaveBeenCalledWith(true)
     expect(editor.svgCanvas.setConfig).toHaveBeenCalled()
     expect(editor.updateCanvas).toHaveBeenCalled()
     expect(globalThis.seAlert).toHaveBeenCalled()

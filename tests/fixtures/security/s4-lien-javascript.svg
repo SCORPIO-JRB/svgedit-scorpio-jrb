@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
+  <!-- Test S4 : le lien de script du rectangle rouge doit disparaître ; le lien https du rectangle bleu doit rester. -->
+  <g class="layer">
+    <title>Layer 1</title>
+    <a href="javascript:alert('Faille S4 : lien javascript conserve')">
+      <rect id="lien_piege" x="60" y="60" width="200" height="120" fill="#c33"/>
+    </a>
+    <a href="https://www.scorp-io.com/">
+      <rect id="lien_ok" x="320" y="60" width="200" height="120" fill="#36c"/>
+    </a>
+  </g>
+</svg>

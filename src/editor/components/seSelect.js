@@ -170,6 +170,36 @@ export class SeSelect extends HTMLElement {
   }
 
   /**
+   * True when the list stands for several different values: it shows
+   * "Mixed" until a value is chosen, which then applies to every element.
+   * @returns {boolean}
+   */
+  get mixed () {
+    return Boolean(this.$mixed?.selected)
+  }
+
+  /**
+   * @param {boolean} mixed
+   * @returns {void}
+   */
+  set mixed (mixed) {
+    if (!mixed) {
+      if (this.$mixed?.selected) { this.$select.selectedIndex = -1 }
+      return
+    }
+    if (!this.$mixed) {
+      this.$mixed = document.createElement('option')
+      this.$mixed.value = ''
+      this.$mixed.disabled = true
+      this.$mixed.hidden = true
+      this.$mixed.dataset.mixed = ''
+      this.$select.append(this.$mixed)
+    }
+    this.$mixed.textContent = t('properties.mixed')
+    this.$mixed.selected = true
+  }
+
+  /**
    * @function get
    * @returns {any}
    */

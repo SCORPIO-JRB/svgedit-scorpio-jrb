@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
+  <!-- Test B9 : un symbole dont l'id commence par un chiffre, réutilisé par <use>. Avant correctif, l'import échoue. -->
+  <defs>
+    <symbol id="1icone" viewBox="0 0 10 10">
+      <circle cx="5" cy="5" r="4" fill="#c33"/>
+    </symbol>
+  </defs>
+  <g class="layer">
+    <title>Layer 1</title>
+    <use href="#1icone" x="100" y="100"/>
+    <rect x="300" y="100" width="150" height="100" fill="#36c"/>
+  </g>
+</svg>

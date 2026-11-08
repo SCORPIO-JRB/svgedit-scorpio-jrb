@@ -1,0 +1,21 @@
+{
+  "200": {
+    "hover": 4
+  },
+  "2000": {
+    "selectAll": 150,
+    "dragMove": 100,
+    "dragRelease": 200,
+    "undo": 50,
+    "redo": 50,
+    "zoom": 100,
+    "marquee": 100,
+    "groupResizeMove": 100,
+    "groupResizeRelease": 300,
+    "groupRotateMove": 100,
+    "groupRotateRelease": 300,
+    "scaleToolMove": 100,
+    "scaleToolRelease": 300,
+    "hover": 4
+  }
+}

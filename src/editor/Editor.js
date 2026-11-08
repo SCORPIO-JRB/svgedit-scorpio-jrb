@@ -17,6 +17,7 @@ import './components/index.js'
 import './dialogs/index.js'
 
 import { isMac } from '@svgedit/svgcanvas/common/browser'
+import { normalizeShortcut, eventShortcut } from './shortcuts.js'
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import ConfigObj from './ConfigObj.js'
@@ -26,7 +27,13 @@ import TopPanel from './panels/TopPanel.js'
 import BottomPanel from './panels/BottomPanel.js'
 import LayersPanel from './panels/LayersPanel.js'
 import MainMenu from './MainMenu.js'
+import SystemClipboard from './SystemClipboard.js'
 import { getParentsUntil } from '@svgedit/svgcanvas/common/util.js'
+
+// Zoom bounds and ladder shared by every zoom gesture (1 = 100 %).
+const ZOOM_MIN = 0.01
+const ZOOM_MAX = 10
+const ZOOM_STEPS = [0.01, 0.02, 0.03, 0.06, 0.12, 0.25, 0.5, 1, 2, 4, 8, 10]
 
 const { $id, $click, decode64 } = SvgCanvas
 
@@ -115,13 +122,20 @@ class Editor extends EditorStartup {
       {
         key: ['ctrl+shift+arrowleft', true],
         fn: () => {
-          this.rotateSelected(0, 5)
+          this.rotateSelected(0, 15)
         }
       },
       {
-        key: 'ctrl+shift+arrowright',
+        key: ['ctrl+shift+arrowright', true],
         fn: () => {
-          this.rotateSelected(1, 5)
+          this.rotateSelected(1, 15)
+        }
+      },
+      {
+        // Redo: Ctrl+Y (tool_redo button) or the standard Mod+Shift+Z
+        key: ['ctrl+shift+z', true],
+        fn: () => {
+          this.topPanel.clickRedo()
         }
       },
       {
@@ -137,6 +151,21 @@ class Editor extends EditorStartup {
         }
       },
       {
+        // Enter: the objects of the selected group (a path: its nodes, a
+        // text: its characters); Shift+Enter: the group that holds the
+        // selection.
+        key: ['enter', true],
+        fn: () => {
+          this.svgCanvas.selectChildren()
+        }
+      },
+      {
+        key: ['shift+enter', true],
+        fn: () => {
+          this.svgCanvas.selectParent()
+        }
+      },
+      {
         key: 'tab',
         fn: () => {
           this.svgCanvas.cycleElement(0)
@@ -148,6 +177,38 @@ class Editor extends EditorStartup {
           this.svgCanvas.cycleElement(1)
         }
       },
+      // View shortcuts: Shift+0 100 %, Shift+1 fit content, Shift+2 fit
+      // selection, Shift+3 fit page; Mod+plus / Mod+minus step the zoom.
+      {
+        key: ['shift+0', true],
+        fn: () => {
+          this.zoomAt(1)
+        }
+      },
+      {
+        key: ['shift+1', true],
+        fn: () => {
+          this.zoomChanged(window, 'content')
+        }
+      },
+      {
+        key: ['shift+2', true],
+        fn: () => {
+          if (this.selectedElement || this.multiselected) {
+            this.zoomChanged(window, 'selection')
+          }
+        }
+      },
+      {
+        key: ['shift+3', true],
+        fn: () => {
+          this.zoomChanged(window, 'canvas')
+        }
+      },
+      { key: ['ctrl+=', true], fn: () => { this.zoomStep(1) } },
+      { key: ['ctrl++', true], fn: () => { this.zoomStep(1) } },
+      { key: ['ctrl+shift++', true], fn: () => { this.zoomStep(1) } },
+      { key: ['ctrl+-', true], fn: () => { this.zoomStep(-1) } },
       {
         key: [modKey + 'arrowup', true],
         fn: () => {
@@ -164,6 +225,39 @@ class Editor extends EditorStartup {
         key: [modKey + ']', true],
         fn: () => {
           this.moveUpDownSelected('Up')
+        }
+      },
+      // Keyboard-layout independent order shortcuts (brackets need AltGr on
+      // AZERTY): Mod+PageUp/PageDown one step, Mod+Home/End to the front/back.
+      { key: ['ctrl+pageup', true], fn: () => { this.moveUpDownSelected('Up') } },
+      { key: ['ctrl+pagedown', true], fn: () => { this.moveUpDownSelected('Down') } },
+      { key: ['ctrl+home', true], fn: () => { this.topPanel.moveToTopSelected() } },
+      { key: ['ctrl+end', true], fn: () => { this.topPanel.moveToBottomSelected() } },
+      {
+        // Duplicate the selection (Mod+D), like the D / C buttons. After the
+        // copy has been moved, Mod+D repeats that offset (M7).
+        key: ['ctrl+d', true],
+        fn: () => {
+          if (this.selectedElement || this.multiselected) {
+            this.svgCanvas.duplicateSelectedElements()
+          }
+        }
+      },
+      {
+        key: ['ctrl+g', true],
+        fn: () => {
+          if (this.multiselected) {
+            this.svgCanvas.groupSelectedElements()
+          }
+        }
+      },
+      {
+        key: ['ctrl+shift+g', true],
+        fn: () => {
+          const elem = this.selectedElement
+          if (elem && !this.multiselected && ['g', 'a', 'use'].includes(elem.tagName)) {
+            this.svgCanvas.ungroupSelectedElement()
+          }
         }
       },
       {
@@ -223,49 +317,49 @@ class Editor extends EditorStartup {
       {
         key: ['alt+arrowup', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(0, -1)
+          this.svgCanvas.duplicateSelectedElements({ x: 0, y: -1 })
         }
       },
       {
         key: ['alt+arrowdown', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(0, 1)
+          this.svgCanvas.duplicateSelectedElements({ x: 0, y: 1 })
         }
       },
       {
         key: ['alt+arrowleft', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(-1, 0)
+          this.svgCanvas.duplicateSelectedElements({ x: -1, y: 0 })
         }
       },
       {
         key: ['alt+arrowright', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(1, 0)
+          this.svgCanvas.duplicateSelectedElements({ x: 1, y: 0 })
         }
       },
       {
         key: ['alt+shift+arrowup', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(0, -10)
+          this.svgCanvas.duplicateSelectedElements({ x: 0, y: -10 })
         }
       },
       {
         key: ['alt+shift+arrowdown', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(0, 10)
+          this.svgCanvas.duplicateSelectedElements({ x: 0, y: 10 })
         }
       },
       {
         key: ['alt+shift+arrowleft', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(-10, 0)
+          this.svgCanvas.duplicateSelectedElements({ x: -10, y: 0 })
         }
       },
       {
         key: ['alt+shift+arrowright', true],
         fn: () => {
-          this.svgCanvas.cloneSelectedElements(10, 0)
+          this.svgCanvas.duplicateSelectedElements({ x: 10, y: 0 })
         }
       },
       {
@@ -288,33 +382,77 @@ class Editor extends EditorStartup {
           this.svgCanvas.selectAllInCurrentLayer()
         }
       },
+      // Cut, copy and paste go through the system clipboard (M7): the key
+      // announces the action, the browser's clipboard event carries it out.
+      // The key must not be prevented, or the event would not follow.
       {
         key: modKey + 'x',
         fn: () => {
-          this.cutSelected()
+          this.systemClipboard.request('cut')
         }
       },
       {
         key: modKey + 'c',
         fn: () => {
-          this.copySelected()
+          this.systemClipboard.request('copy')
         }
       },
       {
         key: modKey + 'v',
         fn: () => {
-          this.pasteInCenter()
+          this.systemClipboard.request('paste', { center: true })
         }
       },
       {
+        // Paste in place: the objects keep their coordinates.
+        key: modKey + 'shift+v',
+        fn: () => {
+          this.systemClipboard.request('paste', { type: 'in_place' })
+        }
+      },
+      {
+        // Copy, paste the properties: fill, stroke, opacity, font (M7)
+        key: [modKey + 'alt+c', true],
+        fn: () => {
+          this.copyProperties()
+        }
+      },
+      {
+        key: [modKey + 'alt+v', true],
+        fn: () => {
+          this.pasteProperties()
+        }
+      },
+      {
+        // Escape first cancels a drag in progress (move, duplicate, resize,
+        // rotation, rubber band). Otherwise it goes up one level: drawing tool
+        // -> selection tool, node editing -> selection, open group -> the
+        // group selected, selection -> nothing selected.
         key: 'escape',
         fn: () => {
-          if (this.enableToolCancel) {
+          // enableToolCancel is false while the mouse button is down: only
+          // the gesture can be cancelled then, not the tool.
+          if (this.svgCanvas.cancelGesture?.()) { return }
+          if (!this.enableToolCancel) { return }
+          const mode = this.svgCanvas.getMode()
+          if (mode === 'pathedit') {
+            this.svgCanvas.pathActions.toSelectMode()
+            return
+          }
+          if (mode !== 'select') {
             this.cancelTool()
+            return
+          }
+          // In an open group, up one level, as Shift+Enter: the group is
+          // selected in the group that holds it.
+          if (this.svgCanvas.selectParent()) { return }
+          if (this.svgCanvas.getSelectedElements().some(Boolean)) {
+            this.svgCanvas.clearSelection()
           }
         }
       }
     ]
+    this.systemClipboard = new SystemClipboard(this)
     this.leftPanel = new LeftPanel(this)
     this.bottomPanel = new BottomPanel(this)
     this.topPanel = new TopPanel(this)
@@ -421,19 +559,19 @@ class Editor extends EditorStartup {
         keyval = String(keyval)
         const { fn } = shortcut
         keyval.split('/').forEach((key) => {
-          keyHandler[key] = { fn, pd }
+          keyHandler[normalizeShortcut(key)] = { fn, pd }
         })
       }
       return true
     })
+    // Copy, cut and paste events of the system clipboard (M7)
+    this.systemClipboard.init()
     // register the keydown event
     document.addEventListener('keydown', (e) => {
       // only track keyboard shortcuts for the body containing the SVG-Editor
       if (e.target.nodeName !== 'BODY') return
       // normalize key
-      const key = `${e.altKey ? 'alt+' : ''}${e.shiftKey ? 'shift+' : ''}${
-        e.metaKey ? 'meta+' : ''
-      }${e.ctrlKey ? 'ctrl+' : ''}${e.key.toLowerCase()}`
+      const key = eventShortcut(e)
       // return if no shortcut defined for this key
       if (!keyHandler[key]) return
       // launch associated handler and preventDefault if necessary
@@ -706,8 +844,10 @@ class Editor extends EditorStartup {
     }
 
     this.multiselected = elems.length >= 2 && elems[1]
-    // Only updating fields for single elements for now
-    if (!this.multiselected) {
+    if (this.multiselected && mode === 'rotate') {
+      // The angle the elements share follows the rotation.
+      this.topPanel.updateSelectionAngle()
+    } else if (!this.multiselected) {
       switch (mode) {
         case 'rotate': {
           const ang = this.svgCanvas.getRotationAngle(elem)
@@ -750,8 +890,10 @@ class Editor extends EditorStartup {
           this.updateCanvas()
         }
         // Update selectedElement if element is no longer part of the image.
-        // This occurs for the text elements in Firefox
-      } else if (elem && !this.selectedElement?.parentNode) {
+        // This occurs for the text elements in Firefox. Not for a
+        // multi-selection: the panel would show the last changed element alone
+        // (and, in the angle field, its own angle).
+      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode) {
         this.selectedElement = elem
       }
     })
@@ -810,9 +952,14 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   zoomDone () {
-    for (const el of this.svgCanvas.selectedElements) {
-      this.svgCanvas.selectorManager.requestSelector(el).resize()
-    }
+    // Read every selection box first, then resize the selectors: interleaving
+    // reads and writes forced one layout per selected element.
+    const elements = this.svgCanvas.selectedElements.filter(Boolean)
+    const measure = this.svgCanvas.getSelector().getSelectionBBox
+    const boxes = elements.map((el) => measure(el))
+    elements.forEach((el, index) => {
+      this.svgCanvas.selectorManager.requestSelector(el).resize(boxes[index], Boolean(boxes[index]))
+    })
     this.updateWireFrame()
   }
 
@@ -854,11 +1001,12 @@ class Editor extends EditorStartup {
     const bb = zInfo.bbox
 
     if (zoomlevel < 0.001) {
-      this.changeZoom(0.1)
+      // Editor has no changeZoom method: this branch used to throw.
+      this.zoomAt(0.1)
       return
     }
 
-    $id('zoom').value = (this.svgCanvas.getZoom() * 100).toFixed(1)
+    $id('zoom').syncValue((this.svgCanvas.getZoom() * 100).toFixed(1))
 
     if (autoCenter) {
       this.updateCanvas()
@@ -889,21 +1037,32 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   contextChanged (win, context) {
-    let linkStr = ''
+    const panel = $id('cur_context_panel')
+    // Layer names and group ids come from the edited document: the breadcrumb
+    // is built with DOM nodes so they are never parsed as HTML.
+    panel.replaceChildren()
     if (context) {
       let str = ''
-      linkStr =
-        '<a href="#" data-root="y">' +
-        this.svgCanvas.getCurrentDrawing().getCurrentLayerName() +
-        '</a>'
-      const parentsUntil = getParentsUntil(context, '#svgcontent')
+      const rootLink = document.createElement('a')
+      rootLink.href = '#'
+      rootLink.dataset.root = 'y'
+      rootLink.textContent = this.svgCanvas.getCurrentDrawing().getCurrentLayerName()
+      panel.append(rootLink)
+      // From the outermost group to the open one (the list went the other
+      // way, which read backwards once groups are nested).
+      const parentsUntil = getParentsUntil(context, '#svgcontent').reverse()
       parentsUntil.forEach(function (parent) {
         if (parent.id) {
           str += ' > ' + parent.id
-          linkStr +=
-            parent !== context
-              ? ` > <a href="#">${parent.id}</a>`
-              : ` > ${parent.id}`
+          panel.append(' > ')
+          if (parent !== context) {
+            const link = document.createElement('a')
+            link.href = '#'
+            link.textContent = parent.id
+            panel.append(link)
+          } else {
+            panel.append(parent.id)
+          }
         }
       })
 
@@ -911,8 +1070,7 @@ class Editor extends EditorStartup {
     } else {
       this.curContext = null
     }
-    $id('cur_context_panel').style.display = context ? 'block' : 'none'
-    $id('cur_context_panel').innerHTML = linkStr
+    panel.style.display = context ? 'block' : 'none'
   }
 
   /**
@@ -967,14 +1125,79 @@ class Editor extends EditorStartup {
   }
 
   /**
+   * Zooms to a level, keeping the document point under a screen position
+   * fixed. Every zoom gesture (wheel, pinch, keyboard steps) goes through it,
+   * with the same bounds.
+   * @param {Float} level - Requested zoom (1 = 100 %), clamped to the bounds
+   * @param {Float} [clientX] - Anchor, in client coordinates; defaults to the view center
+   * @param {Float} [clientY]
+   * @returns {void}
+   */
+  zoomAt (level, clientX, clientY) {
+    const zoom = this.svgCanvas.getZoom()
+    const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, level))
+    if (!Number.isFinite(newZoom) || Math.abs(newZoom - zoom) < 1e-9) { return }
+
+    const { workarea } = this
+    const area = workarea.getBoundingClientRect()
+    const anchorX = clientX ?? area.left + workarea.clientWidth / 2
+    const anchorY = clientY ?? area.top + workarea.clientHeight / 2
+    // Document point under the anchor, through the first layer's screen CTM
+    // (svgcontent itself carries an x/y offset).
+    const layer = this.svgCanvas.getSvgContent().querySelector('g')
+    const ctm = layer?.getScreenCTM?.()
+    this.svgCanvas.setZoom(newZoom)
+    if (!ctm) {
+      this.updateCanvas(true)
+    } else {
+      const inverse = ctm.inverse()
+      const point = {
+        x: inverse.a * anchorX + inverse.c * anchorY + inverse.e,
+        y: inverse.b * anchorX + inverse.d * anchorY + inverse.f
+      }
+      const width = parseFloat(getComputedStyle(workarea, null).width)
+      const height = parseFloat(getComputedStyle(workarea, null).height)
+      this.updateCanvas(false, {
+        x: point.x * newZoom - (anchorX - area.left) + width / 2,
+        y: point.y * newZoom - (anchorY - area.top) + height / 2
+      })
+      // Correct any residual offset (rulers, borders) by measuring where the
+      // point landed.
+      const after = layer.getScreenCTM()
+      if (after) {
+        workarea.scrollLeft += (after.a * point.x + after.c * point.y + after.e) - anchorX
+        workarea.scrollTop += (after.b * point.x + after.d * point.y + after.f) - anchorY
+      }
+    }
+    $id('zoom').syncValue((newZoom * 100).toFixed(1))
+    this.zoomDone()
+    this.svgCanvas.runExtensions('zoomChanged', newZoom)
+  }
+
+  /**
+   * Zooms to the next or previous step of the zoom ladder, around the view
+   * center.
+   * @param {1|-1} direction
+   * @returns {void}
+   */
+  zoomStep (direction) {
+    const zoom = this.svgCanvas.getZoom()
+    const next = direction > 0
+      ? ZOOM_STEPS.find((step) => step > zoom * 1.001)
+      : [...ZOOM_STEPS].reverse().find((step) => step < zoom * 0.999)
+    this.zoomAt(next ?? (direction > 0 ? ZOOM_MAX : ZOOM_MIN))
+  }
+
+  /**
    * @param {Float} multiplier
    * @returns {void}
    */
   zoomImage (multiplier) {
     const resolution = this.svgCanvas.getResolution()
     multiplier = multiplier ? resolution.zoom * multiplier : 1
+    multiplier = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, multiplier))
     // setResolution(res.w * multiplier, res.h * multiplier, true);
-    $id('zoom').value = (multiplier * 100).toFixed(1)
+    $id('zoom').syncValue((multiplier * 100).toFixed(1))
     this.svgCanvas.setCurrentZoom(multiplier)
     this.zoomDone()
     this.updateCanvas(true)
@@ -1005,6 +1228,16 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   pasteInCenter () {
+    const { x, y } = this.getViewCenter()
+    this.svgCanvas.pasteElements('point', x, y)
+  }
+
+  /**
+   * The middle of the visible part of the canvas, in drawing coordinates:
+   * where Mod+V pastes.
+   * @returns {{x: number, y: number}}
+   */
+  getViewCenter () {
     const { workarea } = this
     const zoom = this.svgCanvas.getZoom()
     const x =
@@ -1019,7 +1252,27 @@ class Editor extends EditorStartup {
           2) /
         zoom -
       this.svgCanvas.contentH
-    this.svgCanvas.pasteElements('point', x, y)
+    return { x, y }
+  }
+
+  /**
+   * Copies the fill, stroke, opacity and font of the first selected object.
+   * @returns {void}
+   */
+  copyProperties () {
+    if (this.selectedElement || this.multiselected) {
+      this.svgCanvas.copySelectedProperties()
+    }
+  }
+
+  /**
+   * Gives the copied properties to the selected objects.
+   * @returns {void}
+   */
+  pasteProperties () {
+    if (this.selectedElement || this.multiselected) {
+      this.svgCanvas.pasteProperties()
+    }
   }
 
   /**
@@ -1027,7 +1280,7 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   moveUpDownSelected (dir) {
-    if (this.selectedElement) {
+    if (this.selectedElement || this.multiselected) {
       this.svgCanvas.moveUpDownSelected(dir)
     }
   }
@@ -1039,14 +1292,13 @@ class Editor extends EditorStartup {
    */
   moveSelected (dx, dy) {
     if (this.selectedElement || this.multiselected) {
-      if (this.configObj.curConfig.gridSnapping) {
-        // Use grid snap value regardless of zoom level
-        const multi =
-          this.svgCanvas.getZoom() * this.configObj.curConfig.snappingStep
-        dx *= multi
-        dy *= multi
-      }
-      this.svgCanvas.moveSelectedElements(dx, dy)
+      // Arrow keys move by document units (one grid step when snapping),
+      // whatever the zoom. moveSelectedElements expects screen pixels.
+      const step = this.configObj.curConfig.gridSnapping
+        ? this.configObj.curConfig.snappingStep
+        : 1
+      const multi = this.svgCanvas.getZoom() * step
+      this.svgCanvas.moveSelectedElements(dx * multi, dy * multi)
     }
   }
 
@@ -1072,11 +1324,17 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   rotateSelected (cw, step) {
-    if (!this.selectedElement || this.multiselected) {
-      return
-    }
     if (!cw) {
       step *= -1
+    }
+    if (this.multiselected) {
+      // The whole selection turns about the center of its frame.
+      this.svgCanvas.rotateSelectedElements(step)
+      this.topPanel.updateContextPanel()
+      return
+    }
+    if (!this.selectedElement) {
+      return
     }
     const angle = Number.parseFloat($id('angle').value) + step
     this.svgCanvas.setRotationAngle(angle)
@@ -1124,7 +1382,7 @@ class Editor extends EditorStartup {
    * @param {Event} e
    * @returns {void} Resolves to `undefined`
    */
-  cancelOverlays (e) {
+  async cancelOverlays (e) {
     if ($id('dialog_box') != null) $id('dialog_box').style.display = 'none'
     const $editorDialog = $id('se-svg-editor-dialog')
     const editingsource = $editorDialog.getAttribute('dialog') === 'open'
@@ -1138,10 +1396,11 @@ class Editor extends EditorStartup {
     if (editingsource) {
       const origSource = this.svgCanvas.getSvgString()
       if (origSource !== e.detail.value) {
-        const ok = seConfirm(
+        // Wait for the answer before discarding the edited source.
+        const ok = await seConfirm(
           this.i18next.t('notification.QignoreSourceChanges')
         )
-        if (ok) {
+        if (ok !== false && ok !== 'Cancel') {
           this.hideSourceEditor()
         }
       } else {
@@ -1166,10 +1425,29 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   enableOrDisableClipboard () {
-    const hasClipboardData = this.svgCanvas.hasClipboardData()
+    // The system clipboard may hold SVG from another application (M7).
+    const canPaste = this.systemClipboard.canPaste()
     this.canvMenu.setAttribute(
-      (hasClipboardData ? 'en' : 'dis') + 'ablemenuitems',
+      (canPaste ? 'en' : 'dis') + 'ablemenuitems',
       '#paste,#paste_in_place'
+    )
+    this.updatePropertiesMenu()
+  }
+
+  /**
+   * Enables "Copy properties" when an object can give them, and "Paste
+   * properties" when some have been copied and objects are selected.
+   * @returns {void}
+   */
+  updatePropertiesMenu () {
+    const menu = this.canvMenu
+    if (!menu?.setItemEnabled) return
+    const selected = this.svgCanvas.getSelectedElements().some(Boolean)
+    const editingNodes = this.svgCanvas.getMode() === 'pathedit'
+    menu.setItemEnabled('copy_properties', selected && !editingNodes)
+    menu.setItemEnabled(
+      'paste_properties',
+      selected && !editingNodes && this.svgCanvas.hasCopiedProperties()
     )
   }
 

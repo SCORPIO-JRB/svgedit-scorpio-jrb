@@ -42,13 +42,23 @@ export default {
     let started = false
     let connections = []
 
+    /**
+     * The connectors of the drawing: the lines this tool joined to two
+     * objects. An object whose id merely starts with "conn_", or the line
+     * being drawn, is not one.
+     * @returns {Element[]}
+     */
+    const getConnectors = () => Array.from(
+      svgCanvas.getSvgContent().querySelectorAll('[id^="conn_"]')
+    ).filter(elem => elem.hasAttributeNS(seNs, 'connector'))
+
     // Save the original groupSelectedElements method
     const originalGroupSelectedElements = svgCanvas.groupSelectedElements
 
     // Override the original groupSelectedElements to exclude connectors
     svgCanvas.groupSelectedElements = function (...args) {
       // Remove connectors from selection
-      svgCanvas.removeFromSelection(document.querySelectorAll('[id^="conn_"]'))
+      svgCanvas.removeFromSelection(getConnectors())
 
       // Call the original method
       return originalGroupSelectedElements.apply(this, args)
@@ -237,15 +247,14 @@ export default {
       // Fetch data storage object from svgCanvas
       const dataStorage = svgCanvas.getDataStorage()
 
-      // Query all connector elements (id startss with conn_)
-      const connectors = document.querySelectorAll('[id^="conn_"]')
       // Reset connections array
       connections = []
 
       // Loop through each connector
-      for (const connector of connectors) {
+      for (const connector of getConnectors()) {
         let addThis = false // Flag to indicate whether to add this connector
         const parts = [] // To hold the starting and ending elements connected by the connector
+        const ends = connector.getAttributeNS(seNs, 'connector').split(' ')
 
         // Loop through the connector ends ("start" and "end")
         for (const [i, pos] of ['start', 'end'].entries()) {
@@ -254,15 +263,16 @@ export default {
 
           // If part is null or undefined, fetch it and store it
           if (!part) {
-            part = document.getElementById(
-              connector.attributes['se:connector'].value.split(' ')[i]
-            )
-            dataStorage.put(connector, `c_${pos}`, part.id)
-            dataStorage.put(
-              connector,
-              `${pos}_bb`,
-              svgCanvas.getStrokedBBox([part])
-            )
+            part = ends[i] ? document.getElementById(ends[i]) : null
+            // A missing object: the connector is removed below
+            if (part) {
+              dataStorage.put(connector, `c_${pos}`, part.id)
+              dataStorage.put(
+                connector,
+                `${pos}_bb`,
+                svgCanvas.getStrokedBBox([part])
+              )
+            }
           } else {
             // If part is already stored, fetch it by ID
             part = document.getElementById(part)
@@ -272,10 +282,15 @@ export default {
           parts.push(part)
         }
 
+        // An end is missing (deleted object): the connector is left as it
+        // is, outside the undo history, and joins the object again if an
+        // undo brings it back.
+        if (parts.some(part => !part?.parentNode)) continue
+
         // Loop through the starting and ending elements connected by the connector
         for (let i = 0; i < 2; i++) {
           const cElem = parts[i]
-          const parents = svgCanvas.getParents(cElem?.parentNode)
+          const parents = svgCanvas.getParents(cElem.parentNode) ?? []
 
           // Check if the element is part of a selected group
           for (const el of parents) {
@@ -283,12 +298,6 @@ export default {
               addThis = true
               break
             }
-          }
-
-          // If element is missing or parent is null, remove the connector
-          if (!cElem || !cElem.parentNode) {
-            connector.remove()
-            continue
           }
 
           // If element is in the selection or part of a selected group
@@ -378,8 +387,12 @@ export default {
         const conn = element.getAttributeNS(seNs, 'connector')
         if (conn) {
           const connData = conn.split(' ')
-          const sbb = svgCanvas.getStrokedBBox([getElement(connData[0])])
-          const ebb = svgCanvas.getStrokedBBox([getElement(connData[1])])
+          const startEl = connData[0] && getElement(connData[0])
+          const endEl = connData[1] && getElement(connData[1])
+          // An end is missing: nothing to measure (see findConnectors)
+          if (!startEl || !endEl) return
+          const sbb = svgCanvas.getStrokedBBox([startEl])
+          const ebb = svgCanvas.getStrokedBBox([endEl])
           dataStorage.put(element, 'c_start', connData[0])
           dataStorage.put(element, 'c_end', connData[1])
           dataStorage.put(element, 'start_bb', sbb)
@@ -411,7 +424,10 @@ export default {
         // Retrieve necessary data from the SVG canvas and the event object
         const dataStorage = svgCanvas.getDataStorage()
         const svgContent = svgCanvas.getSvgContent()
-        const { event: e, start_x: startX, start_y: startY } = opts
+        const { event: e } = opts
+        // The point where the gesture starts, which mouseMove and mouseUp use
+        startX = opts.start_x
+        startY = opts.start_y
         const mode = svgCanvas.getMode()
         const {
           curConfig: { initStroke }
@@ -478,16 +494,13 @@ export default {
         return undefined
       },
       mouseMove (opts) {
-        // Exit early if there are no connectors
-        if (connections.length === 0) return
-
         const dataStorage = svgCanvas.getDataStorage()
         const zoom = svgCanvas.getZoom()
         // const e = opts.event;
         const x = opts.mouse_x / zoom
         const y = opts.mouse_y / zoom
         /** @todo  We have a concern if startX or startY are undefined */
-        if (!startX || !startY) return
+        if (startX === undefined || startY === undefined) return
 
         const diffX = x - startX
         const diffY = y - startY
@@ -616,12 +629,10 @@ export default {
         }
       },
       selectedChanged (opts) {
-        // Get necessary data storage and SVG content
         const dataStorage = svgCanvas.getDataStorage()
-        const svgContent = svgCanvas.getSvgContent()
 
         // Exit early if there are no connectors
-        if (!svgContent.querySelectorAll('[id^="conn_"]').length) return
+        if (!getConnectors().length) return
 
         // If the current mode is 'connector', switch to 'select'
         if (svgCanvas.getMode() === 'connector') {
@@ -701,7 +712,10 @@ export default {
           const start = getElement(dataStorage.get(elem, 'c_start'))
           updateConnectors([start])
         } else {
-          updateConnectors(svgCanvas.getSelectedElements())
+          // The changed objects (an undo changes objects that may not be
+          // selected) and the selection
+          const changed = opts.elems.filter(el => el && el.tagName !== 'svg')
+          updateConnectors([...changed, ...svgCanvas.getSelectedElements()])
         }
       },
       IDsUpdated (input) {

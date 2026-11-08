@@ -110,7 +110,11 @@ const addToSelectionMethod = (elemsToAdd, showGrips) => {
     ++firstNull
   }
 
-  // now add each element consecutively
+  // Collect the new elements first, then read all their selection boxes, then
+  // create the selectors: reading a box right after inserting the previous
+  // selector forced one layout per element (quadratic on "select all").
+  const alreadySelected = new Set(selectedElements)
+  const toAdd = []
   let i = elemsToAdd.length
   while (i--) {
     let elem = elemsToAdd[i]
@@ -124,19 +128,24 @@ const addToSelectionMethod = (elemsToAdd, showGrips) => {
     }
 
     // if it's not already there, add it
-    if (!selectedElements.includes(elem)) {
-      selectedElements[firstNull] = elem
-
-      // only the first selectedBBoxes element is ever used in the codebase these days
-      // if (j === 0) selectedBBoxes[0] = utilsGetBBox(elem);
-      firstNull++
-      const sel = svgCanvas.selectorManager.requestSelector(elem)
-
-      if (selectedElements.length > 1) {
-        sel.showGrips(false)
-      }
+    if (!alreadySelected.has(elem)) {
+      alreadySelected.add(elem)
+      toAdd.push(elem)
     }
   }
+
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  const boxes = toAdd.map((elem) => (measure ? measure(elem) : undefined))
+  toAdd.forEach((elem, index) => {
+    selectedElements[firstNull] = elem
+    firstNull++
+    const bbox = boxes[index]
+    const sel = svgCanvas.selectorManager.requestSelector(elem, bbox, Boolean(bbox))
+
+    if (selectedElements.length > 1) {
+      sel.showGrips(false)
+    }
+  })
   if (!selectedElements.length) {
     return
   }
@@ -212,10 +221,19 @@ const getMouseTargetMethod = (evt) => {
     return svgCanvas.selectorManager.selectorParentGroup
   }
 
+  // A selected object inside a group (objects that look the same, taken in
+  // the whole page) is the target of a click on it, so that it can be dragged
+  // with the rest of the selection.
+  const context = svgCanvas.getCurrentGroup() || currentLayer
+  const selected = svgCanvas.getSelectedElements()
+  if (selected.length) {
+    for (let node = mouseTarget; node && node !== context && node !== content; node = node.parentNode) {
+      if (node.parentNode !== context && selected.includes(node)) { return node }
+    }
+  }
+
   while (
-    !mouseTarget?.parentNode?.isSameNode(
-      svgCanvas.getCurrentGroup() || currentLayer
-    )
+    !mouseTarget?.parentNode?.isSameNode(context)
   ) {
     mouseTarget = mouseTarget.parentNode
   }
@@ -402,27 +420,24 @@ const prepareSvg = (newDoc) => {
 }
 
 /**
- * Removes any old rotations if present, prepends a new rotation at the
- * transformed center.
- * @function module:svgcanvas.SvgCanvas#setRotationAngle
+ * Sets the rotation of one element about its visual center: removes any old
+ * rotation and prepends the new one, keeping the rest of its transform. No
+ * recalculation, no history.
+ * @function module:selection.rotateElementTo
+ * @param {Element} elem
  * @param {string|Float} val - The new rotation angle in degrees
- * @param {boolean} preventUndo - Indicates whether the action should be undoable or not
- * @fires module:svgcanvas.SvgCanvas#event:changed
- * @returns {void}
+ * @returns {Object<string, string>|null} The geometry and transform before the
+ *   change, or null when nothing changed
  */
-const setRotationAngle = (val, preventUndo) => {
-  const selectedElements = svgCanvas.getSelectedElements()
-  // ensure val is the proper type
+export const rotateElementTo = (elem, val) => {
   val = normalizeRotationAngle(val)
-  const elem = selectedElements[0]
-  if (!elem) return
   const bbox = getBBox(elem)
-  if (!bbox) return
+  if (!bbox) return null
   const cx = bbox.x + bbox.width / 2
   const cy = bbox.y + bbox.height / 2
   const tlist = getTransformList(elem)
   const { rotationAngle: currentAngle } = getRotationTransformSummary(tlist)
-  if (Math.abs(val - currentAngle) < NEAR_ZERO) return
+  if (Math.abs(val - currentAngle) < NEAR_ZERO) return null
 
   const oldValues = getTransformGeometryValues(elem)
   const svgroot = svgCanvas.getSvgRoot()
@@ -461,6 +476,42 @@ const setRotationAngle = (val, preventUndo) => {
   if (tlist.numberOfItems === 0) {
     elem.removeAttribute('transform')
   }
+  return oldValues
+}
+
+/**
+ * Checks whether an element's geometry or transform differs from values read
+ * by {@link rotateElementTo}.
+ * @function module:selection.hasGeometryChanged
+ * @param {Element} elem
+ * @param {Object<string, string>} oldValues
+ * @returns {boolean}
+ */
+export const hasGeometryChanged = (elem, oldValues) => hasTransformGeometryChange(elem, oldValues)
+
+/**
+ * Removes any old rotations if present, prepends a new rotation at the
+ * transformed center. With several elements selected, the whole selection
+ * turns about the center of its frame, so that every element gets this angle
+ * when they all had the same one (see rotateSelectedElements).
+ * @function module:svgcanvas.SvgCanvas#setRotationAngle
+ * @param {string|Float} val - The new rotation angle in degrees
+ * @param {boolean} preventUndo - Indicates whether the action should be undoable or not
+ * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @returns {void}
+ */
+const setRotationAngle = (val, preventUndo) => {
+  const selectedElements = svgCanvas.getSelectedElements()
+  // ensure val is the proper type
+  val = normalizeRotationAngle(val)
+  if (selectedElements.filter(Boolean).length > 1 && svgCanvas.setSelectionAngle) {
+    svgCanvas.setSelectionAngle(val, { addToHistory: !preventUndo })
+    return
+  }
+  const elem = selectedElements[0]
+  if (!elem) return
+  const oldValues = rotateElementTo(elem, val)
+  if (!oldValues) return
 
   if (!preventUndo) {
     // Recalculation may bake transforms into geometry. Its returned command is

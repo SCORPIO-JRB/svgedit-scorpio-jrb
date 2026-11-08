@@ -54,7 +54,8 @@ export const normalizeClipboardData = (data) => {
       sourceDocumentId: null,
       elements: data,
       dependencies: [],
-      useTargetIds: []
+      useTargetIds: [],
+      svg: null
     }
   }
 
@@ -76,7 +77,9 @@ export const normalizeClipboardData = (data) => {
     dependencies: Array.isArray(data.dependencies) ? data.dependencies : [],
     useTargetIds: Array.isArray(data.useTargetIds)
       ? data.useTargetIds.filter((id) => typeof id === 'string' && id)
-      : []
+      : [],
+    // The same elements as SVG text, written to the system clipboard (M7)
+    svg: typeof data.svg === 'string' ? data.svg : null
   }
 }
 
@@ -367,6 +370,64 @@ export const createClipboardPayload = (svgCanvas, selectedElements) => {
     sourceDocumentId: getClipboardDocumentId(svgContent),
     elements,
     dependencies,
-    useTargetIds: [...useTargetIds].filter((id) => dependencyIds.has(id))
+    useTargetIds: [...useTargetIds].filter((id) => dependencyIds.has(id)),
+    svg: createClipboardSvg(svgCanvas, selectedElements, dependencyRoots)
+  }
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+const RESERVED_NS = new Set([
+  SVG_NS,
+  'http://www.w3.org/XML/1998/namespace',
+  'http://www.w3.org/2000/xmlns/'
+])
+
+/**
+ * Writes the copied elements as a standalone SVG document, for the system
+ * clipboard (M7): other applications and other browsers read this text.
+ * Elements keep their coordinates; the view box frames them tightly, stroke
+ * included. They are serialized as when the drawing is saved, from copies,
+ * so that copying never changes the document.
+ * @param {module:svgcanvas.SvgCanvas} svgCanvas
+ * @param {Element[]} selectedElements
+ * @param {Element[]} dependencyRoots - Definitions the elements refer to
+ * @returns {string|null}
+ */
+export const createClipboardSvg = (svgCanvas, selectedElements, dependencyRoots = []) => {
+  if (!selectedElements.length || typeof svgCanvas.svgToString !== 'function') return null
+  try {
+    const nsMap = svgCanvas.getNsMap?.() || {}
+    const namespaces = new Map()
+    const noteNamespaces = (root) => {
+      [root, ...root.querySelectorAll('*')].forEach((element) => {
+        [element, ...element.attributes].forEach((node) => {
+          const uri = node.namespaceURI
+          if (uri && !RESERVED_NS.has(uri) && nsMap[uri]) namespaces.set(uri, nsMap[uri])
+        })
+      })
+    }
+    const write = (element) => {
+      const copy = element.cloneNode(true)
+      noteNamespaces(copy)
+      return svgCanvas.svgToString(copy, 1)
+    }
+    const parts = []
+    const defs = dependencyRoots.map(write).filter(Boolean)
+    if (defs.length) parts.push(' <defs>', ...defs.map((text) => ` ${text}`), ' </defs>')
+    parts.push(...selectedElements.map(write).filter(Boolean))
+
+    const box = svgCanvas.getStrokedBBox?.(selectedElements)
+    const round = (value) => Number(Number(value).toFixed(svgCanvas.getRoundDigits?.() ?? 2))
+    let frame = ''
+    if (box && box.width > 0 && box.height > 0) {
+      const [x, y, width, height] = [box.x, box.y, box.width, box.height].map(round)
+      frame = ` width="${width}" height="${height}" viewBox="${x} ${y} ${width} ${height}"`
+    }
+    const declarations = [...namespaces]
+      .map(([uri, prefix]) => ` xmlns:${prefix}="${uri}"`)
+      .join('')
+    return `<svg xmlns="${SVG_NS}"${declarations}${frame}>\n${parts.join('\n')}\n</svg>`
+  } catch {
+    return null
   }
 }

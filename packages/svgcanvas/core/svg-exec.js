@@ -20,7 +20,8 @@ import {
   getStrokedBBoxDefaultVisible,
   walkTree,
   getBBox as utilsGetBBox,
-  hashCode
+  hashCode,
+  escapeCssIdent
 } from './utilities.js'
 import {
   transformPoint,
@@ -494,7 +495,7 @@ const setSvgString = (xmlString, preventUndo) => {
 
     Object.entries(ids).forEach(([key, value]) => {
       if (value > 1) {
-        const nodes = content.querySelectorAll(`[id="${key}"]`)
+        const nodes = content.querySelectorAll(`#${escapeCssIdent(key)}`)
         for (let i = 1; i < nodes.length; i++) {
           nodes[i].setAttribute('id', svgCanvas.getNextId())
         }

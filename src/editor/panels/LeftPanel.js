@@ -29,7 +29,9 @@ class LeftPanel {
   updateLeftPanel (button) {
     if (button.disabled) return false
     // remove the pressed state on other(s) button(s)
-    $qa('#tools_left *[pressed]').forEach((b) => {
+    const toolsLeft = $id('tools_left')
+    const pressed = toolsLeft ? toolsLeft.querySelectorAll('*[pressed]') : $qa('#tools_left *[pressed]')
+    pressed.forEach((b) => {
       b.pressed = false
     })
     // pressed state for the clicked button
@@ -44,10 +46,47 @@ class LeftPanel {
    * @returns {void}
    */
   clickSelect () {
-    if (this.updateLeftPanel('tool_select')) {
+    // The Scale tool works in the select mode: going back to that mode keeps
+    // it on (another mode has already turned it off), see chooseSelect.
+    const button = this.editor.svgCanvas.isScaleTool?.() ? 'tool_scale' : 'tool_select'
+    if (this.updateLeftPanel(button)) {
       // this.editor.workarea.style.cursor = 'auto'
       this.editor.svgCanvas.setMode('select')
     }
+  }
+
+  /**
+   * The Select button, or V: the select mode, with the Scale tool off.
+   * @returns {void}
+   */
+  chooseSelect () {
+    this.setScaleTool(false)
+    this.clickSelect()
+  }
+
+  /**
+   * The Scale tool (K): the select mode, with grips that scale the selection
+   * as a whole, proportions kept, strokes and text sizes included.
+   * @returns {void}
+   */
+  clickScale () {
+    if (this.updateLeftPanel('tool_scale')) {
+      this.editor.svgCanvas.setMode('select')
+      this.setScaleTool(true)
+    }
+  }
+
+  /**
+   * Turns the Scale tool on or off and shows or hides its panel.
+   * @param {boolean} on
+   * @returns {void}
+   */
+  setScaleTool (on) {
+    const { svgCanvas } = this.editor
+    if (!svgCanvas.setScaleTool || svgCanvas.isScaleTool() === on) { return }
+    svgCanvas.setScaleTool(on)
+    this.editor.workarea.classList.toggle('scale_tool', on)
+    this.editor.topPanel.updateContextPanel()
   }
 
   /**
@@ -202,7 +241,8 @@ class LeftPanel {
     template.innerHTML = leftPanelHTML
     this.editor.$svgEditor.append(template.content.cloneNode(true))
     // register actions for left panel
-    $click($id('tool_select'), this.clickSelect.bind(this))
+    $click($id('tool_select'), this.chooseSelect.bind(this))
+    $click($id('tool_scale'), this.clickScale.bind(this))
     $click($id('tool_fhpath'), this.clickFHPath.bind(this))
     $click($id('tool_text'), this.clickText.bind(this))
     $click($id('tool_image'), this.clickImage.bind(this))

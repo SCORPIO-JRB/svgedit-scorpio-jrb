@@ -10,6 +10,34 @@ export const regexEscape = function (str) {
   // Originally from: http://phpjs.org/functions
   return String(str).replace(/[.\\+*?[^\]$(){}=!<>|:-]/g, '\\$&')
 }
+
+/**
+ * Configuration keys that can never be set from the URL query string.
+ * A path such as `extPath` would let a crafted link load and run
+ * third-party code; `forceStorage` would bypass the user's storage consent.
+ * @type {string[]}
+ */
+export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins']
+
+/**
+ * Tells whether a configuration key must be ignored when it comes from the URL.
+ * Any key ending in `Path` is treated as a path configuration, so future path
+ * options are protected by default.
+ * @function isForbiddenUrlConfig
+ * @param {string} key
+ * @returns {boolean}
+ */
+export const isForbiddenUrlConfig = (key) => URL_FORBIDDEN_CONFIG.includes(key) || /Path$/.test(key)
+
+/**
+ * Validates a language code received from the URL (e.g. `fr`, `pt-BR`, `zh-CN`).
+ * Rejects anything that could be used as a path segment when locale files are imported.
+ * @function isValidLangParam
+ * @param {any} lang
+ * @returns {boolean}
+ */
+export const isValidLangParam = (lang) => typeof lang === 'string' && /^[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*$/.test(lang)
+
 /**
  * @class configObj
  */
@@ -151,6 +179,9 @@ export default class ConfigObj {
       baseUnit: 'px',
       snappingStep: 10,
       showRulers: true,
+      // The editor zooms with Ctrl/Cmd + wheel and pinch; Shift + wheel scrolls
+      // horizontally instead of zooming (canvas default: true).
+      shiftWheelZoom: false,
       // SOURCE OUTPUT BEHAVIOR
       dynamicOutput: false,
       // URL BEHAVIOR CONFIGURATION
@@ -250,7 +281,6 @@ export default class ConfigObj {
    * @returns {void}
    */
   loadFromURL () {
-    const self = this
     const { search, searchParams } = new URL(location)
     if (search) {
       this.urldata = {}
@@ -284,16 +314,19 @@ export default class ConfigObj {
           : this.urldata.extensions.split(',')
       }
 
-      // Disallowing extension paths via URL for
-      // security reasons, even for same-domain
-      // ones given potential to interact in undesirable
-      // ways with other script resources
-      ['userExtensions', 'imgPath']
-        .forEach(function (pathConfig) {
-          if (self.urldata[pathConfig]) {
-            delete self.urldata[pathConfig]
-          }
-        })
+      // Disallowing paths and privacy-sensitive options via URL for
+      // security reasons, even for same-domain ones: a path such as
+      // `extPath` would let a crafted link load and run third-party code.
+      Object.keys(this.urldata).forEach((key) => {
+        if (isForbiddenUrlConfig(key)) {
+          delete this.urldata[key]
+        }
+      })
+
+      // The language code ends up in locale import paths
+      if (this.urldata.lang !== undefined && !isValidLangParam(this.urldata.lang)) {
+        delete this.urldata.lang
+      }
 
       // Note: `source` and `url` (as with `storagePrompt` later) are not
       //  set on config but are used below

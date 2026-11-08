@@ -61,7 +61,8 @@ describe('draw context', () => {
     expect(currentGroup).toBe(editGroup)
     expect(calls[0]).toStrictEqual({ event: 'contextset', arg: editGroup })
     expect(sibling.getAttribute('opacity')).toBe('0.33')
-    expect(sibling.getAttribute('style')).toBe('pointer-events: none')
+    // Only pointer-events is changed, the rest of the style is kept (M6).
+    expect(sibling.style.pointerEvents).toBe('none')
     expect(dataStorage.get(sibling, 'orig_opac')).toBe('inherit')
 
     draw.leaveContext()
@@ -69,7 +70,7 @@ describe('draw context', () => {
     expect(currentGroup).toBe(null)
     expect(calls[1]).toStrictEqual({ event: 'contextset', arg: null })
     expect(sibling.getAttribute('opacity')).toBe('inherit')
-    expect(sibling.getAttribute('style')).toBe('pointer-events: inherit')
+    expect(sibling.style.pointerEvents).toBe('inherit')
     expect(dataStorage.has(sibling, 'orig_opac')).toBe(false)
   })
 })

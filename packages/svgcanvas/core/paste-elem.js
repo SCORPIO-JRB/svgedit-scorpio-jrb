@@ -157,7 +157,7 @@ const insertVisibleElements = (elements, batchCmd) => {
  * @param {Integer|void} y
  * @returns {void}
  */
-const finishPaste = (pasted, batchCmd, type, x, y) => {
+export const finishPaste = (pasted, batchCmd, type, x, y) => {
   if (!pasted.length) return
   svgCanvas.selectOnly(pasted)
 

@@ -101,6 +101,8 @@ class MainMenu {
     this.editor.configObj.curConfig.snappingStep = gridsnappingstep
     this.editor.configObj.curConfig.gridColor = gridcolor
     this.editor.configObj.curConfig.showRulers = showrulers
+    // Unchecking the option used to leave the rulers visible.
+    this.editor.rulers.display(Boolean(showrulers))
     if (this.editor.configObj.curConfig.showRulers) {
       this.editor.rulers.updateRulers()
     }

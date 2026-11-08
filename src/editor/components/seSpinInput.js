@@ -1,6 +1,7 @@
 /* globals svgEditor */
 import '../dialogs/se-elix/define/NumberSpinBox.js'
 import { t } from '../locale.js'
+import { isPlainNumber, parseFieldExpression } from './fieldExpression.js'
 
 const template = document.createElement('template')
 template.innerHTML = `
@@ -72,6 +73,61 @@ export class SESpinInput extends HTMLElement {
     this.committedValue = this.$input.value
     this.manualEdit = false
     this.inputEventsConnected = false
+    this.#mixed = false
+    // The arrows of a field showing "Mixed" change each element's own value.
+    const { stepUp, stepDown } = this.$input
+    this.$input.stepUp = () => (this.#mixed ? this.#stepMixed(1) : stepUp.call(this.$input))
+    this.$input.stepDown = () => (this.#mixed ? this.#stepMixed(-1) : stepDown.call(this.$input))
+  }
+
+  #mixed
+
+  // Exact value behind a rounded shown value: expressions apply to it.
+  #precise
+
+  /**
+   * Words that stand, in an expression, for the value of each element.
+   * @returns {string[]}
+   */
+  #mixedWords () {
+    return [t('properties.mixed'), 'mixed', 'mixte']
+  }
+
+  /**
+   * Keeps a value between the field's bounds.
+   * @param {number} value
+   * @returns {number}
+   */
+  #clamp (value) {
+    const min = this.getAttribute('min')
+    const max = this.getAttribute('max')
+    let result = value
+    if (min !== null && result < Number(min)) { result = Number(min) }
+    if (max !== null && result > Number(max)) { result = Number(max) }
+    return result
+  }
+
+  /**
+   * Sends a change to apply to each element's own value, from a field
+   * showing "Mixed". The listener reads `event.detail.relative`, a function
+   * from an element's value to its new value; the field keeps showing
+   * "Mixed" until the panel updates it.
+   * @param {(value: number) => number} evaluate
+   * @returns {void}
+   */
+  #dispatchRelative (evaluate) {
+    const relative = (value) => {
+      const result = evaluate(Number(value))
+      return Number.isFinite(result) ? this.#clamp(result) : Number(value)
+    }
+    this.manualEdit = false
+    this.$input.value = ''
+    this.dispatchEvent(new CustomEvent('change', { detail: { relative } }))
+  }
+
+  #stepMixed (sign) {
+    const step = Number(this.getAttribute('step')) || 1
+    this.#dispatchRelative((value) => value + sign * step)
   }
 
   #isValidValue (value) {
@@ -87,11 +143,34 @@ export class SESpinInput extends HTMLElement {
       (max === null || number <= Number(max))
   }
 
-  #dispatchChange () {
-    this.dispatchEvent(new CustomEvent('change'))
+  /**
+   * @param {PlainObject} [detail] - `{wasMixed: true}` when a value typed in a
+   *   field showing "Mixed" is to be given to every element
+   * @returns {void}
+   */
+  #dispatchChange (detail) {
+    this.dispatchEvent(new CustomEvent('change', detail ? { detail } : undefined))
   }
 
   #commitValue (value) {
+    const wasMixed = this.#mixed
+    // A plain number is kept as typed, as before expressions were read.
+    if (!isPlainNumber(value)) {
+      const expression = parseFieldExpression(value, { words: this.#mixedWords() })
+      if (!expression) {
+        this.#revertValue()
+        return
+      }
+      if (this.#mixed && expression.relative) {
+        this.#dispatchRelative(expression.evaluate)
+        return
+      }
+      // An empty field has no value to add to.
+      const current = String(this.committedValue).trim() === ''
+        ? NaN
+        : (this.#precise ?? Number(this.committedValue))
+      value = String(expression.evaluate(current))
+    }
     if (!this.#isValidValue(value)) {
       this.#revertValue()
       return
@@ -100,11 +179,15 @@ export class SESpinInput extends HTMLElement {
     this.value = value
     this.committedValue = String(this.value)
     this.manualEdit = false
-    this.#dispatchChange()
+    this.#dispatchChange(wasMixed ? { wasMixed } : undefined)
   }
 
   #revertValue () {
     this.manualEdit = false
+    if (this.#mixed) {
+      this.$input.value = ''
+      return
+    }
     this.value = this.committedValue
   }
 
@@ -121,10 +204,14 @@ export class SESpinInput extends HTMLElement {
       this.committedValue = String(this.value)
       input.select()
     }, true)
+    // In the capture phase: the spin box raises its own change event on the
+    // input event, which must already see the manual edit. Otherwise the
+    // first character typed was committed at once ("1" of "12", or the "+"
+    // of "+10").
     inputRoot.addEventListener('input', (e) => {
       if (e.target?.id !== 'input') return
       this.manualEdit = true
-    })
+    }, true)
     inputRoot.addEventListener('keydown', (e) => {
       const input = e.target
       if (input?.id !== 'input') return
@@ -212,6 +299,7 @@ export class SESpinInput extends HTMLElement {
         this.$img.remove()
         break
       case 'value':
+        this.#setMixed(false)
         this.$input.value = newValue
         if (!this.manualEdit) {
           this.committedValue = String(newValue)
@@ -268,10 +356,65 @@ export class SESpinInput extends HTMLElement {
    * @returns {void}
    */
   set value (value) {
+    this.#setMixed(false)
+    this.#precise = undefined
     this.$input.value = value
     if (!this.manualEdit) {
       this.committedValue = String(value)
     }
+  }
+
+  /**
+   * Exact value of a field showing a rounded value: an expression such as
+   * *2 applies to it rather than to the rounding. Set it after the value;
+   * setting the value again drops it.
+   * @param {number} value
+   * @returns {void}
+   */
+  set preciseValue (value) {
+    this.#precise = Number.isFinite(value) ? value : undefined
+  }
+
+  /**
+   * @returns {number|undefined}
+   */
+  get preciseValue () {
+    return this.#precise
+  }
+
+  /**
+   * True when the field stands for several different values: it is empty
+   * and shows "Mixed". A number typed then applies to every element; an
+   * expression such as +10 or *2, or an arrow, changes each element's own
+   * value (see the `relative` detail of the change event).
+   * @returns {boolean}
+   */
+  get mixed () {
+    return this.#mixed
+  }
+
+  /**
+   * @param {boolean} mixed
+   * @returns {void}
+   */
+  set mixed (mixed) {
+    this.#setMixed(Boolean(mixed))
+    if (mixed) {
+      this.$input.value = ''
+      if (!this.manualEdit) {
+        this.committedValue = ''
+      }
+    }
+  }
+
+  #setMixed (mixed) {
+    if (this.#mixed === mixed) return
+    this.#mixed = mixed
+    const input = this.$input.shadowRoot?.getElementById('input')
+    if (input) {
+      input.placeholder = mixed ? t('properties.mixed') : ''
+    }
+    this.classList.toggle('mixed', mixed)
   }
 
   /**

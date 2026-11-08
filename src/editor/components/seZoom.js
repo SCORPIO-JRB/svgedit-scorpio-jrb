@@ -202,6 +202,22 @@ class SeZoom extends HTMLElement {
   }
 
   /**
+   * Displays a zoom level that the editor has already applied, without
+   * emitting `change`. Setting `value` emits `change`, which made the editor
+   * apply the same zoom a second time.
+   * @param {string|number} value
+   * @returns {void}
+   */
+  syncValue (value) {
+    this.silent = true
+    try {
+      this.setAttribute('value', value)
+    } finally {
+      this.silent = false
+    }
+  }
+
+  /**
    * @function attributeChangedCallback
    * @param {string} name
    * @param {string} oldValue
@@ -224,9 +240,11 @@ class SeZoom extends HTMLElement {
     switch (name) {
       case 'value':
         this.inputElement.value = newValue
-        this.dispatchEvent(
-          new CustomEvent('change', { detail: { value: newValue } })
-        )
+        if (!this.silent) {
+          this.dispatchEvent(
+            new CustomEvent('change', { detail: { value: newValue } })
+          )
+        }
         break
     }
   }

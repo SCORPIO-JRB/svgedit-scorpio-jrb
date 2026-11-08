@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
+  <!-- Test S3 : la feuille de style tente de charger des ressources externes. -->
+  <style>@import url(https://example.invalid/import.css); rect.piege { fill: url(https://example.invalid/pixel.png) } rect.ok { fill: #2a7 }</style>
+  <g class="layer">
+    <title>Layer 1</title>
+    <rect class="piege" x="60" y="60" width="200" height="120" stroke="#123" stroke-width="4"/>
+    <rect class="ok" x="320" y="60" width="200" height="120" stroke="#123" stroke-width="4"/>
+  </g>
+</svg>

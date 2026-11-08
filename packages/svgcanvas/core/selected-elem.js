@@ -35,6 +35,8 @@ import { recalculateDimensions, withStartTransform } from './recalculate.js'
 import { isGecko } from '../common/browser.js'
 import { getParents } from '../common/util.js'
 import { createClipboardPayload } from './clipboard.js'
+import { drawingMatrixInParent, invert, multiply, parentBoxToDrawing, parentDelta, parentToDrawing } from './multi-transform.js'
+import { INHERITED_PROPERTIES, inheritedFromAncestors, ownPresentationValue } from './inherited.js'
 
 const {
   MoveElementCommand,
@@ -62,6 +64,9 @@ export const init = canvas => {
   svgCanvas.moveUpDownSelected = moveUpDownSelected // Moves the select element up or down the stack, based on the visibly
   svgCanvas.moveSelectedElements = moveSelectedElements // Moves selected elements on the X/Y axis.
   svgCanvas.cloneSelectedElements = cloneSelectedElements // Create deep DOM copies (clones) of all selected elements and move them slightly
+  svgCanvas.duplicateSelectedElements = duplicateSelectedElements // Mod+D: clone the selection, repeating the last offset (M7)
+  svgCanvas.getDuplicateOffset = getDuplicateOffset
+  svgCanvas.rememberDuplicate = rememberDuplicate
   svgCanvas.alignSelectedElements = alignSelectedElements // Aligns selected elements.
   svgCanvas.updateCanvas = updateCanvas // Updates the editor canvas width/height/position after a zoom has occurred.
   svgCanvas.cycleElement = cycleElement // Select the next/previous element within the current layer.
@@ -70,65 +75,83 @@ export const init = canvas => {
 }
 
 /**
- * Repositions the selected element to the bottom in the DOM to appear on top of
- * other elements.
+ * Returns the selected elements in document order.
+ * @returns {Element[]}
+ */
+const getSelectedInDocumentOrder = () => {
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  return elements.sort((a, b) =>
+    (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1)
+}
+
+/**
+ * Returns the first child of a container that the selection can be placed
+ * before: layers start with their <title>, and possibly <defs>.
+ * @param {Element} parent
+ * @returns {Element|null}
+ */
+const getFirstStackedChild = (parent) => {
+  let child = parent.firstElementChild
+  while (child && ['title', 'defs'].includes(child.tagName)) {
+    child = child.nextElementSibling
+  }
+  return child
+}
+
+/**
+ * Applies a reordering to the selected elements as one undoable step.
+ * @param {string} label - History label
+ * @param {Element[]} elements - In the order the move must be applied
+ * @param {(elem: Element) => void} move - Moves one element in the DOM
+ * @returns {void}
+ */
+const reorderSelected = (label, elements, move) => {
+  const batchCmd = new BatchCommand(label)
+  const moved = []
+  elements.forEach((elem) => {
+    const oldParent = elem.parentNode
+    const oldNextSibling = elem.nextSibling
+    move(elem)
+    if (oldNextSibling !== elem.nextSibling || oldParent !== elem.parentNode) {
+      batchCmd.addSubCommand(new MoveElementCommand(elem, oldNextSibling, oldParent, label))
+      moved.push(elem)
+    }
+  })
+  if (!batchCmd.isEmpty()) {
+    svgCanvas.addCommandToHistory(batchCmd)
+    svgCanvas.call('changed', moved)
+  }
+}
+
+/**
+ * Brings the selected elements to the front of their container, keeping
+ * their relative order.
  * @function module:selected-elem.SvgCanvas#moveToTopSelectedElem
  * @fires module:selected-elem.SvgCanvas#event:changed
  * @returns {void}
  */
 const moveToTopSelectedElem = () => {
-  const [selected] = svgCanvas.getSelectedElements()
-  if (selected) {
-    const t = selected
-    const oldParent = t.parentNode
-    const oldNextSibling = t.nextSibling
-    t.parentNode.append(t)
-    // If the element actually moved position, add the command and fire the changed
-    // event handler.
-    if (oldNextSibling !== t.nextSibling) {
-      svgCanvas.addCommandToHistory(
-        new MoveElementCommand(t, oldNextSibling, oldParent, 'top')
-      )
-      svgCanvas.call('changed', [t])
-    }
-  }
+  reorderSelected('top', getSelectedInDocumentOrder(), (elem) => {
+    elem.parentNode.append(elem)
+  })
 }
 
 /**
- * Repositions the selected element to the top in the DOM to appear under
- * other elements.
+ * Sends the selected elements to the back of their container, keeping their
+ * relative order.
  * @function module:selected-elem.SvgCanvas#moveToBottomSelectedElement
  * @fires module:selected-elem.SvgCanvas#event:changed
  * @returns {void}
  */
 const moveToBottomSelectedElem = () => {
-  const [selected] = svgCanvas.getSelectedElements()
-  if (selected) {
-    let t = selected
-    const oldParent = t.parentNode
-    const oldNextSibling = t.nextSibling
-    let firstChild = t.parentNode.firstElementChild
-    if (firstChild?.tagName === 'title') {
-      firstChild = firstChild.nextElementSibling
+  // Last element first: each one goes before the previous, so the relative
+  // order is kept.
+  reorderSelected('bottom', getSelectedInDocumentOrder().reverse(), (elem) => {
+    const first = getFirstStackedChild(elem.parentNode)
+    if (first && first !== elem) {
+      elem.parentNode.insertBefore(elem, first)
     }
-    // This can probably be removed, as the defs should not ever apppear
-    // inside a layer group
-    if (firstChild?.tagName === 'defs') {
-      firstChild = firstChild.nextElementSibling
-    }
-    if (!firstChild) {
-      return
-    }
-    t = t.parentNode.insertBefore(t, firstChild)
-    // If the element actually moved position, add the command and fire the changed
-    // event handler.
-    if (oldNextSibling !== t.nextSibling) {
-      svgCanvas.addCommandToHistory(
-        new MoveElementCommand(t, oldNextSibling, oldParent, 'bottom')
-      )
-      svgCanvas.call('changed', [t])
-    }
-  }
+  })
 }
 
 /**
@@ -143,6 +166,28 @@ const moveUpDownSelected = dir => {
   const selectedElements = svgCanvas.getSelectedElements()
   const selected = selectedElements[0]
   if (!selected) {
+    return
+  }
+
+  // Several elements: move the whole selection one step among its siblings,
+  // keeping the relative order (the overlap-based step below is defined for
+  // a single element).
+  if (selectedElements.filter(Boolean).length > 1) {
+    const inSelection = new Set(selectedElements.filter(Boolean))
+    const ordered = getSelectedInDocumentOrder()
+    if (dir === 'Up') {
+      reorderSelected(`Move ${dir}`, ordered.reverse(), (elem) => {
+        let next = elem.nextElementSibling
+        while (next && inSelection.has(next)) { next = next.nextElementSibling }
+        if (next) { next.after(elem) }
+      })
+    } else {
+      reorderSelected(`Move ${dir}`, ordered, (elem) => {
+        let prev = elem.previousElementSibling
+        while (prev && inSelection.has(prev)) { prev = prev.previousElementSibling }
+        if (prev && !['title', 'defs'].includes(prev.tagName)) { prev.before(elem) }
+      })
+    }
     return
   }
 
@@ -212,20 +257,22 @@ const moveSelectedElements = (dx, dy, undoable = true) => {
   }
 
   const batchCmd = new BatchCommand('position')
+  const moved = []
   selectedElements.forEach((selected, i) => {
     if (selected) {
+      moved.push(selected)
       // Store the existing transform before modifying
       const existingTransform = selected.getAttribute('transform') || ''
 
       const xform = svgCanvas.getSvgRoot().createSVGTransform()
       const tlist = getTransformList(selected)
 
-      // dx and dy could be arrays
-      if (Array.isArray(dx)) {
-        xform.setTranslate(dx[i], dy[i])
-      } else {
-        xform.setTranslate(dx, dy)
-      }
+      // dx and dy could be arrays. They are moves on the drawing: an element
+      // under a scaled or turned group takes them in its group's coordinates.
+      const move = Array.isArray(dx)
+        ? parentDelta(selected, dx[i], dy[i])
+        : parentDelta(selected, dx, dy)
+      xform.setTranslate(move.dx, move.dy)
 
       if (tlist.numberOfItems) {
         tlist.insertItemBefore(xform, 0)
@@ -247,12 +294,16 @@ const moveSelectedElements = (dx, dy, undoable = true) => {
           new ChangeElementCommand(selected, { transform: existingTransform })
         )
       }
-
-      svgCanvas
-        .gettingSelectorManager()
-        .requestSelector(selected)
-        .resize()
     }
+  })
+  // The selection boxes follow once every element is written: all their
+  // boxes are read, then all are drawn. Read between the writes, each box
+  // forced a layout of the drawing (700 ms to align 2000 objects).
+  const manager = svgCanvas.gettingSelectorManager()
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  const boxes = moved.map((elem) => (measure ? measure(elem) : undefined))
+  moved.forEach((elem, i) => {
+    manager.requestSelector(elem).resize(boxes[i], Boolean(boxes[i]))
   })
   if (!batchCmd.isEmpty()) {
     if (undoable) {
@@ -270,9 +321,12 @@ const moveSelectedElements = (dx, dy, undoable = true) => {
  * @function module:selected-elem.SvgCanvas#cloneSelectedElements
  * @param {Float} x Float with the distance to move on the x-axis
  * @param {Float} y Float with the distance to move on the y-axis
- * @returns {void}
+ * @param {PlainObject} [options]
+ * @param {boolean} [options.addToHistory=true] - False to let the caller record
+ *   the returned command, for instance together with the move of an Alt+drag
+ * @returns {module:history.BatchCommand|undefined} The insertion of the copies
  */
-const cloneSelectedElements = (x, y) => {
+const cloneSelectedElements = (x, y, { addToHistory = true } = {}) => {
   const selectedElements = svgCanvas.getSelectedElements()
   const currentGroup = svgCanvas.getCurrentGroup()
   let i
@@ -315,27 +369,148 @@ const cloneSelectedElements = (x, y) => {
   // to the selectedElements array (top-first)
   const drawing = svgCanvas.getDrawing()
   i = copiedElements.length
+  const context = currentGroup || drawing.getCurrentLayer()
   while (i--) {
     // clone each element and replace it within copiedElements
-    elem = copiedElements[i] = drawing.copyElem(copiedElements[i])
-    ;(currentGroup || drawing.getCurrentLayer()).append(elem)
+    const original = copiedElements[i]
+    elem = copiedElements[i] = drawing.copyElem(original)
+    // A copy of an object inside another group or layer (objects that look
+    // the same, taken in the whole page) stays there, so that it looks the
+    // same. A link around a single object is left out, as before.
+    const parent = original.parentNode !== context && original.parentNode?.tagName === 'g'
+      ? original.parentNode
+      : context
+    parent.append(elem)
     batchCmd.addSubCommand(new InsertElementCommand(elem))
   }
 
   if (!batchCmd.isEmpty()) {
     svgCanvas.addToSelection(copiedElements.reverse()) // Need to reverse for correct selection-adding
     moveSelectedElements(x, y, false)
-    svgCanvas.addCommandToHistory(batchCmd)
+    if (addToHistory) {
+      svgCanvas.addCommandToHistory(batchCmd)
+    }
+    return batchCmd
   }
+  return undefined
 }
+
+// ---------------------------------------------------------------------------
+// Duplication that repeats its offset (M7).
+
+/** Offset of a first copy: Mod+D, the D and C keys and buttons. */
+const DUPLICATE_OFFSET = 20
+/** Below this, an offset is zero: the copies would hide the originals. */
+const DUPLICATE_EPSILON = 1e-9
+
+/**
+ * The last duplication: its copies, the offset they were made with, and the
+ * box they had then, to tell how far they have been moved since.
+ * @type {{copies: Set<Element>, offset: {x: number, y: number}, box: module:utilities.BBoxObject}|null}
+ */
+let lastDuplicate = null
+
+/**
+ * Rounds a distance measured on boxes. Boxes are read in single precision
+ * (77.1 reads 77.09999847): the document's number of decimals, the one of the
+ * saved file, removes that noise.
+ * @param {number} value
+ * @returns {number}
+ */
+const roundDistance = (value) => {
+  const digits = svgCanvas.getRoundDigits?.() ?? 2
+  return Number(value.toFixed(Math.max(0, Math.min(digits, 10))))
+}
+
+/**
+ * Remembers a duplication so that Mod+D can repeat its offset. Copies made at
+ * the place of their originals are not remembered: repeating a zero offset
+ * would pile up copies the user cannot see.
+ * @function module:selected-elem.SvgCanvas#rememberDuplicate
+ * @param {Element[]} copies - The copies, as selected after the duplication
+ * @param {{x: number, y: number}|Element[]} offsetOrOriginals - The offset of
+ *   the copies, or the originals to measure it on (after an Alt+drag)
+ * @returns {void}
+ */
+const rememberDuplicate = (copies, offsetOrOriginals) => {
+  const elements = copies.filter(Boolean)
+  const box = elements.length ? svgCanvas.getSelectionBox(elements) : null
+  let offset = offsetOrOriginals
+  if (Array.isArray(offsetOrOriginals)) {
+    const from = svgCanvas.getSelectionBox(offsetOrOriginals.filter(Boolean))
+    offset = from && box
+      ? { x: roundDistance(box.x - from.x), y: roundDistance(box.y - from.y) }
+      : null
+  }
+  const isZero = !offset ||
+    (Math.abs(offset.x) < DUPLICATE_EPSILON && Math.abs(offset.y) < DUPLICATE_EPSILON)
+  lastDuplicate = box && !isZero ? { copies: new Set(elements), offset, box } : null
+}
+
+/**
+ * The offset Mod+D gives to copies of the given elements. When they are the
+ * copies of the last duplication, it is the offset of that duplication plus
+ * the distance they were moved since: duplicate, move the copy, then Mod+D
+ * makes a regular series. Otherwise, 20 to the right and 20 down.
+ * @function module:selected-elem.SvgCanvas#getDuplicateOffset
+ * @param {Element[]} [elements] - The selected elements by default
+ * @returns {{x: number, y: number}}
+ */
+const getDuplicateOffset = (elements) => {
+  const fallback = { x: DUPLICATE_OFFSET, y: DUPLICATE_OFFSET }
+  const current = (elements || svgCanvas.getSelectedElements()).filter(Boolean)
+  const last = lastDuplicate
+  if (
+    !last ||
+    current.length !== last.copies.size ||
+    !current.every((elem) => last.copies.has(elem) && elem.isConnected)
+  ) {
+    return fallback
+  }
+  const box = svgCanvas.getSelectionBox(current)
+  if (!box) { return fallback }
+  // Unmoved copies give exactly the remembered offset, with no rounding.
+  const dx = box.x === last.box.x ? 0 : roundDistance(box.x - last.box.x)
+  const dy = box.y === last.box.y ? 0 : roundDistance(box.y - last.box.y)
+  const offset = { x: last.offset.x + dx, y: last.offset.y + dy }
+  if (Math.abs(offset.x) < DUPLICATE_EPSILON && Math.abs(offset.y) < DUPLICATE_EPSILON) {
+    return fallback
+  }
+  return offset
+}
+
+/**
+ * Duplicates the selection, as one undo step, and selects the copies: Mod+D,
+ * the D and C keys and buttons, Alt+arrows. Without an offset, the copies go
+ * where getDuplicateOffset() says, so that repeating Mod+D after moving a copy
+ * continues the series.
+ * @function module:selected-elem.SvgCanvas#duplicateSelectedElements
+ * @param {{x: number, y: number}} [offset] - A fixed offset (Alt+arrows)
+ * @returns {module:history.BatchCommand|undefined}
+ */
+const duplicateSelectedElements = (offset) => {
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  if (!elements.length) { return undefined }
+  const { x, y } = offset || getDuplicateOffset(elements)
+  const cmd = cloneSelectedElements(x, y)
+  if (cmd) {
+    rememberDuplicate(svgCanvas.getSelectedElements(), { x, y })
+  }
+  return cmd
+}
+
 /**
  * Aligns selected elements.
  * @function module:selected-elem.SvgCanvas#alignSelectedElements
  * @param {string} type - String with single character indicating the alignment type
  * @param {"selected"|"largest"|"smallest"|"page"} relativeTo
+ * @param {PlainObject} [options]
+ * @param {number} [options.spacing] - Gap imposed by a distribution: the
+ *   first object stays in place and each next one follows the previous one
+ *   at this distance, whatever the reference (M9)
  * @returns {void}
  */
-const alignSelectedElements = (type, relativeTo) => {
+const alignSelectedElements = (type, relativeTo, { spacing } = {}) => {
   const selectedElements = svgCanvas.getSelectedElements()
   const bboxes = [] // angles = [];
   const len = selectedElements.length
@@ -347,6 +522,9 @@ const alignSelectedElements = (type, relativeTo) => {
   let miny = Number.MAX_VALUE
   let maxy = Number.MIN_VALUE
 
+  // "Largest" and "smallest" compare areas: comparing widths only picked a
+  // wide, flat object as the largest one, even for a vertical alignment.
+  const byArea = (a, b) => a.width * a.height - b.width * b.height
   const isHorizontalAlign = (type) => ['l', 'c', 'r', 'left', 'center', 'right'].includes(type)
   const isVerticalAlign = (type) => ['t', 'm', 'b', 'top', 'middle', 'bottom'].includes(type)
 
@@ -357,16 +535,29 @@ const alignSelectedElements = (type, relativeTo) => {
     const elem = selectedElements[i]
     bboxes[i] = getStrokedBBoxDefaultVisible([elem])
   }
+  // Objects of several groups (objects that look the same, taken in the
+  // whole page): their boxes are compared on the drawing, and the moves are
+  // taken in each group's coordinates (see moveSelectedElements).
+  if (new Set(selectedElements.filter(Boolean).map((elem) => elem.parentNode)).size > 1) {
+    for (let i = 0; i < len && selectedElements[i]; ++i) {
+      bboxes[i] = parentBoxToDrawing(selectedElements[i], bboxes[i])
+    }
+  }
 
   // distribute horizontal and vertical align is not support smallest and largest
   if (['smallest', 'largest'].includes(relativeTo) && ['dh', 'distrib_horiz', 'dv', 'distrib_verti'].includes(type)) {
+    relativeTo = 'selected'
+  }
+  // An imposed spacing starts from the first object.
+  const imposed = Number.isFinite(spacing) ? spacing : null
+  if (imposed !== null && ['dh', 'distrib_horiz', 'dv', 'distrib_verti'].includes(type)) {
     relativeTo = 'selected'
   }
 
   switch (relativeTo) {
     case 'smallest':
       if (isHorizontalAlign(type) || isVerticalAlign(type)) {
-        const sortedBboxes = bboxes.slice().sort((a, b) => a.width - b.width)
+        const sortedBboxes = bboxes.slice().sort(byArea)
         const minBbox = sortedBboxes[0]
         minx = minBbox.x
         miny = minBbox.y
@@ -376,7 +567,7 @@ const alignSelectedElements = (type, relativeTo) => {
       break
     case 'largest':
       if (isHorizontalAlign(type) || isVerticalAlign(type)) {
-        const sortedBboxes = bboxes.slice().sort((a, b) => a.width - b.width)
+        const sortedBboxes = bboxes.slice().sort(byArea)
         const maxBbox = sortedBboxes[bboxes.length - 1]
         minx = maxBbox.x
         miny = maxBbox.y
@@ -403,23 +594,15 @@ const alignSelectedElements = (type, relativeTo) => {
   let dy = []
 
   if (['dh', 'distrib_horiz'].includes(type)) { // distribute horizontal align
-    [dx, dy] = _getDistributeHorizontalDistances(relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy)
+    [dx, dy] = _getDistributeHorizontalDistances(relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy, imposed)
   } else if (['dv', 'distrib_verti'].includes(type)) { // distribute vertical align
-    [dx, dy] = _getDistributeVerticalDistances(relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy)
+    [dx, dy] = _getDistributeVerticalDistances(relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy, imposed)
   } else { // normal align (top, left, right, ...)
     [dx, dy] = _getNormalDistances(type, selectedElements, bboxes, minx, maxx, miny, maxy)
   }
 
   moveSelectedElements(dx, dy)
 }
-
-/**
- * Aligns selected elements.
- * @function module:selected-elem.SvgCanvas#alignSelectedElements
- * @param {string} type - String with single character indicating the alignment type
- * @param {"selected"|"largest"|"smallest"|"page"} relativeTo
- * @returns {void}
- */
 
 /**
  * get distribution horizontal distances.
@@ -432,10 +615,11 @@ const alignSelectedElements = (type, relativeTo) => {
  * @param {Float} maxx - selected area max-x
  * @param {Float} miny - selected area min-y
  * @param {Float} maxy - selected area max-y
+ * @param {number|null} [imposed] - Imposed gap, instead of an even one
  * @returns {Array.Float[]} x and y distances array
  * @private
  */
-const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy) => {
+const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy, imposed = null) => {
   const dx = []
   const dy = []
 
@@ -445,12 +629,9 @@ const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes,
 
   const bboxesSortedClone = bboxes
     .slice()
-    .sort((firstBox, secondBox) => {
-      const firstMaxX = firstBox.x + firstBox.width
-      const secondMaxX = secondBox.x + secondBox.width
-
-      if (firstMaxX === secondMaxX) { return 0 } else if (firstMaxX > secondMaxX) { return 1 } else { return -1 }
-    })
+    // Sorted by left edge, so that the leftmost object keeps its place: sorting
+    // by right edge moved it when a narrower object ended before it did.
+    .sort((firstBox, secondBox) => firstBox.x - secondBox.x)
 
   if (relativeTo === 'page') {
     bboxesSortedClone.unshift({ x: 0, y: 0, width: 0, height: maxy }) // virtual left box
@@ -459,7 +640,7 @@ const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes,
 
   const totalWidth = maxx - minx
   const totalBoxWidth = bboxesSortedClone.map(b => b.width).reduce((w1, w2) => w1 + w2, 0)
-  const space = (totalWidth - totalBoxWidth) / (bboxesSortedClone.length - 1)
+  const space = imposed ?? (totalWidth - totalBoxWidth) / (bboxesSortedClone.length - 1)
   const _dx = []
 
   for (let i = 0; i < bboxesSortedClone.length; ++i) {
@@ -493,10 +674,11 @@ const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes,
  * @param {Float} maxx - selected area max-x
  * @param {Float} miny - selected area min-y
  * @param {Float} maxy - selected area max-y
+ * @param {number|null} [imposed] - Imposed gap, instead of an even one
  * @returns {Array.Float[]}} x and y distances array
  * @private
  */
-const _getDistributeVerticalDistances = (relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy) => {
+const _getDistributeVerticalDistances = (relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy, imposed = null) => {
   const dx = []
   const dy = []
 
@@ -506,12 +688,8 @@ const _getDistributeVerticalDistances = (relativeTo, selectedElements, bboxes, m
 
   const bboxesSortedClone = bboxes
     .slice()
-    .sort((firstBox, secondBox) => {
-      const firstMaxY = firstBox.y + firstBox.height
-      const secondMaxY = secondBox.y + secondBox.height
-
-      if (firstMaxY === secondMaxY) { return 0 } else if (firstMaxY > secondMaxY) { return 1 } else { return -1 }
-    })
+    // Sorted by top edge, for the same reason as the horizontal distribution.
+    .sort((firstBox, secondBox) => firstBox.y - secondBox.y)
 
   if (relativeTo === 'page') {
     bboxesSortedClone.unshift({ x: 0, y: 0, width: maxx, height: 0 }) // virtual top box
@@ -520,7 +698,7 @@ const _getDistributeVerticalDistances = (relativeTo, selectedElements, bboxes, m
 
   const totalHeight = maxy - miny
   const totalBoxHeight = bboxesSortedClone.map(b => b.height).reduce((h1, h2) => h1 + h2, 0)
-  const space = (totalHeight - totalBoxHeight) / (bboxesSortedClone.length - 1)
+  const space = imposed ?? (totalHeight - totalBoxHeight) / (bboxesSortedClone.length - 1)
   const _dy = []
 
   for (let i = 0; i < bboxesSortedClone.length; ++i) {
@@ -656,21 +834,54 @@ const flipSelectedElements = (scaleX, scaleY) => {
   const batchCmd = new BatchCommand('Flip Elements')
   const svgRoot = svgCanvas.getSvgRoot()
 
+  // The whole selection flips around the centre of its common box, like a
+  // single object: relative positions are mirrored too. For one element the
+  // common box is its own box, so the result is unchanged. The boxes are in
+  // the parent's user space, which the elements of a selection share.
+  const elements = selectedElements.filter(Boolean)
+  // Objects of several groups (objects that look the same, taken in the
+  // whole page) flip around the centre of their box on the drawing, each in
+  // its group's coordinates.
+  const severalParents = new Set(elements.map((elem) => elem.parentNode)).size > 1
+  let commonBox = null
+  if (severalParents) {
+    commonBox = elements.map((elem) => parentBoxToDrawing(elem, getStrokedBBoxDefaultVisible([elem])))
+      .filter(Boolean)
+      .reduce((union, box) => {
+        if (!union) { return { ...box } }
+        const x = Math.min(union.x, box.x)
+        const y = Math.min(union.y, box.y)
+        return {
+          x,
+          y,
+          width: Math.max(union.x + union.width, box.x + box.width) - x,
+          height: Math.max(union.y + union.height, box.y + box.height) - y
+        }
+      }, null)
+  } else if (elements.length > 1) {
+    commonBox = getStrokedBBoxDefaultVisible(elements)
+  }
+
   selectedElements.forEach(selected => {
     if (!selected) return
 
-    const bbox = getStrokedBBoxDefaultVisible([selected])
+    const bbox = commonBox || getStrokedBBoxDefaultVisible([selected])
     if (!bbox) return
 
     const cx = bbox.x + bbox.width / 2
     const cy = bbox.y + bbox.height / 2
     const existingTransform = selected.getAttribute('transform') || ''
 
-    const flipMatrix = svgRoot
+    let flipMatrix = svgRoot
       .createSVGMatrix()
       .translate(cx, cy)
       .scaleNonUniform(scaleX, scaleY)
       .translate(-cx, -cy)
+    if (severalParents) {
+      const m = drawingMatrixInParent(selected, flipMatrix)
+      flipMatrix = svgRoot.createSVGMatrix()
+      Object.assign(flipMatrix, { a: m.a, b: m.b, c: m.c, d: m.d, e: m.e, f: m.f })
+    }
 
     const tlist = getTransformList(selected)
     const combinedMatrix = matrixMultiply(
@@ -717,9 +928,17 @@ const flipSelectedElements = (scaleX, scaleY) => {
  */
 const copySelectedElements = () => {
   const selectedElements = svgCanvas.getSelectedElements().filter(Boolean)
-  const data = JSON.stringify(createClipboardPayload(svgCanvas, selectedElements))
+  const payload = createClipboardPayload(svgCanvas, selectedElements)
   // Use sessionStorage for the clipboard data.
-  sessionStorage.setItem(svgCanvas.getClipboardID(), data)
+  try {
+    sessionStorage.setItem(svgCanvas.getClipboardID(), JSON.stringify(payload))
+  } catch (err) {
+    // The SVG text for the system clipboard (M7) doubles the size of the
+    // data: when the storage is full, keep the copy without it.
+    if (!payload.svg) throw err
+    delete payload.svg
+    sessionStorage.setItem(svgCanvas.getClipboardID(), JSON.stringify(payload))
+  }
   svgCanvas.call('clipboardChanged')
   svgCanvas.flashStorage()
 }
@@ -783,10 +1002,14 @@ const groupSelectedElements = (type, urlArg) => {
 
     const oldNextSibling = elem.nextSibling
     const oldParent = elem.parentNode
+    // An object of another group (objects that look the same, taken in the
+    // whole page) keeps its place and its look in the new group.
+    const leaving = oldParent !== g.parentNode ? leaveGroups(elem, g) : null
     g.append(elem)
     batchCmd.addSubCommand(
       new MoveElementCommand(elem, oldNextSibling, oldParent)
     )
+    if (leaving) { leaving.finish(batchCmd) }
   }
   if (!batchCmd.isEmpty()) {
     svgCanvas.addCommandToHistory(batchCmd)
@@ -794,6 +1017,64 @@ const groupSelectedElements = (type, urlArg) => {
 
   // update selection
   svgCanvas.selectOnly([g], true)
+}
+
+/**
+ * Prepares an element to move into a group outside of its own groups: it
+ * takes the transform and the look (fill, stroke, font, opacity) that the
+ * groups it leaves gave it. Call `finish` once it has moved.
+ * @param {Element} elem
+ * @param {Element} target - The group it moves into, already in the drawing
+ * @returns {{finish: (batchCmd: BatchCommand) => void}}
+ */
+const leaveGroups = (elem, target) => {
+  const oldTransform = elem.getAttribute('transform') || ''
+  const from = parentToDrawing(elem)
+  const to = parentToDrawing(target)
+  const targetMatrix = target.transform?.baseVal?.numberOfItems
+    ? transformListToTransform(target.transform.baseVal).matrix
+    : null
+  const into = targetMatrix ? multiply(to, targetMatrix) : to
+  const rel = multiply(invert(into), from)
+  const moved = Math.abs(rel.a - 1) > 1e-12 || Math.abs(rel.b) > 1e-12 || Math.abs(rel.c) > 1e-12 ||
+    Math.abs(rel.d - 1) > 1e-12 || Math.abs(rel.e) > 1e-12 || Math.abs(rel.f) > 1e-12
+  // The groups that stay above the element keep giving it their values.
+  let stop = elem.parentNode
+  while (stop && stop.nodeType === 1 && !stop.contains(target)) { stop = stop.parentNode }
+  const { values, opacity } = inheritedFromAncestors(elem, stop)
+  return {
+    finish (batchCmd) {
+      const old = {}
+      Object.entries(values).forEach(([prop, value]) => {
+        old[prop] = elem.getAttribute(prop)
+        elem.setAttribute(prop, value)
+      })
+      if (opacity !== 1) {
+        const own = Number.parseFloat(ownPresentationValue(elem, 'opacity') ?? '1')
+        old.opacity = elem.getAttribute('opacity')
+        elem.setAttribute('opacity', Math.round((Number.isFinite(own) ? own : 1) * opacity * 1000) / 1000)
+      }
+      if (Object.keys(old).length) { batchCmd.addSubCommand(new ChangeElementCommand(elem, old)) }
+      if (!moved) { return }
+      const tlist = getTransformList(elem)
+      if (!tlist) { return }
+      const xform = svgCanvas.getSvgRoot().createSVGTransform()
+      const matrix = svgCanvas.getSvgRoot().createSVGMatrix()
+      Object.assign(matrix, rel)
+      xform.setMatrix(matrix)
+      if (tlist.numberOfItems) {
+        tlist.insertItemBefore(xform, 0)
+      } else {
+        tlist.appendItem(xform)
+      }
+      const cmd = withStartTransform(svgCanvas, oldTransform, () => recalculateDimensions(elem))
+      if (cmd) {
+        batchCmd.addSubCommand(cmd)
+      } else if ((elem.getAttribute('transform') || '') !== oldTransform) {
+        batchCmd.addSubCommand(new ChangeElementCommand(elem, { transform: oldTransform }))
+      }
+    }
+  }
 }
 
 /**
@@ -1078,7 +1359,9 @@ const convertToGroup = elem => {
     // $(elem.firstChild.firstChild).unwrap();
     const firstChild = elem.firstChild.firstChild
     if (firstChild) {
-      firstChild.outerHTML = firstChild.innerHTML
+      // Move the nodes instead of re-serializing them: re-parsing imported
+      // markup with the HTML parser could turn inert content into live markup.
+      firstChild.replaceWith(...firstChild.childNodes)
     }
     dataStorage.remove(elem, 'gsvg')
 
@@ -1230,6 +1513,39 @@ const convertToGroup = elem => {
   }
 }
 
+// Children that draw with inherited properties, or pass them on.
+const INHERITING_CHILDREN = new Set([
+  'a', 'circle', 'ellipse', 'g', 'line', 'path', 'polygon', 'polyline', 'rect',
+  'switch', 'text', 'use'
+])
+
+/**
+ * Before a group is removed, gives each child the fill, stroke and font the
+ * group gave it by inheritance, unchanged: ungrouping changes neither the
+ * colors nor the stroke widths (M9). A child's own values stay.
+ * @param {Element} g
+ * @param {BatchCommand} batchCmd
+ * @returns {void}
+ */
+const pushInheritedProperties = (g, batchCmd) => {
+  const values = INHERITED_PROPERTIES
+    .map((prop) => [prop, ownPresentationValue(g, prop)])
+    .filter(([, value]) => value !== null)
+  if (!values.length) { return }
+  Array.from(g.children).forEach((child) => {
+    if (!INHERITING_CHILDREN.has(child.tagName)) { return }
+    const old = {}
+    values.forEach(([prop, value]) => {
+      if (ownPresentationValue(child, prop) !== null) { return }
+      old[prop] = child.getAttribute(prop)
+      child.setAttribute(prop, value)
+    })
+    if (Object.keys(old).length) {
+      batchCmd.addSubCommand(new ChangeElementCommand(child, old))
+    }
+  })
+}
+
 /**
  * Unwraps all the elements in a selected group (`g`) element. This requires
  * significant recalculations to apply group's transforms, etc. to its children.
@@ -1280,6 +1596,7 @@ const ungroupSelectedElement = () => {
     if (cmd) {
       batchCmd.addSubCommand(cmd)
     }
+    pushInheritedProperties(g, batchCmd)
 
     const parent = g.parentNode
     const anchor = g.nextSibling
@@ -1368,6 +1685,8 @@ const updateCanvas = (w, h) => {
     'transform',
     `translate(${x},${y})`
   )
+  // The hover outline was drawn for the previous zoom.
+  svgCanvas.selectorManager.hideHover?.()
 
   /**
    * Invoked upon updates to the canvas.

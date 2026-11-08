@@ -29,8 +29,9 @@
     <se-button id="tool_reorient" title="tools.reorient_path" src="reorient.svg"></se-button>
     <se-button id="tool_make_link" title="tools.make_link" src="globe_link.svg"></se-button>
     <div class="tool_sep"></div>
-    <se-button id="tool_flip_h" title="tools.flip_horizontal" src="flip_horizontal.svg"></se-button>
-    <se-button id="tool_flip_v" title="tools.flip_vertical" src="flip_vertical.svg"></se-button>
+    <se-button id="tool_flip_h" title="tools.flip_horizontal" shortcut="Shift+H" src="flip_horizontal.svg">
+    </se-button>
+    <se-button id="tool_flip_v" title="tools.flip_vertical" shortcut="Shift+V" src="flip_vertical.svg"></se-button>
   </div>
   <div class="selected_panel">
     <div class="tool_sep"></div>
@@ -39,8 +40,71 @@
   <div class="selected_panel">
     <se-input id="elem_class" data-attr="class" size="10" label="properties.class_label" title="properties.class">
     </se-input>
+  </div>
+  <!-- Buttons when multiple elements are selected -->
+  <div class="multiselected_panel">
+    <div class="tool_sep"></div>
+    <se-button id="tool_clone_multi" title="tools.clone" shortcut="C" src="clone.svg"></se-button>
+    <se-button id="tool_delete_multi" title="tools.del" shortcut="Delete/Backspace" src="delete.svg"></se-button>
+  </div>
+  <!-- Ctrl+Shift+] and Ctrl+Shift+[ are bound by tool_move_top and
+       tool_move_bottom, which order a multi-selection too. -->
+  <div class="multiselected_panel">
+    <div class="tool_sep"></div>
+    <se-button id="tool_move_top_multi" title="tools.move_top" shortcut="Ctrl+Shift+]"
+      shortcut-hint-only src="move_top.svg"></se-button>
+    <se-button id="tool_move_bottom_multi" title="tools.move_bottom" shortcut="Ctrl+Shift+["
+      shortcut-hint-only src="move_bottom.svg"></se-button>
+    <se-button id="tool_topath_multi" title="tools.to_path" src="to_path.svg"></se-button>
+  </div>
+  <div class="multiselected_panel">
+    <div class="tool_sep"></div>
+    <se-button id="tool_group_elements" title="tools.group_elements" shortcut="G" src="group_elements.svg">
+    </se-button>
+    <se-button id="tool_make_link_multi" title="tools.make_link" src="globe_link.svg"></se-button>
+    <!-- Alignment and distribution: one button opens them, with the spacing
+         and the reference, so that the bar fits one line (decision of
+         8 November). -->
+    <div id="align_menu">
+      <se-button id="tool_align_menu" title="tools.align_menu" src="align.svg"></se-button>
+      <div id="tool_align_popup" role="group" hidden>
+        <div class="align_row">
+          <se-button id="tool_align_left" title="tools.align_left" src="align_left.svg"></se-button>
+          <se-button id="tool_align_center" title="tools.align_center" src="align_center.svg"></se-button>
+          <se-button id="tool_align_right" title="tools.align_right" src="align_right.svg"></se-button>
+          <se-button id="tool_align_top" title="tools.align_top" src="align_top.svg"></se-button>
+          <se-button id="tool_align_middle" title="tools.align_middle" src="align_middle.svg"></se-button>
+          <se-button id="tool_align_bottom" title="tools.align_bottom" src="align_bottom.svg"></se-button>
+        </div>
+        <div class="align_row">
+          <se-button id="tool_align_distrib_horiz" title="tools.align_distrib_horiz"
+            src="align_distrib_horiz.svg"></se-button>
+          <se-button id="tool_align_distrib_verti" title="tools.align_distrib_verti"
+            src="align_distrib_verti.svg"></se-button>
+          <!-- Spacing imposed on Distribute; an empty field distributes evenly. -->
+          <se-input id="tool_align_spacing" size="3" label="tools.spacing_label" title="tools.spacing"></se-input>
+        </div>
+        <div class="align_row">
+          <se-select id="tool_align_relative" label="tools.relativeTo"
+            options="tools.selected_objects,tools.largest_object,tools.smallest_object,tools.page"
+            values="selected::largest::smallest::page">
+          </se-select>
+        </div>
+      </div>
+    </div>
+    <!-- Shift+H and Shift+V are bound by tool_flip_h and tool_flip_v, which
+         flip a multi-selection too: these buttons only show the hint. -->
+    <se-button id="tool_flip_h_multi" title="tools.flip_horizontal" shortcut="Shift+H"
+      shortcut-hint-only src="flip_horizontal.svg"></se-button>
+    <se-button id="tool_flip_v_multi" title="tools.flip_vertical" shortcut="Shift+V"
+      shortcut-hint-only src="flip_vertical.svg"></se-button>
+  </div> <!-- multiselected_panel -->
+  <!-- The angle field also turns a multi-selection about its center. -->
+  <div class="angle_panel">
     <se-spin-input size="3" id="angle" min=-180 max=180 step=5 src="angle.svg" title="properties.angle">
     </se-spin-input>
+  </div>
+  <div class="selected_panel">
     <se-spin-input size="2" id="blur" min=0 max=100 step=5 src="blur.svg" title="properties.blur"></se-spin-input>
     <se-list id="tool_position" title="tools.align_to_page" label="" width="22px" height="22px">
       <se-list-item id="tool_posleft" value="l" title="tools.align_left" src="align_left.svg" img-height="22px">
@@ -61,6 +125,7 @@
         img-height="22px"></se-list-item>
     </se-list>
   </div>
+  <!-- X and Y of an element, or of the box of a multi-selection. -->
   <div class="xy_panel">
     <se-spin-input id="selected_x" data-attr="x" size="4" type="text" label="properties.x_label"
       title="properties.pos_x">
@@ -69,33 +134,39 @@
       title="properties.pos_y">
     </se-spin-input>
   </div>
-  <!-- Buttons when multiple elements are selected -->
-  <div class="multiselected_panel">
-    <div class="tool_sep"></div>
-    <se-button id="tool_clone_multi" title="tools.clone" shortcut="C" src="clone.svg"></se-button>
-    <se-button id="tool_delete_multi" title="tools.del" shortcut="Delete/Backspace" src="delete.svg"></se-button>
+  <!-- Width and height of the box of a multi-selection, or of a path,
+       polyline, group or text alone: changing one scales from the top left
+       corner. -->
+  <div class="wh_panel">
+    <se-spin-input id="selected_w" size="4" min=0 label="properties.w_label"
+      title="properties.selection_width"></se-spin-input>
+    <se-spin-input id="selected_h" size="4" min=0 label="properties.h_label"
+      title="properties.selection_height"></se-spin-input>
+    <se-button id="tool_ratio_lock" title="tools.ratio_lock" src="ratio_lock.svg"></se-button>
   </div>
-  <div class="multiselected_panel">
+  <!-- The Scale tool (K): factor, width and height of the selection, and
+       the point that stays in place. Strokes, dashes and text sizes scale
+       with the geometry. -->
+  <div class="scale_panel">
     <div class="tool_sep"></div>
-    <se-button id="tool_group_elements" title="tools.group_elements" shortcut="G" src="group_elements.svg">
-    </se-button>
-    <se-button id="tool_make_link_multi" title="tools.make_link" src="globe_link.svg"></se-button>
-    <se-button id="tool_align_left" title="tools.align_left" src="align_left.svg"></se-button>
-    <se-button id="tool_align_center" title="tools.align_center" src="align_center.svg"></se-button>
-    <se-button id="tool_align_right" title="tools.align_right" src="align_right.svg"></se-button>
-    <se-button id="tool_align_top" title="tools.align_top" src="align_top.svg"></se-button>
-    <se-button id="tool_align_middle" title="tools.align_middle" src="align_middle.svg"></se-button>
-    <se-button id="tool_align_bottom" title="tools.align_bottom" src="align_bottom.svg"></se-button>
-    <se-button id="tool_align_distrib_horiz" title="tools.align_distrib_horiz"
-      src="align_distrib_horiz.svg"></se-button>
-    <se-button id="tool_align_distrib_verti" title="tools.align_distrib_verti"
-      src="align_distrib_verti.svg"></se-button>
-    <se-select id="tool_align_relative" label="tools.relativeTo"
-      options="tools.selected_objects,tools.largest_object,tools.smallest_object,tools.page"
-      values="selected::largest::smallest::page">
-      </se-list-item>
-    </se-select>
-  </div> <!-- multiselected_panel -->
+    <se-spin-input id="scale_factor" size="3" min="0.01" step="0.1" label="tools.scale_factor_label"
+      title="tools.scale_factor"></se-spin-input>
+    <se-spin-input id="scale_w" size="4" min="0" label="properties.w_label" title="tools.scale_width">
+    </se-spin-input>
+    <se-spin-input id="scale_h" size="4" min="0" label="properties.h_label" title="tools.scale_height">
+    </se-spin-input>
+    <div id="scale_anchor" role="radiogroup">
+      <button type="button" role="radio" data-anchor="nw"></button>
+      <button type="button" role="radio" data-anchor="n"></button>
+      <button type="button" role="radio" data-anchor="ne"></button>
+      <button type="button" role="radio" data-anchor="w"></button>
+      <button type="button" role="radio" data-anchor="c"></button>
+      <button type="button" role="radio" data-anchor="e"></button>
+      <button type="button" role="radio" data-anchor="sw"></button>
+      <button type="button" role="radio" data-anchor="s"></button>
+      <button type="button" role="radio" data-anchor="se"></button>
+    </div>
+  </div>
   <div class="rect_panel">
     <se-spin-input id="rect_width" data-attr="width" size="4" label="properties.w_label"
       title="properties.rect_width"></se-spin-input>

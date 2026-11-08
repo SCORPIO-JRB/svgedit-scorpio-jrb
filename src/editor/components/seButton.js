@@ -1,5 +1,6 @@
 /* globals svgEditor */
 import { t } from '../locale.js'
+import { normalizeShortcut, eventShortcut } from '../shortcuts.js'
 const template = document.createElement('template')
 template.innerHTML = `
   <style>
@@ -223,16 +224,17 @@ export class ToolButton extends HTMLElement {
    * @returns {void}
    */
   connectedCallback () {
-    // capture shortcuts
-    const shortcut = this.getAttribute('shortcut')
+    // capture shortcuts; with shortcut-hint-only the shortcut is only shown in
+    // the tooltip, because another button already binds it
+    const shortcut = this.hasAttribute('shortcut-hint-only')
+      ? ''
+      : normalizeShortcut(this.getAttribute('shortcut'))
     if (shortcut) {
       // register the keydown event
       document.addEventListener('keydown', (e) => {
         // only track keyboard shortcuts for the body containing the SVG-Editor
         if (e.target.nodeName !== 'BODY') return
-        // normalize key
-        const key = `${(e.metaKey) ? 'meta+' : ''}${(e.ctrlKey) ? 'ctrl+' : ''}${e.key.toUpperCase()}`
-        if (shortcut !== key) return
+        if (eventShortcut(e) !== shortcut) return
         // launch the click event
         this.click()
         e.preventDefault()

@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-07T17:37:50.341Z",
+  "url": "http://localhost:8000/index.html",
+  "sizes": {
+    "500": {
+      "selectAll": 119.4,
+      "dragMove": 94.2,
+      "dragRelease": 100.6,
+      "undo": 578.7,
+      "redo": 575.2,
+      "zoom": 101.4,
+      "marquee": 80.2,
+      "singleDragMove": 19.3
+    },
+    "2000": {
+      "selectAll": 1217.3,
+      "dragMove": 1301.2,
+      "dragRelease": 847.3,
+      "undo": 7798.9,
+      "redo": 7895,
+      "zoom": 968.1,
+      "marquee": 595.9,
+      "singleDragMove": 3.6
+    },
+    "5000": {
+      "selectAll": 6925.8,
+      "dragMove": 8020.7,
+      "dragRelease": 6672.3,
+      "undo": 64038.6,
+      "redo": 65268.9,
+      "zoom": 6945.4,
+      "marquee": 3988.2,
+      "singleDragMove": 9.5
+    }
+  }
+}

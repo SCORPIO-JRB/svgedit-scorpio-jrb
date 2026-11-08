@@ -20,6 +20,11 @@ export class SeCMenuDialog extends HTMLElement {
     this.$cutLink = this._shadowRoot.querySelector('#se-cut')
     this.$pasteLink = this._shadowRoot.querySelector('#se-paste')
     this.$pasteInPlaceLink = this._shadowRoot.querySelector('#se-paste-in-place')
+    // Copy and paste the properties of an object (M7)
+    this.$propertiesLinks = {
+      copy_properties: this._shadowRoot.querySelector('#se-copy-properties'),
+      paste_properties: this._shadowRoot.querySelector('#se-paste-properties')
+    }
     this.$deleteLink = this._shadowRoot.querySelector('#se-delete')
     this.$groupLink = this._shadowRoot.querySelector('#se-group')
     this.$ungroupLink = this._shadowRoot.querySelector('#se-ungroup')
@@ -27,6 +32,12 @@ export class SeCMenuDialog extends HTMLElement {
     this.$moveUpLink = this._shadowRoot.querySelector('#se-move-up')
     this.$moveDownLink = this._shadowRoot.querySelector('#se-move-down')
     this.$moveBackLink = this._shadowRoot.querySelector('#se-move-back')
+    // Objects that look the same as the selection (M6)
+    this.$similarLinks = {
+      select_same_symbol: this._shadowRoot.querySelector('#se-select-same-symbol'),
+      select_same_fill: this._shadowRoot.querySelector('#se-select-same-fill'),
+      select_same_stroke: this._shadowRoot.querySelector('#se-select-same-stroke')
+    }
   }
 
   /**
@@ -46,6 +57,12 @@ export class SeCMenuDialog extends HTMLElement {
     this.setAttribute('tools-move_up', i18next.t('tools.move_up'))
     this.setAttribute('tools-move_down', i18next.t('tools.move_down'))
     this.setAttribute('tools-move_back', i18next.t('tools.move_back'))
+    Object.entries(this.$similarLinks).forEach(([action, link]) => {
+      link.textContent = i18next.t(`tools.${action}`)
+    })
+    Object.entries(this.$propertiesLinks).forEach(([action, link]) => {
+      link.prepend(document.createTextNode(i18next.t(`tools.${action}`)))
+    })
   }
 
   /**
@@ -102,10 +119,12 @@ export class SeCMenuDialog extends HTMLElement {
         this.$copyLink.prepend(textnode)
         break
       case 'tools-paste':
-        this.$pasteLink.textContent = newValue
+        textnode = document.createTextNode(newValue)
+        this.$pasteLink.prepend(textnode)
         break
       case 'tools-paste_in_place':
-        this.$pasteInPlaceLink.textContent = newValue
+        textnode = document.createTextNode(newValue)
+        this.$pasteInPlaceLink.prepend(textnode)
         break
       case 'tools-delete':
         textnode = document.createTextNode(newValue)
@@ -190,6 +209,52 @@ export class SeCMenuDialog extends HTMLElement {
   }
 
   /**
+   * Enables or greys out one item. Unlike the `enablemenuitems` attribute,
+   * this applies even when the same value is set twice in a row.
+   * @param {string} action The item's action, as in its href
+   * @param {boolean} enabled
+   * @returns {void}
+   */
+  setItemEnabled (action, enabled) {
+    this._shadowRoot.querySelector(`a[href="#${action}"]`)
+      ?.parentElement.classList.toggle('disabled', !enabled)
+  }
+
+  /**
+   * Adds a menu item registered by an extension (see `contextmenu.add`). A
+   * click dispatches `change` with the item id, which the editor routes to the
+   * extension's action. The label is inserted as text, never as markup.
+   * @param {{id: string, label: string, shortcut?: string}} menuItem
+   * @returns {void}
+   */
+  addExtensionItem ({ id, label, shortcut }) {
+    if (!this.hasExtensionItems) {
+      // extension items appear at the bottom of the menu, after a separator
+      const separator = document.createElement('li')
+      separator.className = 'separator'
+      this.$dialog.append(separator)
+      this.hasExtensionItems = true
+    }
+    const item = document.createElement('li')
+    const link = document.createElement('a')
+    link.href = `#${id}`
+    link.textContent = label
+    if (shortcut) {
+      const hint = document.createElement('span')
+      hint.className = 'shortcut'
+      hint.textContent = shortcut
+      link.append(hint)
+    }
+    item.append(link)
+    this.$dialog.append(item)
+    svgEditor.$click(link, (evt) => {
+      evt.preventDefault()
+      this.$dialog.style.display = 'none'
+      this.dispatchEvent(new CustomEvent('change', { detail: { trigger: id } }))
+    })
+  }
+
+  /**
    * @function connectedCallback
    * @returns {void}
    */
@@ -220,6 +285,10 @@ export class SeCMenuDialog extends HTMLElement {
       }
     }
     const onMenuClickHandler = (e, action) => {
+      // The clicked item takes the focus: give it back to the page, or the
+      // keyboard shortcuts (Mod+V, Delete...) stop working until the canvas
+      // is clicked.
+      this._shadowRoot.activeElement?.blur()
       const triggerEvent = new CustomEvent('change', {
         detail: {
           trigger: action
@@ -233,6 +302,9 @@ export class SeCMenuDialog extends HTMLElement {
     svgEditor.$click(this.$copyLink, (evt) => onMenuClickHandler(evt, 'copy'))
     svgEditor.$click(this.$pasteLink, (evt) => onMenuClickHandler(evt, 'paste'))
     svgEditor.$click(this.$pasteInPlaceLink, (evt) => onMenuClickHandler(evt, 'paste_in_place'))
+    Object.entries(this.$propertiesLinks).forEach(([action, link]) => {
+      svgEditor.$click(link, (evt) => onMenuClickHandler(evt, action))
+    })
     svgEditor.$click(this.$deleteLink, (evt) => onMenuClickHandler(evt, 'delete'))
     svgEditor.$click(this.$groupLink, (evt) => onMenuClickHandler(evt, 'group'))
     svgEditor.$click(this.$ungroupLink, (evt) => onMenuClickHandler(evt, 'ungroup'))
@@ -240,6 +312,13 @@ export class SeCMenuDialog extends HTMLElement {
     svgEditor.$click(this.$moveUpLink, (evt) => onMenuClickHandler(evt, 'move_up'))
     svgEditor.$click(this.$moveDownLink, (evt) => onMenuClickHandler(evt, 'move_down'))
     svgEditor.$click(this.$moveBackLink, (evt) => onMenuClickHandler(evt, 'move_back'))
+    Object.entries(this.$similarLinks).forEach(([action, link]) => {
+      svgEditor.$click(link, (evt) => {
+        evt.preventDefault()
+        current.$dialog.style.display = 'none'
+        onMenuClickHandler(evt, action)
+      })
+    })
   }
 }
 

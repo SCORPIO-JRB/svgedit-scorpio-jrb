@@ -92,8 +92,6 @@ export const remapElement = (selected, changes, m) => {
     assignAttributes(selected, changes, 1000, true)
   }
 
-  const box = getBBox(selected)
-
   // Handle gradients and patterns
   ;['fill', 'stroke'].forEach(type => {
     const attrVal = selected.getAttribute(type)
@@ -190,7 +188,10 @@ export const remapElement = (selected, changes, m) => {
       const c = remap(changes.cx, changes.cy)
       changes.cx = c.x
       changes.cy = c.y
-      // Take the minimum of the new dimensions for the new circle radius
+      // Take the minimum of the new dimensions for the new circle radius.
+      // The bbox is read only here: reading it for every remapped element
+      // forced a layout per element when many elements moved at once.
+      const box = getBBox(selected)
       const tbox = transformBox(box.x, box.y, box.width, box.height, m)
       const w = tbox.tr.x - tbox.tl.x
       const h = tbox.bl.y - tbox.tl.y

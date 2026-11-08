@@ -12,13 +12,37 @@ import {
   convertAttrs
 } from './units.js'
 import {
-  transformPoint, hasMatrixTransform, getMatrix, snapToAngle, getTransformList
+  transformPoint, hasMatrixTransform, getMatrix, snapToAngle, getTransformList, normalizeRotationAngle
 } from './math.js'
 import { withStartTransform } from './recalculate.js'
 import * as draw from './draw.js'
 import * as pathModule from './path.js'
 import * as hstry from './history.js'
 import { findPos } from '../../svgcanvas/common/util.js'
+import { isMac } from '../common/browser.js'
+import { isDeepClick } from './selection-nav.js'
+import {
+  beginGroupResize,
+  updateGroupResize,
+  commitGroupResize,
+  beginGroupRotate,
+  updateGroupRotate,
+  commitGroupRotate,
+  beginGroupScale,
+  updateGroupScale,
+  commitGroupScale,
+  isGroupScaling,
+  cancelGroupGesture,
+  isGroupGesture,
+  isGroupResizing,
+  isGroupRotating,
+  isScalableText,
+  commitSingleTextResize,
+  singleTextPreview,
+  drawingBoxOf,
+  parentDelta,
+  parentToDrawing
+} from './multi-transform.js'
 
 const {
   InsertElementCommand,
@@ -28,6 +52,117 @@ const {
 
 let svgCanvas = null
 let moveSelectionThresholdReached = false
+// Alt was held when the drag started on a selected element: duplicate the
+// selection once the drag really starts, and move the copies.
+let duplicateOnDrag = false
+// Insertion of the Alt+drag copies, recorded with their move as one undo step
+// when the mouse is released, and the selection it replaced.
+let pendingCloneCmd = null
+let selectionBeforeClone = null
+// Elements that stay selected during a Shift+drag rubber band.
+let rubberBandBase = new Set()
+// A single text resized by a grip: it gets a new font size, not a matrix.
+let singleTextResize = null
+// Rotation of a single element started from a zone outside a corner: the
+// difference between its angle and the pointer's, so that it does not jump.
+// Null for the handle above the frame, whose behaviour is unchanged.
+let rotateOffset = null
+// A single circle resized with free proportions: the scale the gesture
+// really applies, put back before the release writes the circle (see
+// mouseMoveEvent).
+let circleResize = null
+
+/**
+ * Puts back the scale of a circle's resize gesture, replaced during the
+ * gesture by the preview of the circle it gives.
+ * @param {Element} elem
+ * @param {{ox: number, oy: number, sx: number, sy: number}} gesture
+ * @returns {void}
+ */
+const restoreCircleScale = (elem, { ox, oy, sx, sy }) => {
+  const tlist = getTransformList(elem)
+  const N = tlist?.numberOfItems || 0
+  if (N < 3) { return }
+  const svgRoot = svgCanvas.getSvgRoot()
+  const back = svgRoot.createSVGTransform()
+  const scale = svgRoot.createSVGTransform()
+  const origin = svgRoot.createSVGTransform()
+  back.setTranslate(ox, oy)
+  scale.setScale(sx, sy)
+  origin.setTranslate(-ox, -oy)
+  tlist.replaceItem(back, N - 3)
+  tlist.replaceItem(scale, N - 2)
+  tlist.replaceItem(origin, N - 1)
+}
+
+/**
+ * Pointer angle about an element's centre, as the rotation handle measures it:
+ * 0 when the pointer is straight above the centre.
+ * @param {Element} elem
+ * @param {number} x - Pointer, in the drawing's coordinates
+ * @param {number} y
+ * @returns {number} Degrees
+ */
+const pointerAngleAbout = (elem, x, y) => {
+  const box = getBBox(elem)
+  const center = transformPoint(box.x + box.width / 2, box.y + box.height / 2, getMatrix(elem))
+  return ((Math.atan2(center.y - y, center.x - x) * (180 / Math.PI)) - 90) % 360
+}
+
+/** Where the pointer was last seen over the canvas, for refreshHover. */
+let lastHoverPoint = null
+
+/**
+ * Outlines again what a click would select, after Ctrl (Cmd on macOS) was
+ * pressed or released without moving the pointer.
+ * @function module:event.SvgCanvas#refreshHover
+ * @param {KeyboardEvent} evt Gives the modifiers held
+ * @returns {void}
+ */
+const refreshHover = (evt) => {
+  if (!lastHoverPoint) { return }
+  updateHover({
+    ...lastHoverPoint,
+    buttons: 0,
+    ctrlKey: Boolean(evt?.ctrlKey),
+    metaKey: Boolean(evt?.metaKey)
+  })
+}
+
+/**
+ * Outlines the element a click would select: the one getMouseTarget returns,
+ * unless it is already selected. Only in the selection tool, when no button
+ * is down.
+ * @param {MouseEvent} evt
+ * @returns {void}
+ */
+const updateHover = (evt) => {
+  const mgr = svgCanvas.selectorManager
+  if (!mgr?.showHover) { return }
+  lastHoverPoint = { target: evt.target, clientX: evt.clientX, clientY: evt.clientY }
+  if (svgCanvas.getCurrentMode() !== 'select' || evt.buttons || svgCanvas.spaceKey) {
+    mgr.hideHover()
+    return
+  }
+  let target = null
+  try {
+    // With Ctrl (Cmd on macOS), the deepest object: what a Ctrl+click takes.
+    target = (isDeepClick(evt, isMac()) && svgCanvas.getDeepTarget?.(evt)?.elem) ||
+      svgCanvas.getMouseTarget(evt)
+  } catch (e) {
+    target = null
+  }
+  // As on mousedown, a link around a single element selects that element.
+  if (target?.tagName === 'a' && target.childNodes.length === 1) {
+    target = target.firstChild
+  }
+  if (!target || target.nodeType !== 1 || target === svgCanvas.getSvgRoot() ||
+    target === mgr.selectorParentGroup || svgCanvas.getSelectedElements().includes(target)) {
+    mgr.hideHover()
+    return
+  }
+  mgr.showHover(target)
+}
 
 /**
 * @function module:undo.init
@@ -42,6 +177,8 @@ export const init = (canvas) => {
   svgCanvas.mouseUpEvent = mouseUpEvent
   svgCanvas.mouseOutEvent = mouseOutEvent
   svgCanvas.DOMMouseScrollEvent = DOMMouseScrollEvent
+  svgCanvas.cancelGesture = cancelGesture
+  svgCanvas.refreshHover = refreshHover
 }
 
 const getBsplinePoint = (t) => {
@@ -82,6 +219,30 @@ const getBsplinePoint = (t) => {
 
 const beginDragTransform = (svgRoot, selectedElements) => {
   svgCanvas.dragStartTransforms = new Map()
+  // Elements under a group that scales or turns them take the move in its
+  // coordinates: their group's matrix is read once, here.
+  svgCanvas.dragParentMatrices = new Map()
+  const layer = svgCanvas.getCurrentDrawing?.()?.getCurrentLayer?.()
+  for (const selectedElement of selectedElements) {
+    if (!selectedElement || selectedElement.parentNode === layer) { continue }
+    const P = parentToDrawing(selectedElement)
+    if (P.a !== 1 || P.b !== 0 || P.c !== 0 || P.d !== 1) { svgCanvas.dragParentMatrices.set(selectedElement, P) }
+  }
+  // A translation does not change an element's own bounding box, so every
+  // selection box is read once here, before any write, and reused on each
+  // mousemove. Reading it inside the move loop forced one layout per element.
+  svgCanvas.dragStartBBoxes = new Map()
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  for (const selectedElement of selectedElements) {
+    if (!selectedElement || !measure) { continue }
+    svgCanvas.dragStartBBoxes.set(selectedElement, measure(selectedElement))
+  }
+  // Box of the dragged elements, read before the drag transform is added:
+  // its top left corner is the position the dimension label shows.
+  const dragged = selectedElements.filter(Boolean)
+  svgCanvas.dragStartFrame = measure
+    ? drawingBoxOf(dragged, dragged.map((elem) => svgCanvas.dragStartBBoxes.get(elem)))
+    : null
   for (const selectedElement of selectedElements) {
     if (!selectedElement) { continue }
     svgCanvas.dragStartTransforms.set(
@@ -101,10 +262,140 @@ const beginDragTransform = (svgRoot, selectedElements) => {
   svgCanvas.hasDragStartTransform = true
 }
 
+/**
+ * Resizes the selectors of the given elements. Every selection box is read
+ * first, then every selector is written, so the browser lays out once instead
+ * of once per element.
+ * @param {Element[]} elements - Stops at the first empty slot
+ * @returns {void}
+ */
+const resizeSelectors = (elements) => {
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  const boxes = []
+  for (const element of elements) {
+    if (!element) { break }
+    boxes.push([element, measure ? measure(element) : undefined])
+  }
+  boxes.forEach(([element, bbox]) => {
+    svgCanvas.selectorManager.requestSelector(element).resize(bbox, Boolean(bbox))
+  })
+}
+
+/**
+ * Records Alt+drag copies that no move was recorded with, so that they can
+ * still be undone.
+ * @returns {void}
+ */
+const flushPendingClone = () => {
+  if (pendingCloneCmd) {
+    svgCanvas.addCommandToHistory(pendingCloneCmd)
+  }
+  pendingCloneCmd = null
+  selectionBeforeClone = null
+}
+
+/**
+ * Cancels the gesture in progress, for Escape while the mouse button is down:
+ * a move, an Alt+drag duplicate, a resize, a rotation or a rubber band.
+ * Everything returns to its state at the start of the drag and nothing is
+ * added to the history. The coming mouseup is then ignored.
+ * @function module:svgcanvas.SvgCanvas#cancelGesture
+ * @returns {boolean} True when a gesture was cancelled
+ */
+const cancelGesture = () => {
+  if (!svgCanvas.getStarted()) { return false }
+  const mode = svgCanvas.getCurrentMode()
+  if (!['select', 'resize', 'rotate', 'multiselect'].includes(mode)) { return false }
+
+  const restoreTransform = (elem, value) => {
+    // The drag edited the transform list through the SVG DOM, and the browser
+    // writes such changes to the attribute lazily: without this read,
+    // removeAttribute() found no attribute and the drag transform stayed.
+    elem.getAttribute('transform')
+    if (value) {
+      elem.setAttribute('transform', value)
+    } else {
+      elem.removeAttribute('transform')
+    }
+  }
+  const selectedElements = svgCanvas.getSelectedElements().filter(Boolean)
+
+  switch (mode) {
+    case 'select':
+      svgCanvas.dragStartTransforms?.forEach((value, elem) => restoreTransform(elem, value))
+      if (pendingCloneCmd) {
+        // Alt+drag: remove the copies and select the originals again.
+        const originals = selectionBeforeClone || []
+        svgCanvas.clearSelection(true)
+        pendingCloneCmd.elements().forEach((elem) => elem.remove())
+        svgCanvas.addToSelection(originals)
+      }
+      break
+    case 'resize':
+    case 'rotate':
+      if (isGroupGesture()) {
+        cancelGroupGesture()
+        break
+      }
+      // Otherwise the handles belong to a single element.
+      if (selectedElements[0]) {
+        restoreTransform(selectedElements[0], svgCanvas.getStartTransform())
+      }
+      if (mode === 'rotate') {
+        // Drop the undoable change opened on mousedown.
+        svgCanvas.undoMgr.finishUndoableChange()
+      }
+      break
+    case 'multiselect': {
+      svgCanvas.getRubberBox()?.setAttribute('display', 'none')
+      svgCanvas.setCurBBoxes([])
+      // Back to the selection kept when the band started (Shift+drag).
+      const toRemove = selectedElements.filter((elem) => !rubberBandBase.has(elem))
+      if (toRemove.length) {
+        svgCanvas.removeFromSelection(toRemove)
+      }
+      const toAdd = [...rubberBandBase].filter((elem) => !selectedElements.includes(elem))
+      if (toAdd.length) {
+        svgCanvas.addToSelection(toAdd)
+      }
+      break
+    }
+  }
+
+  svgCanvas.dragStartTransforms = null
+  svgCanvas.dragStartBBoxes = null
+  svgCanvas.dragParentMatrices = null
+  svgCanvas.dragStartFrame = null
+  svgCanvas.hasDragStartTransform = false
+  svgCanvas.selectorManager.hideDimension?.()
+  rotateOffset = null
+  circleResize = null
+  duplicateOnDrag = false
+  moveSelectionThresholdReached = false
+  pendingCloneCmd = null
+  selectionBeforeClone = null
+  singleTextResize = null
+  svgCanvas.setStarted(false)
+  svgCanvas.setCurrentMode('select')
+
+  const selection = svgCanvas.getSelectedElements()
+  resizeSelectors(selection)
+  const remaining = selection.filter(Boolean)
+  if (remaining.length === 1) {
+    svgCanvas.selectorManager.requestSelector(remaining[0]).showGrips(true)
+  }
+  svgCanvas.call('selected', selection)
+  return true
+}
+
 // Update only the temporary drag transform inserted at index 0.
 const updateTransformList = (svgRoot, element, dx, dy) => {
   const xform = svgRoot.createSVGTransform()
-  xform.setTranslate(dx, dy)
+  // A move on the drawing, in the coordinates of the element's group (read
+  // once per drag, see beginDragTransform).
+  const parent = svgCanvas.dragParentMatrices?.get(element)
+  const move = parent ? parentDelta(element, dx, dy, parent) : { dx, dy }
+  xform.setTranslate(move.dx, move.dy)
   const tlist = getTransformList(element)
   if (!tlist) { return }
   if (tlist.numberOfItems) {
@@ -127,8 +418,11 @@ const updateTransformList = (svgRoot, element, dx, dy) => {
  * @returns {void}
  */
 const mouseMoveEvent = (evt) => {
-  // if the mouse is move without dragging an element, just return.
-  if (!svgCanvas.getStarted()) { return }
+  // Without a gesture, the mouse only shows what a click would select.
+  if (!svgCanvas.getStarted()) {
+    updateHover(evt)
+    return
+  }
   if (evt.button === 1 || svgCanvas.spaceKey) { return }
 
   svgCanvas.textActions.init()
@@ -146,7 +440,6 @@ const mouseMoveEvent = (evt) => {
   let cy
   let dx
   let dy
-  let len
   let angle
   let box
 
@@ -179,24 +472,41 @@ const mouseMoveEvent = (evt) => {
           dy = snapToGrid(dy)
         }
 
-        // Enable moving selection only if the pointer moved more than 4 px.
-        // This prevents objects from being accidentally moved when (initially) selected
-        const deltaThreshold = 4
-        const deltaThresholdReached = Math.abs(dx) > deltaThreshold || Math.abs(dy) > deltaThreshold
+        // Enable moving selection only if the pointer moved more than 3 screen
+        // pixels, whatever the zoom. This prevents objects from being
+        // accidentally moved when (initially) selected.
+        const deltaThreshold = 3
+        const deltaThresholdReached = Math.abs(dx * zoom) > deltaThreshold || Math.abs(dy * zoom) > deltaThreshold
         moveSelectionThresholdReached = moveSelectionThresholdReached || deltaThresholdReached
 
         if (moveSelectionThresholdReached) {
+          let dragged = selectedElements
           if (!svgCanvas.hasDragStartTransform) {
-            beginDragTransform(svgRoot, selectedElements)
+            if (duplicateOnDrag) {
+              // Alt+drag: copy what is being dragged, then move the copies.
+              // The copies enter the history with their move, on mouse up.
+              duplicateOnDrag = false
+              selectionBeforeClone = selectedElements.filter(Boolean)
+              pendingCloneCmd = svgCanvas.cloneSelectedElements(0, 0, { addToHistory: false }) || null
+              dragged = svgCanvas.getSelectedElements()
+            }
+            beginDragTransform(svgRoot, dragged)
+          } else {
+            dragged = svgCanvas.getSelectedElements()
           }
-          selectedElements.forEach((el) => {
+          dragged.forEach((el) => {
             if (el) {
               updateTransformList(svgRoot, el, dx, dy)
               // update our internal bbox that we're tracking while dragging
-              svgCanvas.selectorManager.requestSelector(el).resize()
+              const bbox = svgCanvas.dragStartBBoxes?.get(el)
+              svgCanvas.selectorManager.requestSelector(el).resize(bbox, Boolean(bbox))
             }
           })
-          svgCanvas.call('transition', selectedElements)
+          const frame = svgCanvas.dragStartFrame
+          if (frame) {
+            svgCanvas.selectorManager.showPosition?.(frame.x + dx, frame.y + dy)
+          }
+          svgCanvas.call('transition', dragged)
         }
       }
       break
@@ -215,23 +525,13 @@ const mouseMoveEvent = (evt) => {
       // - if newList contains selected, do nothing
       // - if newList doesn't contain selected, remove it from selected
       // - for any newList that was not in selectedElements, add it to selected
-      const elemsToRemove = selectedElements.slice(); const elemsToAdd = []
+      // Elements selected before a Shift+drag always stay selected.
       const newList = svgCanvas.getIntersectionList()
-
-      // For every element in the intersection, add if not present in selectedElements.
-      len = newList.length
-      for (i = 0; i < len; ++i) {
-        const intElem = newList[i]
-        // Found an element that was not selected before, so we should add it.
-        if (!selectedElements.includes(intElem)) {
-          elemsToAdd.push(intElem)
-        }
-        // Found an element that was already selected, so we shouldn't remove it.
-        const foundInd = elemsToRemove.indexOf(intElem)
-        if (foundInd !== -1) {
-          elemsToRemove.splice(foundInd, 1)
-        }
-      }
+      const current = new Set(selectedElements.filter(Boolean))
+      const wanted = new Set(newList)
+      rubberBandBase.forEach((elem) => wanted.add(elem))
+      const elemsToRemove = [...current].filter((elem) => !wanted.has(elem))
+      const elemsToAdd = newList.filter((elem) => !current.has(elem))
 
       if (elemsToRemove.length > 0) {
         svgCanvas.removeFromSelection(elemsToRemove)
@@ -244,6 +544,25 @@ const mouseMoveEvent = (evt) => {
       break
     }
     case 'resize': {
+      if (isGroupScaling()) {
+        // The Scale tool: one uniform factor, strokes included.
+        updateGroupScale(x, y, {
+          alt: evt.altKey,
+          snap: svgCanvas.getCurConfig().gridSnapping ? snapToGrid : undefined
+        })
+        svgCanvas.call('transition', selectedElements)
+        break
+      }
+      if (isGroupResizing()) {
+        // The common frame of a multi-selection: one matrix for all.
+        updateGroupResize(x, y, {
+          alt: evt.altKey,
+          shift: evt.shiftKey,
+          snap: svgCanvas.getCurConfig().gridSnapping ? snapToGrid : undefined
+        })
+        svgCanvas.call('transition', selectedElements)
+        break
+      }
       // we track the resize bounding box and translate/scale the selected element
       // while the mouse is down, when mouse goes up, we use this to recalculate
       // the shape's coordinates
@@ -298,6 +617,17 @@ const mouseMoveEvent = (evt) => {
         tx = width
       }
 
+      // Alt: resize from the center, so the opposite side moves symmetrically.
+      if (evt.altKey) {
+        const mode = svgCanvas.getCurrentResizeMode()
+        if (mode.includes('e')) { sx = width ? (width + 2 * dx) / width : 1 }
+        if (mode.includes('w')) { sx = width ? (width - 2 * dx) / width : 1 }
+        if (mode.includes('s')) { sy = height ? (height + 2 * dy) / height : 1 }
+        if (mode.includes('n')) { sy = height ? (height - 2 * dy) / height : 1 }
+        tx = width / 2
+        ty = height / 2
+      }
+
       // update the transform list with translate,scale,translate
       const translateOrigin = svgRoot.createSVGTransform()
       const scale = svgRoot.createSVGTransform()
@@ -311,8 +641,8 @@ const mouseMoveEvent = (evt) => {
       }
 
       translateOrigin.setTranslate(-(left + tx), -(top + ty))
-      // For images, we maintain aspect ratio by default and relax when shift pressed
-      const maintainAspectRatio = (selected.tagName !== 'image' && evt.shiftKey) || (selected.tagName === 'image' && !evt.shiftKey)
+      // Shift keeps the proportions, for every kind of element
+      const maintainAspectRatio = evt.shiftKey
       if (maintainAspectRatio) {
         if (sx === 1) {
           sx = sy
@@ -321,6 +651,35 @@ const mouseMoveEvent = (evt) => {
       scale.setScale(sx, sy)
 
       translateBack.setTranslate(left + tx, top + ty)
+      // Factors the dimension label applies to the element's own size.
+      let labelSx = sx
+      let labelSy = sy
+      circleResize = null
+      if (selected.tagName === 'circle' && !hasMatrix && !angle && Math.abs(Math.abs(sx) - Math.abs(sy)) > 1e-12) {
+        // A circle stays a circle, of radius scaled by the smaller factor
+        // (see coords.js): the preview shows that circle instead of an
+        // ellipse, and the release puts the real scale back before writing.
+        const ox = left + tx
+        const oy = top + ty
+        const c = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+        const s = Math.min(Math.abs(sx), Math.abs(sy))
+        circleResize = { elem: selected, ox, oy, sx, sy }
+        translateOrigin.setTranslate(-c.x, -c.y)
+        scale.setScale(s, s)
+        translateBack.setTranslate(ox + (c.x - ox) * sx, oy + (c.y - oy) * sy)
+        labelSx = s
+        labelSy = s
+      }
+      if (singleTextResize === selected && !(angle && sx * sy < 0)) {
+        // A text is never distorted: the preview shows the uniform scale and
+        // the position it will get (see commitSingleTextResize).
+        const preview = singleTextPreview(box, sx, sy, left + tx, top + ty)
+        translateOrigin.setTranslate(-preview.origin.x, -preview.origin.y)
+        scale.setScale(preview.sx, preview.sy)
+        translateBack.setTranslate(preview.target.x, preview.target.y)
+        labelSx = preview.sx
+        labelSy = preview.sy
+      }
       if (hasMatrix) {
         const diff = angle ? 1 : 0
         tlist.replaceItem(translateOrigin, 2 + diff)
@@ -334,6 +693,7 @@ const mouseMoveEvent = (evt) => {
       }
 
       svgCanvas.selectorManager.requestSelector(selected).resize()
+      svgCanvas.selectorManager.showSize?.(Math.abs(box.width * labelSx), Math.abs(box.height * labelSy))
       svgCanvas.call('transition', selectedElements)
 
       break
@@ -529,6 +889,15 @@ const mouseMoveEvent = (evt) => {
       break
     }
     case 'rotate': {
+      if (isGroupRotating()) {
+        // The handle of the common frame: the whole selection turns.
+        updateGroupRotate(x, y, {
+          shift: evt.shiftKey,
+          snap: svgCanvas.getCurConfig().gridSnapping ? snapToGrid : undefined
+        })
+        svgCanvas.call('transition', selectedElements)
+        break
+      }
       box = getBBox(selected)
       cx = box.x + box.width / 2
       cy = box.y + box.height / 2
@@ -537,15 +906,21 @@ const mouseMoveEvent = (evt) => {
       cx = center.x
       cy = center.y
       angle = ((Math.atan2(cy - y, cx - x) * (180 / Math.PI)) - 90) % 360
+      if (rotateOffset !== null) {
+        // From a corner: the angle turned since the mouse went down.
+        angle = normalizeRotationAngle(angle + rotateOffset)
+      }
       if (svgCanvas.getCurConfig().gridSnapping) {
         angle = snapToGrid(angle)
       }
       if (evt.shiftKey) { // restrict rotations to nice angles (WRS)
-        const snap = 45
+        const snap = 15
         angle = Math.round(angle / snap) * snap
       }
 
-      svgCanvas.setRotationAngle(angle < -180 ? (360 + angle) : angle, true)
+      angle = angle < -180 ? (360 + angle) : angle
+      svgCanvas.setRotationAngle(angle, true)
+      svgCanvas.selectorManager.showAngle?.(angle)
       svgCanvas.call('transition', selectedElements)
       break
     }
@@ -577,6 +952,8 @@ const mouseMoveEvent = (evt) => {
 */
 const mouseOutEvent = (evt) => {
   const { $id } = svgCanvas
+  svgCanvas.selectorManager?.hideHover?.()
+  lastHoverPoint = null
   if (svgCanvas.getCurrentMode() !== 'select' && svgCanvas.getStarted()) {
     const event = new MouseEvent('mouseup', {
       bubbles: true,
@@ -637,8 +1014,29 @@ const mouseUpEvent = (evt) => {
   // TODO: Make true when in multi-unit mode
   const useUnit = false // (svgCanvas.getCurConfig().baseUnit !== 'px');
   svgCanvas.setStarted(false)
+  svgCanvas.selectorManager.hideDimension?.()
+  svgCanvas.dragStartFrame = null
+  rotateOffset = null
   let t
   const mouseUpMode = svgCanvas.getCurrentMode()
+  if ((mouseUpMode === 'resize' && (isGroupResizing() || isGroupScaling())) ||
+    (mouseUpMode === 'rotate' && isGroupRotating())) {
+    // Resize or rotation of a multi-selection, or a drag with the Scale
+    // tool: one undo step for all the elements.
+    let batch
+    if (mouseUpMode === 'rotate') {
+      batch = commitGroupRotate()
+    } else {
+      batch = isGroupScaling() ? commitGroupScale() : commitGroupResize()
+    }
+    svgCanvas.setCurrentMode('select')
+    if (batch) {
+      svgCanvas.addCommandToHistory(batch)
+      svgCanvas.call('changed', selectedElements.filter(Boolean))
+    }
+    resizeSelectors(selectedElements)
+    return
+  }
   switch (mouseUpMode) {
     // intentionally fall-through to select here
     case 'resize':
@@ -705,6 +1103,18 @@ const mouseUpEvent = (evt) => {
               ? svgCanvas.dragStartTransforms.get(elem)
               : (svgCanvas.getStartTransform() || '')
 
+            if (mouseUpMode === 'resize' && elem === circleResize?.elem) {
+              restoreCircleScale(elem, circleResize)
+            }
+            if (mouseUpMode === 'resize' && elem === singleTextResize) {
+              const textCmd = commitSingleTextResize(elem, oldTransform)
+              if (textCmd) {
+                batchCmd.addSubCommand(textCmd)
+                changedElements.push(elem)
+                return
+              }
+            }
+
             // recalculateDimensions uses startTransform when building its undo command.
             // Set it per element so multi-selection preserves every original transform.
             const cmd = withStartTransform(
@@ -724,7 +1134,19 @@ const mouseUpEvent = (evt) => {
             }
           })
 
-          if (!batchCmd.isEmpty()) {
+          if (pendingCloneCmd) {
+            // Alt+drag: the copies and their move form a single undo step.
+            const duplicateCmd = new BatchCommand('Duplicate')
+            duplicateCmd.addSubCommand(pendingCloneCmd)
+            if (!batchCmd.isEmpty()) {
+              duplicateCmd.addSubCommand(batchCmd)
+            }
+            // Mod+D on the copies repeats the offset of the drag (M7).
+            svgCanvas.rememberDuplicate?.(svgCanvas.getSelectedElements(), selectionBeforeClone || [])
+            pendingCloneCmd = null
+            selectionBeforeClone = null
+            svgCanvas.addCommandToHistory(duplicateCmd)
+          } else if (!batchCmd.isEmpty()) {
             svgCanvas.addCommandToHistory(batchCmd)
           }
           if (changedElements.length) {
@@ -733,22 +1155,29 @@ const mouseUpEvent = (evt) => {
 
           // Clear the stored transforms AND reset the flag together
           svgCanvas.dragStartTransforms = null
+          svgCanvas.dragStartBBoxes = null
+          svgCanvas.dragParentMatrices = null
           svgCanvas.hasDragStartTransform = false
 
-          const len = selectedElements.length
-          for (let i = 0; i < len; ++i) {
-            if (!selectedElements[i]) { break }
-            svgCanvas.selectorManager.requestSelector(selectedElements[i]).resize()
-          }
+          resizeSelectors(selectedElements)
           // no change in position/size, so maybe we should move to pathedit
         } else {
-          t = evt.target
+          // The clicked element as selected at mousedown (the top element in
+          // the current layer or group), not the raw event target.
+          t = svgCanvas.getMouseTarget(evt)
+          if (t?.tagName === 'a' && t.childNodes.length === 1) {
+            t = t.firstChild
+          }
           if (selectedElements[0].nodeName === 'path' && !selectedElements[1]) {
             svgCanvas.pathActions.select(selectedElements[0])
             // if it was a path
             // else, if it was selected and this is a shift-click, remove it from selection
           } else if (evt.shiftKey && tempJustSelected !== t) {
             svgCanvas.removeFromSelection([t])
+          } else if (!evt.shiftKey && selectedElements[1] && tempJustSelected !== t &&
+            selectedElements.includes(t)) {
+            // A click without drag on a member of a multi-selection keeps only that member.
+            svgCanvas.selectOnly([t], true)
           }
         } // no change in mouse position
 
@@ -918,6 +1347,8 @@ const mouseUpEvent = (evt) => {
   // Reset drag flag after any mouseUp
   svgCanvas.hasDragStartTransform = false
   svgCanvas.dragStartTransforms = null
+  singleTextResize = null
+  flushPendingClone()
 
   /**
 * The main (left) mouse button is released (anywhere).
@@ -1037,8 +1468,12 @@ const dblClickEvent = (evt) => {
     // TODO: Allow method of in-group editing without having to do
     // this (similar to editing rotated paths)
 
-    // Ungroup and regroup
-    svgCanvas.pushGroupProperties(mouseTarget)
+    // Ungroup and regroup. Entering the group rewrites the children's
+    // transforms: record it so that undo stays consistent (it was silent).
+    const cmd = svgCanvas.pushGroupProperties(mouseTarget, true)
+    if (cmd) {
+      svgCanvas.addCommandToHistory(cmd)
+    }
     mouseTarget = selectedElements[0]
     svgCanvas.clearSelection(true)
   }
@@ -1069,7 +1504,7 @@ const dblClickEvent = (evt) => {
  */
 const mouseDownEvent = (evt) => {
   const dataStorage = svgCanvas.getDataStorage()
-  const selectedElements = svgCanvas.getSelectedElements()
+  let selectedElements = svgCanvas.getSelectedElements()
   const zoom = svgCanvas.getZoom()
   const curShape = svgCanvas.getStyle()
   const svgRoot = svgCanvas.getSvgRoot()
@@ -1079,9 +1514,15 @@ const mouseDownEvent = (evt) => {
 
   const rightClick = (evt.button === 2)
 
-  if (evt.altKey) { // duplicate when dragging
-    svgCanvas.cloneSelectedElements(0, 0)
-  }
+  // Alt+drag duplicates, but only once the drag starts and only in the
+  // selection tool (see mouseMoveEvent): cloning here copied the previous
+  // selection, even on a simple Alt+click or while drawing with Alt.
+  duplicateOnDrag = false
+  flushPendingClone()
+  svgCanvas.selectorManager.hideHover?.()
+  svgCanvas.selectorManager.hideDimension?.()
+  rotateOffset = null
+  circleResize = null
 
   // Get screenCTM from the first child group of svgcontent
   // Note: svgcontent itself has x/y offset attributes, so we use its first child
@@ -1113,6 +1554,17 @@ const mouseDownEvent = (evt) => {
     mouseTarget = mouseTarget.firstChild
   }
 
+  // Ctrl+click (Cmd+click on macOS) in the selection tool takes the deepest
+  // object under the pointer, opening the groups that hold it. A selection
+  // grip keeps its role.
+  if (!rightClick && svgCanvas.getCurrentMode() === 'select' &&
+    mouseTarget !== svgCanvas.selectorManager.selectorParentGroup &&
+    isDeepClick(evt, isMac())) {
+    mouseTarget = svgCanvas.openDeepTarget(evt) ?? mouseTarget
+    // Opening a group starts a new selection.
+    selectedElements = svgCanvas.getSelectedElements()
+  }
+
   // realX/y ignores grid-snap value
   const realX = x
   svgCanvas.setStartX(x)
@@ -1137,7 +1589,12 @@ const mouseDownEvent = (evt) => {
     // rotating
     if (griptype === 'rotate') {
       svgCanvas.setCurrentMode('rotate')
-      // svgCanvas.setCurrentRotateMode(dataStorage.get(grip, 'dir'));
+      // A zone outside a corner: a single element turns by the angle the
+      // pointer turns, without jumping to the pointer (see mouseMoveEvent).
+      if (dataStorage.get(grip, 'dir') && selectedElements.filter(Boolean).length === 1) {
+        const elem = selectedElements[0]
+        rotateOffset = (getRotationAngle(elem) || 0) - pointerAngleAbout(elem, x, y)
+      }
       // resizing
     } else if (griptype === 'resize') {
       svgCanvas.setCurrentMode('resize')
@@ -1145,6 +1602,7 @@ const mouseDownEvent = (evt) => {
     }
     mouseTarget = selectedElements[0]
   }
+  singleTextResize = null
 
   svgCanvas.setStartTransform(mouseTarget.getAttribute('transform'))
 
@@ -1165,16 +1623,26 @@ const mouseDownEvent = (evt) => {
             svgCanvas.clearSelection(true)
           }
           svgCanvas.addToSelection([mouseTarget])
-          svgCanvas.setJustSelected(mouseTarget)
+          // A right click opens the menu: the next left click on this
+          // element must still be able to keep it alone or, with Shift, take
+          // it out (the mouse up of a right click never resets this).
+          svgCanvas.setJustSelected(rightClick ? null : mouseTarget)
           svgCanvas.pathActions.clear()
         }
+        duplicateOnDrag = evt.altKey && !rightClick
         // else if it's a path, go into pathedit mode in mouseup
 
         // Note: Dummy transform insertion moved to mouseMove to avoid triggering
         // recalculateDimensions on simple clicks. The dummy transform is only needed
         // when actually starting a drag operation.
       } else if (!rightClick) {
-        svgCanvas.clearSelection()
+        // Shift+drag adds the rubber band to the current selection.
+        if (evt.shiftKey) {
+          rubberBandBase = new Set(selectedElements.filter(Boolean))
+        } else {
+          rubberBandBase = new Set()
+          svgCanvas.clearSelection()
+        }
         svgCanvas.setCurrentMode('multiselect')
         if (!svgCanvas.getRubberBox()) {
           svgCanvas.setRubberBox(svgCanvas.selectorManager.getRubberBandBox())
@@ -1205,10 +1673,28 @@ const mouseDownEvent = (evt) => {
       }, 100)
       break
     case 'resize': {
+      if (svgCanvas.isScaleTool?.()) {
+        // The Scale tool: one element or several, proportions kept, strokes
+        // scaled.
+        svgCanvas.setStarted(true)
+        svgCanvas.setStartX(x)
+        svgCanvas.setStartY(y)
+        beginGroupScale(selectedElements.filter(Boolean), svgCanvas.getCurrentResizeMode(), x, y)
+        break
+      }
+      if (selectedElements.filter(Boolean).length > 1) {
+        // A grip of the common frame: the whole selection is resized.
+        svgCanvas.setStarted(true)
+        svgCanvas.setStartX(x)
+        svgCanvas.setStartY(y)
+        beginGroupResize(selectedElements.filter(Boolean), svgCanvas.getCurrentResizeMode(), x, y)
+        break
+      }
       if (!tlist) { break }
       svgCanvas.setStarted(true)
       svgCanvas.setStartX(x)
       svgCanvas.setStartY(y)
+      singleTextResize = isScalableText(mouseTarget) ? mouseTarget : null
 
       // Getting the BBox from the selection box, since we know we
       // want to orient around it
@@ -1390,6 +1876,12 @@ const mouseDownEvent = (evt) => {
       break
     case 'rotate':
       svgCanvas.setStarted(true)
+      if (selectedElements.filter(Boolean).length > 1) {
+        // The handle of the common frame: the whole selection turns, as one
+        // undo step written on mouseup.
+        beginGroupRotate(selectedElements.filter(Boolean), x, y)
+        break
+      }
       // we are starting an undoable change (a drag-rotation)
       svgCanvas.undoMgr.beginUndoableChange('transform', selectedElements)
       break
@@ -1429,7 +1921,7 @@ const mouseDownEvent = (evt) => {
 const DOMMouseScrollEvent = (e) => {
   const zoom = svgCanvas.getZoom()
   const { $id } = svgCanvas
-  if (!e.shiftKey) { return }
+  if (!e.shiftKey || svgCanvas.getCurConfig().shiftWheelZoom === false) { return }
 
   e.preventDefault()
 

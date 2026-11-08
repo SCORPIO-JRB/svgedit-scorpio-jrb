@@ -16,18 +16,25 @@ import * as draw from './core/draw.js'
 import { init as pasteInit, pasteElementsMethod } from './core/paste-elem.js'
 import {
   hasClipboardElements,
+  normalizeClipboardData,
   resetClipboardDocumentId
 } from './core/clipboard.js'
+import { init as svgPasteInit } from './core/svg-paste.js'
+import { init as pastePropertiesInit } from './core/paste-properties.js'
 import { init as touchInit } from './core/touch.js'
 import { svgRootElement } from './core/svgroot.js'
 import {
   init as undoInit,
   changeSelectedAttributeNoUndoMethod,
-  changeSelectedAttributeMethod
+  changeSelectedAttributeMethod,
+  changeSelectedAttributeEachMethod
 } from './core/undo.js'
 import { init as selectionInit } from './core/selection.js'
 import { init as textActionsInit, textActionsMethod } from './core/text-actions.js'
 import { init as eventInit } from './core/event.js'
+import { init as multiTransformInit } from './core/multi-transform.js'
+import { init as scaleToolInit } from './core/scale-tool.js'
+import { init as selectionNavInit } from './core/selection-nav.js'
 import {
   init as jsonInit,
   getJsonFromSvgElements,
@@ -92,6 +99,8 @@ import {
 
 import dataStorage from './core/dataStorage.js'
 
+// Shapes that convertToPath turns into a path.
+const CONVERTIBLE_TO_PATH = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
 const visElems =
   'a,circle,ellipse,foreignObject,g,image,line,path,polygon,polyline,rect,svg,text,tspan,use'
 const refAttrs = [
@@ -108,6 +117,8 @@ const refAttrs = [
 const THRESHOLD_DIST = 0.8
 const STEP_COUNT = 10
 const CLIPBOARD_ID = 'svgedit_clipboard'
+// Events after which the hover outline no longer matches the drawing.
+const HOVER_RESET_EVENTS = new Set(['changed', 'selected', 'zoomed', 'contextset', 'sourcechanged', 'afterClear'])
 
 /**
  * The main SvgCanvas class that manages all SVG-related functions.
@@ -167,6 +178,8 @@ class SvgCanvas {
     this.curConfig = {
       // Default configuration options
       show_outside_canvas: true,
+      // Shift + wheel zooms around the cursor (an embedding editor may handle zoom itself)
+      shiftWheelZoom: true,
       selectNew: true,
       dimensions: [640, 480]
     }
@@ -259,6 +272,9 @@ class SvgCanvas {
     this.svgroot.appendChild(this.opacAni)
 
     eventInit(this)
+    multiTransformInit(this)
+    scaleToolInit(this)
+    selectionNavInit(this)
     textActionsInit(this)
     svgInit(this)
     draw.init(this)
@@ -311,6 +327,8 @@ class SvgCanvas {
     localStorage.setItem(`${CLIPBOARD_ID}_startup`, Math.random())
 
     pasteInit(this)
+    svgPasteInit(this)
+    pastePropertiesInit(this)
 
     this.contentW = this.getResolution().w
     this.contentH = this.getResolution().h
@@ -725,6 +743,7 @@ class SvgCanvas {
 
   setZoom (value) {
     this.zoom = value
+    this.selectorManager?.hideHover?.()
   }
 
   getImportIds (key) {
@@ -792,6 +811,19 @@ class SvgCanvas {
     }
   }
 
+  /**
+   * The SVG text of this tab's clipboard, as written to the system clipboard
+   * by the last copy (M7).
+   * @returns {string|null}
+   */
+  getClipboardSvg () {
+    try {
+      return normalizeClipboardData(JSON.parse(sessionStorage.getItem(CLIPBOARD_ID)))?.svg ?? null
+    } catch {
+      return null
+    }
+  }
+
   getSvgContent () {
     return this.svgContent
   }
@@ -843,6 +875,9 @@ class SvgCanvas {
    * @returns {void}
    */
   setMode (name) {
+    // The Scale tool works in the select mode only.
+    if (name !== 'select') { this.setScaleTool?.(false) }
+    this.selectorManager?.hideHover?.()
     this.pathActions.clear(true)
     this.textActions.clear()
     this.curProperties =
@@ -941,6 +976,11 @@ class SvgCanvas {
   }
 
   call (ev, arg) {
+    // The hover outline describes the drawing as it was: drop it when the
+    // drawing, the selection or the view changes.
+    if (HOVER_RESET_EVENTS.has(ev)) {
+      this.selectorManager?.hideHover?.()
+    }
     if (this.events[ev]) {
       return this.events[ev](window, arg)
     }
@@ -1001,13 +1041,14 @@ class SvgCanvas {
     }
 
     // find every element and remove it from our array copy
+    const toRemove = new Set(elemsToRemove)
     const newSelectedItems = []
     const len = this.selectedElements.length
     for (let i = 0; i < len; ++i) {
       const elem = this.selectedElements[i]
       if (elem) {
         // keep the item
-        if (!elemsToRemove.includes(elem)) {
+        if (!toRemove.has(elem)) {
           newSelectedItems.push(elem)
         } else {
           // remove the item and its selector
@@ -1015,8 +1056,17 @@ class SvgCanvas {
         }
       }
     }
+    if (newSelectedItems.length === this.selectedElements.filter(Boolean).length) {
+      return
+    }
     // the copy becomes the master now
     this.selectedElements = newSelectedItems
+    // A single remaining element gets its grips back.
+    if (newSelectedItems.length === 1) {
+      this.selectorManager.requestSelector(newSelectedItems[0]).showGrips(true)
+    }
+    // Panels must reflect the smaller selection.
+    this.call('selected', this.selectedElements)
   }
 
   /**
@@ -1270,21 +1320,46 @@ class SvgCanvas {
         this.pathActions
       )
     }
-    // TODO: Why is this applying attributes from this.curShape, then inside utilities.convertToPath it's pulling addition attributes from elem?
-    // TODO: If convertToPath is called with one elem, this.curShape and elem are probably the same; but calling with multiple is a bug or cool feature.
-    const attrs = {
-      fill: this.curShape.fill,
-      'fill-opacity': this.curShape.fill_opacity,
-      stroke: this.curShape.stroke,
-      'stroke-width': this.curShape.stroke_width,
-      'stroke-dasharray': this.curShape.stroke_dasharray,
-      'stroke-linejoin': this.curShape.stroke_linejoin,
-      'stroke-linecap': this.curShape.stroke_linecap,
-      'stroke-opacity': this.curShape.stroke_opacity,
-      opacity: this.curShape.opacity,
-      visibility: 'hidden'
+    // The path keeps everything the shape has but its geometry, however the
+    // shape was selected (see convertToPath in utilities.js). It used to take
+    // the current style, which only a click on the shape alone sets, with
+    // "null" for the attributes the shape did not have, and to lose the
+    // attributes outside a short list (fill-rule, mask, class, title…).
+    return convertToPath(elem, undefined, this)
+  }
+
+  /**
+   * Converts the selected shapes to paths, as one undo step. Each path keeps
+   * everything its shape has but its geometry (see convertToPath). The other elements are left
+   * as they are and stay selected with the new paths.
+   * @function module:svgcanvas.SvgCanvas#convertSelectedToPaths
+   * @fires module:svgcanvas.SvgCanvas#event:changed
+   * @returns {SVGPathElement[]} The new paths
+   */
+  convertSelectedToPaths () {
+    const selected = this.getSelectedElements().filter(Boolean)
+    const shapes = selected.filter((elem) => CONVERTIBLE_TO_PATH.has(elem.tagName))
+    if (!shapes.length) { return [] }
+    const batch = new this.history.BatchCommand('Convert elements to Path')
+    const own = Object.prototype.hasOwnProperty.call(this, 'addCommandToHistory')
+    const add = this.addCommandToHistory
+    const paths = new Map()
+    // Each conversion records its own command: they are gathered into one.
+    this.addCommandToHistory = (cmd) => batch.addSubCommand(cmd)
+    try {
+      shapes.forEach((elem) => {
+        const path = this.convertToPath(elem)
+        if (path) { paths.set(elem, path) }
+      })
+    } finally {
+      if (own) { this.addCommandToHistory = add } else { delete this.addCommandToHistory }
     }
-    return convertToPath(elem, attrs, this) // call convertToPath from utilities.js
+    if (!batch.isEmpty()) { this.addCommandToHistory(batch) }
+    const kept = selected.map((elem) => paths.get(elem) || elem).filter((elem) => elem.parentNode)
+    this.clearSelection()
+    this.addToSelection(kept, true)
+    if (paths.size) { this.call('changed', [...paths.values()]) }
+    return [...paths.values()]
   }
 
   /**
@@ -1345,6 +1420,7 @@ class SvgCanvas {
     this.setContext = draw.setContext
     this.changeSelectedAttributeNoUndo = changeSelectedAttributeNoUndoMethod // This function makes the changes to the elements. It does not add the change to the history stack.
     this.changeSelectedAttribute = changeSelectedAttributeMethod // Change the given/selected element and add the original value to the history stack.
+    this.changeSelectedAttributeEach = changeSelectedAttributeEachMethod // Give each element its own new value, as one undo step.
     this.setBlurNoUndo = setBlurNoUndo // Sets the `stdDeviation` blur value on the selected element without being undoable.
     this.setBlurOffsets = setBlurOffsets // Sets the `x`, `y`, `width`, `height` values of the filter element in order to make the blur not be clipped. Removes them if not neeeded.
     this.setBlur = setBlur // Adds/updates the blur filter to the selected element.

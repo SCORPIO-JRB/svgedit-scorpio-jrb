@@ -13,7 +13,7 @@ import {
   getRefElem,
   findDefs
 } from './utilities.js'
-import { BatchCommand, ChangeElementCommand } from './history.js'
+import { BatchCommand, ChangeElementCommand, InsertElementCommand } from './history.js'
 import { remapElement } from './coords.js'
 import {
   isIdentity,
@@ -28,6 +28,12 @@ import {
 import { mergeDeep } from '../common/util.js'
 
 let svgCanvas
+
+// Elements for which `getBBox` always returns a box.
+const ELEMENTS_WITH_BBOX = new Set([
+  'a', 'circle', 'ellipse', 'foreignObject', 'g', 'image', 'line', 'path',
+  'polygon', 'polyline', 'rect', 'svg', 'text', 'tspan', 'use'
+])
 
 const geometryLimitedElements = new Set([
   'circle',
@@ -268,12 +274,12 @@ export const updateClipPath = (attr, tx, ty, elem) => {
 }
 
 /**
- * Recalculates the dimensions and transformations of a selected element.
- * @function module:recalculate.recalculateDimensions
+ * Recalculates the dimensions and transformations of a selected element,
+ * without its clip path or mask (see recalculateDimensions).
  * @param {Element} selected - The DOM element to recalculate
  * @returns {Command|null} Undo command object with the resulting change, or null if no change
  */
-export const recalculateDimensions = selected => {
+const recalculateGeometry = selected => {
   if (!selected) return null
 
   if (selected.tagName === 'g' || selected.tagName === 'a') {
@@ -675,12 +681,9 @@ export const recalculateDimensions = selected => {
           batchCmd.addSubCommand(recalculatedDimensions)
         }
         svgCanvas.setStartTransform(oldStartTransform)
-
-        const sw = child.getAttribute('stroke-width')
-        if (child.getAttribute('stroke') !== 'none' && !Number.isNaN(Number(sw))) {
-          const avg = (Math.abs(em.a) + Math.abs(em.d)) / 2
-          child.setAttribute('stroke-width', Number(sw) * avg)
-        }
+        // Stroke widths are kept: the strokes of a technical drawing have
+        // standard widths (M9). A group returns earlier in this function, so
+        // this branch is not reached today.
       }
       tlist.clear()
     } else {
@@ -768,11 +771,16 @@ export const recalculateDimensions = selected => {
   } else {
     // Non-group elements
 
-    // Get the bounding box of the element
-    const box = getBBox(selected)
-
-    // Handle elements without a bounding box (e.g., <defs>, <metadata>)
-    if (!box && selected.tagName !== 'path') return null
+    // Get the bounding box of the element. It is only needed to find the
+    // rotation center, or to detect elements without a box (<defs>,
+    // <metadata>…). Reading it for every element of a large unrotated
+    // selection forced one layout per element, so it is read only then.
+    let box
+    if (getRotationAngle(selected) || !ELEMENTS_WITH_BBOX.has(selected.tagName)) {
+      box = getBBox(selected)
+      // Handle elements without a bounding box (e.g., <defs>, <metadata>)
+      if (!box && selected.tagName !== 'path') return null
+    }
 
     let m // Transformation matrix
 
@@ -804,6 +812,9 @@ export const recalculateDimensions = selected => {
     // Handle rotation transformations
     const angle = getRotationAngle(selected)
     if (angle) {
+      if (box === undefined) {
+        box = getBBox(selected)
+      }
       if (selected.localName === 'image') {
         // Use the center of the image as the rotation center
         const xAttr = convertToNum('x', selected.getAttribute('x') || '0')
@@ -1013,4 +1024,140 @@ export const recalculateDimensions = selected => {
   batchCmd.addSubCommand(new ChangeElementCommand(selected, initial))
 
   return batchCmd
+}
+
+// ---------------------------------------------------------------------------
+// Clip paths and masks follow their element (decision of 8 November).
+
+// Attributes referencing content drawn in the element's user space.
+const CUT_REFERENCES = [
+  ['clip-path', 'clipPath', 'clipPathUnits'],
+  ['mask', 'mask', 'maskContentUnits']
+]
+
+const cleanNumber = (n) => Number(n.toPrecision(12))
+
+/**
+ * Writes a matrix as a transform attribute value: a translation when it
+ * only moves.
+ * @param {SVGMatrix} m
+ * @returns {string}
+ */
+const transformValue = (m) => {
+  const [a, b, c, d, e, f] = [m.a, m.b, m.c, m.d, m.e, m.f].map(cleanNumber)
+  if (a === 1 && b === 0 && c === 0 && d === 1) { return `translate(${e} ${f})` }
+  return `matrix(${a} ${b} ${c} ${d} ${e} ${f})`
+}
+
+/**
+ * Puts a matrix in front of an element's transform, as one undoable change.
+ * @param {Element} elem
+ * @param {SVGMatrix} m
+ * @param {BatchCommand} batch
+ * @returns {void}
+ */
+const prependTransform = (elem, m, batch) => {
+  const old = elem.getAttribute('transform')
+  const tlist = getTransformList(elem)
+  const current = tlist?.numberOfItems ? transformListToTransform(tlist).matrix : null
+  elem.setAttribute('transform', transformValue(current ? matrixMultiply(m, current) : m))
+  batch.addSubCommand(new ChangeElementCommand(elem, { transform: old }))
+}
+
+/**
+ * Clip paths and masks of an element whose content is drawn in its user
+ * space, read before the element is recalculated. A group keeps its matrix,
+ * and a reference in bounding box units follows by itself.
+ * @param {Element} elem
+ * @returns {{refs: Array<{attr: string, ref: Element}>, before: SVGMatrix}|null}
+ */
+export const readCutReferences = (elem) => {
+  if (!elem?.getAttribute || elem.tagName === 'g' || elem.tagName === 'a') { return null }
+  const refs = []
+  CUT_REFERENCES.forEach(([attr, tag, units]) => {
+    const value = elem.getAttribute(attr)
+    if (!value) { return }
+    const ref = getRefElem(value)
+    if (!ref || ref.tagName !== tag || ref.getAttribute(units) === 'objectBoundingBox') { return }
+    refs.push({ attr, ref })
+  })
+  if (!refs.length) { return null }
+  const tlist = getTransformList(elem)
+  const before = tlist?.numberOfItems
+    ? transformListToTransform(tlist).matrix
+    : svgCanvas.getSvgRoot().createSVGMatrix()
+  return { refs, before }
+}
+
+/**
+ * Gives a clip path or a mask the change its element took: what the element's
+ * transform drew before, its new geometry and transform draw now, and the cut
+ * follows the same way. A reference shared with other elements is copied
+ * first, so that they keep theirs.
+ * @param {Element} elem
+ * @param {{refs: Array<{attr: string, ref: Element}>, before: SVGMatrix}} cut
+ * @param {module:history.Command|null} cmd - The element's own change
+ * @returns {module:history.Command|null}
+ */
+export const followCutReferences = (elem, cut, cmd) => {
+  const tlist = getTransformList(elem)
+  const after = tlist?.numberOfItems
+    ? transformListToTransform(tlist).matrix
+    : svgCanvas.getSvgRoot().createSVGMatrix()
+  const change = matrixMultiply(after.inverse(), cut.before)
+  if (isIdentity(change)) { return cmd }
+  const batch = new BatchCommand('Follow clip path')
+  if (cmd) { batch.addSubCommand(cmd) }
+  const content = svgCanvas.getSvgContent()
+  cut.refs.forEach(({ attr, ref }) => {
+    let target = ref
+    if (ref.id && content.querySelectorAll(`[${attr}="url(#${ref.id})"]`).length > 1) {
+      target = ref.cloneNode(true)
+      target.id = svgCanvas.getNextId()
+      target.querySelectorAll('[id]').forEach((child) => { child.id = svgCanvas.getNextId() })
+      findDefs().append(target)
+      batch.addSubCommand(new InsertElementCommand(target))
+      const old = elem.getAttribute(attr)
+      elem.setAttribute(attr, `url(#${target.id})`)
+      batch.addSubCommand(new ChangeElementCommand(elem, { [attr]: old }))
+    }
+    if (target.tagName === 'clipPath') {
+      prependTransform(target, change, batch)
+      return
+    }
+    // A mask has no transform of its own: its content takes the change, and
+    // a region given in user units is replaced by the box it now covers.
+    Array.from(target.children).forEach((child) => prependTransform(child, change, batch))
+    if (target.getAttribute('maskUnits') === 'userSpaceOnUse' && target.hasAttribute('width')) {
+      const x = convertToNum('x', target.getAttribute('x') || 0)
+      const y = convertToNum('y', target.getAttribute('y') || 0)
+      const w = convertToNum('width', target.getAttribute('width'))
+      const h = convertToNum('height', target.getAttribute('height'))
+      const corners = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].map(([px, py]) =>
+        transformPoint(px, py, change))
+      const xs = corners.map((p) => p.x)
+      const ys = corners.map((p) => p.y)
+      const old = ['x', 'y', 'width', 'height'].reduce((o, name) => ({ ...o, [name]: target.getAttribute(name) }), {})
+      target.setAttribute('x', cleanNumber(Math.min(...xs)))
+      target.setAttribute('y', cleanNumber(Math.min(...ys)))
+      target.setAttribute('width', cleanNumber(Math.max(...xs) - Math.min(...xs)))
+      target.setAttribute('height', cleanNumber(Math.max(...ys) - Math.min(...ys)))
+      batch.addSubCommand(new ChangeElementCommand(target, old))
+    }
+  })
+  return batch
+}
+
+/**
+ * Decides how to recalculate the dimensions of a selected element and
+ * performs all the necessary steps; a clip path or a mask of the element
+ * follows the change of its geometry.
+ * @function module:recalculate.recalculateDimensions
+ * @param {Element} selected - The DOM element to recalculate
+ * @returns {Command|null} Undo command object with the resulting change, or null if no change
+ */
+export const recalculateDimensions = selected => {
+  const cut = readCutReferences(selected)
+  const cmd = recalculateGeometry(selected)
+  return cut ? followCutReferences(selected, cut, cmd) : cmd
 }

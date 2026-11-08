@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" height="480">
+  <!-- Contrôle : fonctionnalités légitimes qui doivent rester intactes après import puis export. -->
+  <defs>
+    <linearGradient id="degrade">
+      <stop offset="0" stop-color="#f60"/>
+      <stop offset="1" stop-color="#36c"/>
+    </linearGradient>
+  </defs>
+  <style>.carte { fill: url(#degrade); stroke: #333; stroke-width: 3 } text { font-family: Arial }</style>
+  <g class="layer">
+    <title>Layer 1</title>
+    <a href="https://www.scorp-io.com/">
+      <rect class="carte" x="40" y="40" width="260" height="140" rx="12"/>
+    </a>
+    <circle cx="460" cy="110" r="70" fill="url(#degrade)"/>
+    <text x="60" y="260" style="font-size: 32px; fill: #123">Bonjour Scorp-io</text>
+    <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" x="40" y="300" width="80" height="80"/>
+  </g>
+</svg>

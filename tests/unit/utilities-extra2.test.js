@@ -50,6 +50,16 @@ describe('utilities extra coverage', () => {
     expect(rect.getAttribute('height')).toBe('5')
   })
 
+  it('assignAttributes removes an attribute given null instead of writing "null"', () => {
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    rect.setAttribute('stroke', '#000')
+    assignAttributes(rect, { fill: null, stroke: null, 'xlink:href': null, width: '10' })
+    expect(rect.hasAttribute('fill')).toBe(false)
+    expect(rect.hasAttribute('stroke')).toBe(false)
+    expect(rect.hasAttributeNS('http://www.w3.org/1999/xlink', 'href')).toBe(false)
+    expect(rect.getAttribute('width')).toBe('10')
+  })
+
   it('snaps to grid with unit conversion and handles href helpers', () => {
     const value = snapToGrid(2.3)
     expect(value).toBe(0)

@@ -801,6 +801,11 @@ export class SeColorPicker extends HTMLElement {
    */
   update (svgCanvas, selectedElement, apply) {
     const paint = this.paintBox.update(svgCanvas, selectedElement)
+    if (!paint && this.paintBox.mixed && this.paintBox.paint) {
+      // An element alone without paint: the stripes of a multi-selection go.
+      this.paintBox.setPaint(this.paintBox.paint)
+    }
+    this.classList.toggle('mixed', this.paintBox.mixed)
 
     // We check if the color picker popup is already open
     if (this.$color_picker.style.display === 'block') {
@@ -820,11 +825,24 @@ export class SeColorPicker extends HTMLElement {
   }
 
   /**
+   * Shows the paint the elements of a multi-selection share, or stripes
+   * when they differ.
+   * @param {PlainObject} svgCanvas
+   * @param {Element[]} elements
+   * @returns {void}
+   */
+  updateMany (svgCanvas, elements) {
+    this.paintBox.updateMany(svgCanvas, elements)
+    this.classList.toggle('mixed', this.paintBox.mixed)
+  }
+
+  /**
    * @param {PlainObject} paint
    * @returns {void}
    */
   setPaint (paint) {
     this.paintBox.setPaint(paint)
+    this.classList.remove('mixed')
   }
 
   /**

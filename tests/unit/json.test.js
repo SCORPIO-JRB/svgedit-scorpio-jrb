@@ -128,4 +128,36 @@ describe('json', () => {
     }).not.toThrow()
     expect(rect.getAttribute('x')).toBe('10')
   })
+
+  it('addSVGElementsFromJson() leaves out the style the last clicked shape did not have, never "null"', () => {
+    // A click on a shape copies getAttribute() into the current style: null
+    // for each attribute the shape does not have (question 10).
+    initJson({
+      getDOMDocument: () => document,
+      getSvgRoot: () => svgRoot,
+      getDrawing: () => ({ getCurrentLayer: () => layer }),
+      getCurrentGroup: () => null,
+      getCurShape: () => ({
+        fill: null,
+        stroke: '#000',
+        stroke_width: null,
+        stroke_dasharray: null,
+        stroke_linejoin: null,
+        stroke_linecap: null,
+        stroke_opacity: null,
+        fill_opacity: null,
+        opacity: 1
+      })
+    })
+    const rect = addSVGElementsFromJson({
+      element: 'rect',
+      curStyles: true,
+      attr: { id: 'drawn', x: 1, y: 2, width: 3, height: 4, 'stroke-dasharray': null }
+    })
+    const values = [...rect.attributes].map((attr) => attr.value)
+    expect(values).not.toContain('null')
+    expect(rect.hasAttribute('fill')).toBe(false)
+    expect(rect.hasAttribute('stroke-dasharray')).toBe(false)
+    expect(rect.getAttribute('stroke')).toBe('#000')
+  })
 })

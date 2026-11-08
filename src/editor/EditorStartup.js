@@ -236,7 +236,7 @@ class EditorStartup {
 
     // fired when user wants to move elements to another layer
     let promptMoveLayerOnce = false
-    $id('selLayerNames').addEventListener('change', (evt) => {
+    $id('selLayerNames').addEventListener('change', async (evt) => {
       const destLayer = evt.detail.value
       const confirmStr = this.i18next.t('notification.QmoveElemsToLayer').replace('%s', destLayer)
       /**
@@ -254,8 +254,9 @@ class EditorStartup {
         if (promptMoveLayerOnce) {
           moveToLayer(true)
         } else {
-          const ok = seConfirm(confirmStr)
-          if (!ok) {
+          // Wait for the answer: the move used to happen before the user chose.
+          const ok = await seConfirm(confirmStr)
+          if (ok === false || ok === 'Cancel') {
             return
           }
           moveToLayer(true)
@@ -334,6 +335,17 @@ class EditorStartup {
       return true
     })
 
+    // Holding Ctrl (Cmd on macOS) outlines the deepest object under the
+    // pointer, what a Ctrl+click takes (M6): refresh the outline when the key
+    // goes down or up without the pointer moving.
+    const refreshHover = (e) => {
+      if (!e.repeat && (e.key === 'Control' || e.key === 'Meta')) {
+        this.svgCanvas.refreshHover?.(e)
+      }
+    }
+    document.addEventListener('keydown', refreshHover)
+    document.addEventListener('keyup', refreshHover)
+
     // preventing browser's scaling with Ctrl+wheel
     this.$container.addEventListener('wheel', (e) => {
       if (e.ctrlKey) {
@@ -367,15 +379,19 @@ class EditorStartup {
       }
     })
 
-    // Add a new shortcut for zoom in/out : Alt + Wheels
+    // Zoom with Ctrl/Cmd + wheel and with a trackpad pinch (which browsers send
+    // as a wheel event with ctrlKey), anchored on the cursor and proportional
+    // to the gesture. Alt + wheel is kept as an alias. A plain wheel scrolls,
+    // and Shift + wheel scrolls horizontally (native behavior).
     this.workarea.addEventListener('wheel', (e) => {
-      if (e.altKey) {
-        e.preventDefault()
-        this.svgCanvas.setZoom(e.deltaY > 0 ? this.svgCanvas.getZoom() * 0.9 : this.svgCanvas.getZoom() * 1.1, true)
-        this.updateCanvas(true)
-        $id('zoom').value = (this.svgCanvas.getZoom() * 100).toFixed(1)
-      }
-    })
+      if (!(e.ctrlKey || e.metaKey || e.altKey)) { return }
+      e.preventDefault()
+      const unit = e.deltaMode === 1 ? 33 : (e.deltaMode === 2 ? 400 : 1)
+      const delta = e.deltaY * unit
+      // Small pixel deltas come from trackpads: give them more weight per unit.
+      const sensitivity = (e.deltaMode === 0 && Math.abs(e.deltaY) < 40) ? 0.01 : 0.002
+      this.zoomAt(this.svgCanvas.getZoom() * Math.exp(-delta * sensitivity), e.clientX, e.clientY)
+    }, { passive: false })
 
     document.addEventListener('keyup', (e) => {
       if (e.target.nodeName !== 'BODY') return
@@ -516,17 +532,24 @@ class EditorStartup {
         case 'delete':
           this.svgCanvas.deleteSelectedElements()
           break
+        // Through the system clipboard (M7)
         case 'cut':
-          this.cutSelected()
+          this.systemClipboard.copyFromMenu('cut')
           break
         case 'copy':
-          this.copySelected()
+          this.systemClipboard.copyFromMenu('copy')
           break
         case 'paste':
-          this.svgCanvas.pasteElements()
+          this.systemClipboard.pasteFromMenu()
           break
         case 'paste_in_place':
-          this.svgCanvas.pasteElements('in_place')
+          this.systemClipboard.pasteFromMenu({ type: 'in_place' })
+          break
+        case 'copy_properties':
+          this.copyProperties()
+          break
+        case 'paste_properties':
+          this.pasteProperties()
           break
         case 'group':
         case 'group_elements':
@@ -547,6 +570,15 @@ class EditorStartup {
         case 'move_back':
           this.svgCanvas.moveToBottomSelectedElement()
           break
+        case 'select_same_symbol':
+          this.svgCanvas.selectSimilar('symbol')
+          break
+        case 'select_same_fill':
+          this.svgCanvas.selectSimilar('fill')
+          break
+        case 'select_same_stroke':
+          this.svgCanvas.selectSimilar('stroke')
+          break
         default:
           if (hasCustomHandler(action)) {
             getCustomHandler(action).call()
@@ -557,8 +589,12 @@ class EditorStartup {
 
     // Select given tool
     this.ready(function () {
-      const preTool = $id(`tool_${this.configObj.curConfig.initTool}`)
-      const regTool = $id(this.configObj.curConfig.initTool)
+      // `initTool` can come from the URL: only accept the editor's own tool buttons,
+      // never an arbitrary element of the host page.
+      const toolsLeft = $id('tools_left')
+      const asTool = (el) => (el && toolsLeft?.contains(el) ? el : null)
+      const preTool = asTool($id(`tool_${this.configObj.curConfig.initTool}`))
+      const regTool = asTool($id(this.configObj.curConfig.initTool))
       const selectTool = $id('tool_select')
       const $editDialog = $id('se-edit-prefs')
 
@@ -606,7 +642,7 @@ class EditorStartup {
     }.bind(this))
 
     // zoom
-    $id('zoom').value = (this.svgCanvas.getZoom() * 100).toFixed(1)
+    $id('zoom').syncValue((this.svgCanvas.getZoom() * 100).toFixed(1))
     this.canvMenu.setAttribute('disableallmenu', true)
     this.canvMenu.setAttribute('enablemenuitems', '#delete,#cut,#copy')
 
@@ -750,6 +786,11 @@ class EditorStartup {
     const mode = this.svgCanvas.getMode()
 
     this.setCursorStyle(mode)
+    // Another mode turns the Scale tool off: its panel goes with it.
+    if (this.workarea.classList.contains('scale_tool') && !this.svgCanvas.isScaleTool?.()) {
+      this.workarea.classList.remove('scale_tool')
+      this.topPanel.updateContextPanel()
+    }
   }
 
   /**

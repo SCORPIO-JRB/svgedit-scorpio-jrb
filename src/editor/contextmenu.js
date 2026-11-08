@@ -75,14 +75,9 @@ export const getCustomHandler = function (handlerKey) {
 * @returns {void}
 */
 const injectExtendedContextMenuItemIntoDom = function (menuItem) {
-  if (!Object.keys(contextMenuExtensions).length) {
-    // all menuItems appear at the bottom of the menu in their own container.
-    // if this is the first extension menu we need to add the separator.
-    document.getElementById('cmenu_canvas').appendChild('<li class=\'separator\'>')
-  }
-  const shortcut = menuItem.shortcut || ''
-  document.getElementById('cmenu_canvas').appendChild(`
-    <li class='disabled'><a href='#${menuItem.id}'>${menuItem.label}<span class='shortcut'>${shortcut}</span></a></li>`)
+  // The canvas menu lives in the shadow DOM of <se-cmenu_canvas-dialog>: the
+  // former code appended a string to a missing #cmenu_canvas and threw.
+  document.getElementById('se-cmenu_canvas')?.addExtensionItem?.(menuItem)
 }
 
 /**
