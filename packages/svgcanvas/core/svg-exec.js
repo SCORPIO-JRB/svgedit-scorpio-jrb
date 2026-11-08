@@ -18,9 +18,7 @@ import {
   preventClickDefault,
   toXml,
   getStrokedBBoxDefaultVisible,
-  walkTree,
-  getBBox as utilsGetBBox,
-  hashCode
+  getBBox as utilsGetBBox
 } from './utilities.js'
 import {
   transformPoint,
@@ -33,7 +31,7 @@ import * as pathModule from './path.js'
 import { NS } from './namespaces.js'
 import * as draw from './draw.js'
 import { recalculateDimensions } from './recalculate.js'
-import { getParents, getClosest } from '../common/util.js'
+import { getClosest } from '../common/util.js'
 
 const {
   InsertElementCommand,
@@ -167,13 +165,19 @@ const svgToString = (elem, indent) => {
         }
         out.push(` viewBox="${vb}" xmlns="${NS.SVG}"`)
       } else {
-        if (unit !== 'px') {
-          res.w = convertUnit(res.w, unit) + unit
-          res.h = convertUnit(res.h, unit) + unit
+        // The size attributes the opened file declared: a drawing that scales
+        // with its viewBox keeps it (it was replaced by width and height).
+        const declared = svgCanvas.getDataStorage().get(elem, 'declaredSize')
+        let size = ''
+        if (!declared || declared.size) {
+          size = !unit || unit === 'px'
+            ? ` width="${res.w}" height="${res.h}"`
+            : ` width="${convertUnit(res.w, unit) + unit}" height="${convertUnit(res.h, unit) + unit}"`
         }
-        out.push(
-          ' width="' + res.w + '" height="' + res.h + '" xmlns="' + NS.SVG + '"'
-        )
+        if (declared?.viewBox) {
+          size += ` viewBox="0 0 ${res.w} ${res.h}"`
+        }
+        out.push(`${size} xmlns="${NS.SVG}"`)
       }
 
       const nsuris = {}
@@ -387,25 +391,38 @@ const svgToString = (elem, indent) => {
   return out.join('')
 } // end svgToString()
 
+const URL_REFERENCE = /url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/g
+// `#id` in a selector: the next brace opens a block, before any `;` or `}`
+// (a colour such as `fill: #abc;` is in a declaration).
+const SELECTOR_ID = /#([\w\u00A0-\uFFFF-]+)(?=[^{};]*\{)/g
+
 /**
- * Points the references of a subtree to an element that changed identifier:
- * `url(#old)` in any attribute, and `href="#old"`.
+ * Points the references of a subtree to elements that changed identifier:
+ * `url(#old)` in any attribute, `href="#old"`, the connectors of SVG-Edit
+ * and the `#old` selectors of the style sheets.
  * @param {Element} root
- * @param {string} oldId
- * @param {string} newId
+ * @param {Map<string, string>} ids - New identifier of each old one
  * @returns {void}
  */
-const remapReferences = (root, oldId, newId) => {
-  const escaped = oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const urlRef = new RegExp(`url\\(\\s*(['"]?)#${escaped}\\1\\s*\\)`, 'g')
+const remapReferences = (root, ids) => {
+  if (!ids.size) return
+  const remapUrl = (match, _quote, id) => ids.has(id) ? `url(#${ids.get(id)})` : match
   ;[root, ...root.querySelectorAll('*')].forEach((elem) => {
     for (const attr of [...elem.attributes]) {
+      const value = attr.value
+      let next = value
       if (attr.localName === 'href') {
-        if (attr.value === `#${oldId}`) attr.value = `#${newId}`
-      } else if (attr.value.includes('url(')) {
-        const value = attr.value.replace(urlRef, `url(#${newId})`)
-        if (value !== attr.value) attr.value = value
+        if (value.startsWith('#') && ids.has(value.slice(1))) next = `#${ids.get(value.slice(1))}`
+      } else if (attr.localName === 'connector' && attr.namespaceURI === NS.SE) {
+        next = value.split(/\s+/).map((id) => ids.get(id) || id).join(' ')
+      } else if (value.includes('url(')) {
+        next = value.replace(URL_REFERENCE, remapUrl)
       }
+      if (next !== value) attr.value = next
+    }
+    if (elem.localName === 'style') {
+      const text = elem.textContent.replace(SELECTOR_ID, (match, id) => ids.has(id) ? `#${ids.get(id)}` : match)
+      if (text !== elem.textContent) elem.textContent = text
     }
   })
 }
@@ -441,7 +458,7 @@ const renameDuplicateIds = (content) => {
       // Only the first occurrence of a symbol takes its references along:
       // a second one in the same symbol was already a duplicate there.
       if (scope && scope !== scopeOf(keeper) && elem === elems.find((other) => scopeOf(other) === scope)) {
-        remapReferences(scope, id, elem.id)
+        remapReferences(scope, new Map([[id, elem.id]]))
       }
     })
   })
@@ -586,6 +603,12 @@ const setSvgString = (xmlString, preventUndo) => {
 
     let percs = false
 
+    // Kept for the save, which writes back the size attributes declared
+    dataStorage.put(content, 'declaredSize', {
+      viewBox: content.hasAttribute('viewBox'),
+      size: content.hasAttribute('width') || content.hasAttribute('height') || !content.hasAttribute('viewBox')
+    })
+
     // determine proper size
     if (content.getAttribute('viewBox')) {
       const viBox = content.getAttribute('viewBox')
@@ -689,7 +712,9 @@ const setSvgString = (xmlString, preventUndo) => {
  * @function module:svgcanvas.SvgCanvas#importSvgString
  * @param {string} xmlString - The SVG as XML text.
  * @param {boolean} preserveDimension - A boolean to force to preserve initial dimension of the imported svg (force svgEdit don't apply a transformation on the imported svg)
- * @param {boolean} doNotUseExisting - Do not use existing imported elements.
+ * @param {boolean} [_doNotUseExisting] - No longer used: each import has its
+ *   own `<symbol>` (the same file imported again reused the first one, found
+ *   by a 32-bit hash of its text)
  * @fires module:svgcanvas.SvgCanvas#event:changed
  * @returns {null|Element} This function returns null if the import was unsuccessful, or the element otherwise.
  * @todo
@@ -699,109 +724,87 @@ const setSvgString = (xmlString, preventUndo) => {
  * arbitrary transform lists, but makes some assumptions about how the transform list
  * was obtained
  */
-const importSvgString = (xmlString, preserveDimension, doNotUseExisting) => {
+const importSvgString = (xmlString, preserveDimension, _doNotUseExisting) => {
   const dataStorage = svgCanvas.getDataStorage()
   let j
   let ts
   let useEl
   try {
-    // Get unique ID
-    const uid = hashCode(xmlString)
-    let useExisting = false
-    // Look for symbol and make sure symbol exists in image
-    if (svgCanvas.getImportIds(uid) && svgCanvas.getImportIds(uid).symbol) {
-      const parents = getParents(svgCanvas.getImportIds(uid).symbol, '#svgroot')
-      if (parents?.length) {
-        useExisting = true
-      }
-    }
-
     const batchCmd = new BatchCommand('Import Image')
-    let symbol
-    if (useExisting && !doNotUseExisting) {
-      symbol = svgCanvas.getImportIds(uid).symbol
-      ts = svgCanvas.getImportIds(uid).xform
-    } else {
-      // convert string into XML document
-      const newDoc = text2xml(xmlString)
+    // convert string into XML document
+    const newDoc = text2xml(xmlString)
 
-      svgCanvas.prepareSvg(newDoc)
+    svgCanvas.prepareSvg(newDoc)
 
-      // import new svg document into our document
-      // If DOM3 adoptNode() available, use it. Otherwise fall back to DOM2 importNode()
-      const svg = svgCanvas.getDOMDocument().adoptNode
-        ? svgCanvas.getDOMDocument().adoptNode(newDoc.documentElement)
-        : svgCanvas.getDOMDocument().importNode(newDoc.documentElement, true)
+    // import new svg document into our document
+    // If DOM3 adoptNode() available, use it. Otherwise fall back to DOM2 importNode()
+    const svg = svgCanvas.getDOMDocument().adoptNode
+      ? svgCanvas.getDOMDocument().adoptNode(newDoc.documentElement)
+      : svgCanvas.getDOMDocument().importNode(newDoc.documentElement, true)
 
-      svgCanvas.uniquifyElems(svg)
+    svgCanvas.uniquifyElems(svg)
 
-      const innerw = convertToNum('width', svg.getAttribute('width'))
-      const innerh = convertToNum('height', svg.getAttribute('height'))
-      const innervb = svg.getAttribute('viewBox')
-      // if no explicit viewbox, create one out of the width and height
-      const vb = innervb ? innervb.split(/[ ,]+/) : [0, 0, innerw, innerh]
-      for (j = 0; j < 4; ++j) {
-        vb[j] = Number(vb[j])
-      }
-
-      // TODO: properly handle preserveAspectRatio
-      const // canvasw = +svgContent.getAttribute('width'),
-        rawCanvash = Number(svgCanvas.getSvgContent().getAttribute('height'))
-      const canvash =
-        Number.isFinite(rawCanvash) && rawCanvash > 0
-          ? rawCanvash
-          : (Number(svgCanvas.getCurConfig().dimensions?.[1]) || 100)
-      // imported content should be 1/3 of the canvas on its largest dimension
-
-      const vbWidth = vb[2]
-      const vbHeight = vb[3]
-      const importW = Number.isFinite(vbWidth) && vbWidth > 0 ? vbWidth : (innerw > 0 ? innerw : 100)
-      const importH = Number.isFinite(vbHeight) && vbHeight > 0 ? vbHeight : (innerh > 0 ? innerh : 100)
-      const safeImportW = Number.isFinite(importW) && importW > 0 ? importW : 100
-      const safeImportH = Number.isFinite(importH) && importH > 0 ? importH : 100
-      ts =
-        safeImportH > safeImportW
-          ? 'scale(' + canvash / 3 / safeImportH + ')'
-          : 'scale(' + canvash / 3 / safeImportW + ')'
-
-      // Hack to make recalculateDimensions understand how to scale
-      ts = `translate(0) ${ts} translate(0)`
-
-      symbol = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'symbol')
-      const defs = findDefs()
-
-      if (isGecko()) {
-        // Move all gradients into root for Firefox, workaround for this bug:
-        // https://bugzilla.mozilla.org/show_bug.cgi?id=353575
-        // TODO: Make this properly undo-able.
-        const elements = svg.querySelectorAll(
-          'linearGradient, radialGradient, pattern'
-        )
-        Array.prototype.forEach.call(elements, el => {
-          defs.appendChild(el)
-        })
-      }
-
-      while (svg.firstChild) {
-        const first = svg.firstChild
-        symbol.append(first)
-      }
-      const attrs = svg.attributes
-      for (const attr of attrs) {
-        // Ok for `NamedNodeMap`
-        symbol.setAttribute(attr.nodeName, attr.value)
-      }
-      symbol.id = svgCanvas.getNextId()
-
-      // Store data
-      svgCanvas.setImportIds(uid, {
-        symbol,
-        xform: ts
-      })
-
-      findDefs().append(symbol)
-      batchCmd.addSubCommand(new InsertElementCommand(symbol))
+    const innerw = convertToNum('width', svg.getAttribute('width'))
+    const innerh = convertToNum('height', svg.getAttribute('height'))
+    const innervb = svg.getAttribute('viewBox')
+    // if no explicit viewbox, create one out of the width and height
+    const vb = innervb ? innervb.split(/[ ,]+/) : [0, 0, innerw, innerh]
+    for (j = 0; j < 4; ++j) {
+      vb[j] = Number(vb[j])
     }
+
+    // TODO: properly handle preserveAspectRatio
+    const // canvasw = +svgContent.getAttribute('width'),
+      rawCanvash = Number(svgCanvas.getSvgContent().getAttribute('height'))
+    const canvash =
+      Number.isFinite(rawCanvash) && rawCanvash > 0
+        ? rawCanvash
+        : (Number(svgCanvas.getCurConfig().dimensions?.[1]) || 100)
+    // imported content should be 1/3 of the canvas on its largest dimension
+
+    const vbWidth = vb[2]
+    const vbHeight = vb[3]
+    const importW = Number.isFinite(vbWidth) && vbWidth > 0 ? vbWidth : (innerw > 0 ? innerw : 100)
+    const importH = Number.isFinite(vbHeight) && vbHeight > 0 ? vbHeight : (innerh > 0 ? innerh : 100)
+    const safeImportW = Number.isFinite(importW) && importW > 0 ? importW : 100
+    const safeImportH = Number.isFinite(importH) && importH > 0 ? importH : 100
+    ts =
+      safeImportH > safeImportW
+        ? 'scale(' + canvash / 3 / safeImportH + ')'
+        : 'scale(' + canvash / 3 / safeImportW + ')'
+
+    // Hack to make recalculateDimensions understand how to scale
+    ts = `translate(0) ${ts} translate(0)`
+
+    const symbol = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'symbol')
+    const defs = findDefs()
+
+    if (isGecko()) {
+      // Move all gradients into root for Firefox, workaround for this bug:
+      // https://bugzilla.mozilla.org/show_bug.cgi?id=353575
+      // TODO: Make this properly undo-able.
+      const elements = svg.querySelectorAll(
+        'linearGradient, radialGradient, pattern'
+      )
+      Array.prototype.forEach.call(elements, el => {
+        defs.appendChild(el)
+      })
+    }
+
+    while (svg.firstChild) {
+      const first = svg.firstChild
+      symbol.append(first)
+    }
+    const attrs = svg.attributes
+    for (const attr of attrs) {
+      // Ok for `NamedNodeMap`
+      symbol.setAttribute(attr.nodeName, attr.value)
+    }
+    // In the drawing before any new identifier is chosen: the identifiers of
+    // the file are kept, so a new one must not take one of them.
+    defs.append(symbol)
+    if (!symbol.id) symbol.id = svgCanvas.getNextId()
+    batchCmd.addSubCommand(new InsertElementCommand(symbol))
 
     useEl = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'use')
     useEl.id = svgCanvas.getNextId()
@@ -1120,107 +1123,41 @@ const exportPDF = (
   })
 }
 /**
- * Ensure each element has a unique ID.
+ * Gives a new identifier to the elements of a subtree whose identifier is
+ * already used: in the page (the drawing or the editor itself), or earlier in
+ * the subtree. The references of the subtree follow; the other identifiers
+ * are kept, since a platform finds its texts and its instances by them.
+ * Every identifier was renewed before.
  * @function module:svgcanvas.SvgCanvas#uniquifyElems
- * @param {Element} g - The parent element of the tree to give unique IDs
+ * @param {Element} g - The root of the tree being added
  * @returns {void}
  */
 const uniquifyElemsMethod = g => {
-  const ids = {}
-  // TODO: Handle markers and connectors. These are not yet re-identified properly
-  // as their referring elements do not get remapped.
-  //
-  // <marker id='se_marker_end_svg_7'/>
-  // <polyline id='svg_7' se:connector='svg_1 svg_6' marker-end='url(#se_marker_end_svg_7)'/>
-  //
-  // Problem #1: if svg_1 gets renamed, we do not update the polyline's se:connector attribute
-  // Problem #2: if the polyline svg_7 gets renamed, we do not update the marker id nor the polyline's marker-end attribute
-  const refElems = [
-    'filter',
-    'linearGradient',
-    'pattern',
-    'radialGradient',
-    'symbol',
-    'textPath',
-    'use'
-  ]
-
-  walkTree(g, n => {
-    // if it's an element node
-    if (n.nodeType === 1) {
-      // and the element has an ID
-      if (n.id) {
-        // and we haven't tracked this ID yet
-        if (!(n.id in ids)) {
-          // add this id to our map
-          ids[n.id] = { elem: null, attrs: [], hrefs: [] }
-        }
-        ids[n.id].elem = n
-      }
-
-      // now search for all attributes on this element that might refer
-      // to other elements
-      svgCanvas.getrefAttrs().forEach(attr => {
-        const attrnode = n.getAttributeNode(attr)
-        if (attrnode) {
-          // the incoming file has been sanitized, so we should be able to safely just strip off the leading #
-          const url = svgCanvas.getUrlFromAttr(attrnode.value)
-          const refid = url ? url.substr(1) : null
-          if (refid) {
-            if (!(refid in ids)) {
-              // add this id to our map
-              ids[refid] = { elem: null, attrs: [], hrefs: [] }
-            }
-            ids[refid].attrs.push(attrnode)
-          }
-        }
-      })
-
-      // check xlink:href now
-      const href = svgCanvas.getHref(n)
-      // TODO: what if an <image> or <a> element refers to an element internally?
-      if (href && refElems.includes(n.nodeName)) {
-        const refid = href.substr(1)
-        if (refid) {
-          if (!(refid in ids)) {
-            // add this id to our map
-            ids[refid] = { elem: null, attrs: [], hrefs: [] }
-          }
-          ids[refid].hrefs.push(n)
-        }
-      }
-    }
+  const inside = [g, ...g.querySelectorAll('[id]')].filter((elem) => elem.id)
+  const taken = new Set()
+  svgCanvas.getDOMDocument().querySelectorAll('[id]').forEach((elem) => {
+    if (!g.contains(elem)) taken.add(elem.id)
   })
-
-  // in ids, we now have a map of ids, elements and attributes, let's re-identify
-  for (const oldid in ids) {
-    if (!oldid) {
-      continue
+  const own = new Set(inside.map((elem) => elem.id))
+  const seen = new Set()
+  const renamed = new Map()
+  inside.forEach((elem) => {
+    const { id } = elem
+    if (!taken.has(id) && !seen.has(id)) {
+      seen.add(id)
+      return
     }
-    const { elem } = ids[oldid]
-    if (elem) {
-      const newid = svgCanvas.getNextId()
-
-      // assign element its new id
-      elem.id = newid
-
-      // remap all url() attributes
-      const { attrs } = ids[oldid]
-      let j = attrs.length
-      while (j--) {
-        const attr = attrs[j]
-        attr.ownerElement.setAttribute(attr.name, `url(#${newid})`)
-      }
-
-      // remap all href attributes
-      const hreffers = ids[oldid].hrefs
-      let k = hreffers.length
-      while (k--) {
-        const hreffer = hreffers[k]
-        svgCanvas.setHref(hreffer, '#' + newid)
-      }
-    }
-  }
+    let newId
+    do {
+      newId = svgCanvas.getNextId()
+    } while (taken.has(newId) || own.has(newId) || seen.has(newId))
+    // A reference of the subtree means its first element of that identifier
+    if (!seen.has(id)) renamed.set(id, newId)
+    seen.add(id)
+    seen.add(newId)
+    elem.id = newId
+  })
+  remapReferences(g, renamed)
 }
 
 /**

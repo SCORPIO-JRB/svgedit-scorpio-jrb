@@ -308,7 +308,8 @@ const sortContent = (root) => {
  * Pastes SVG text from outside the editor, as one undo step, and selects the
  * pasted objects. The text goes through the import filter of an opened file:
  * scripts, event handlers, external references and unsafe CSS are removed.
- * Every identifier is renewed, so nothing in the drawing is replaced.
+ * The identifiers already used in the drawing are renewed, so nothing in the
+ * drawing is replaced; the others are kept.
  * @function module:svgcanvas.SvgCanvas#pasteSvgString
  * @param {string} text
  * @param {'in_place'|'point'|void} type - As for pasteElements

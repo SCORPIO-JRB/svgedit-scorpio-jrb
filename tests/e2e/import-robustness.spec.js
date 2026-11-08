@@ -167,6 +167,48 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(result).toEqual({ differ: 0, measures: 30, rootClass: 'synoptique' })
   })
 
+  test('identifiers that are free in the drawing are kept', async ({ page }) => {
+    const useId = await importFile(page, 'ids.svg', `<svg xmlns="${NS}" width="10" height="10"><rect id="pompe_1" width="5" height="5"/></svg>`)
+    const kept = await page.evaluate((useId) => {
+      const canvas = window.svgEditor.svgCanvas
+      const symbol = document.getElementById(canvas.getHref(document.getElementById(useId)).slice(1))
+      return Boolean(symbol.querySelector('#pompe_1'))
+    }, useId)
+    expect(kept).toBe(true)
+  })
+
+  test('an imported synoptic keeps the identifiers of its live values, and its hidden measures', async ({ page }) => {
+    const useId = await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
+    const result = await page.evaluate((useId) => {
+      const canvas = window.svgEditor.svgCanvas
+      const symbol = document.getElementById(canvas.getHref(document.getElementById(useId)).slice(1))
+      const detail = symbol.querySelector('#mesures-detail')
+      return {
+        measures: symbol.querySelectorAll('[id^="mesure-"], [id^="synthese-"], [id^="etat-"]').length,
+        detail: detail && getComputedStyle(detail).display
+      }
+    }, useId)
+    expect(result).toEqual({ measures: 30, detail: 'none' })
+  })
+
+  test('a synoptic imported twice: the first copy keeps its identifiers, the hidden measures stay hidden in both', async ({ page }) => {
+    const first = await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
+    const second = await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
+    const result = await page.evaluate((uses) => {
+      const canvas = window.svgEditor.svgCanvas
+      const symbols = uses.map((id) => document.getElementById(canvas.getHref(document.getElementById(id)).slice(1)))
+      const ids = [...document.querySelectorAll('#svgcontent [id]')].map((elem) => elem.id)
+      return {
+        twoSymbols: symbols[0] !== symbols[1],
+        firstKeeps: Boolean(symbols[0].querySelector('#mesure-depart-constant')),
+        // the detail group: parent of the measures of the valves
+        hidden: symbols.map((symbol) => getComputedStyle(symbol.querySelector('[class~="mesure-detail"]').parentNode).display),
+        duplicates: ids.length - new Set(ids).size
+      }
+    }, [first, second])
+    expect(result).toEqual({ twoSymbols: true, firstKeeps: true, hidden: ['none', 'none'], duplicates: 0 })
+  })
+
   // Defects fixed by the next lots of the plan
 
   test('a stylesheet in the imported file does not repaint the drawing (lot 4)', async ({ page }) => {
@@ -204,32 +246,6 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(result).toEqual({ shown: 756, ungrouped: 756 })
   })
 
-  test('identifiers that are free in the drawing are kept (lot 3)', async ({ page }) => {
-    test.fail(true, 'Every imported identifier is renamed')
-    const useId = await importFile(page, 'ids.svg', `<svg xmlns="${NS}" width="10" height="10"><rect id="pompe_1" width="5" height="5"/></svg>`)
-    const kept = await page.evaluate((useId) => {
-      const canvas = window.svgEditor.svgCanvas
-      const symbol = document.getElementById(canvas.getHref(document.getElementById(useId)).slice(1))
-      return Boolean(symbol.querySelector('#pompe_1'))
-    }, useId)
-    expect(kept).toBe(true)
-  })
-
-  test('an imported synoptic keeps the identifiers of its live values, and its hidden measures (lot 3)', async ({ page }) => {
-    test.fail(true, 'Every identifier is renamed: the platform loses its texts, and the rule hiding #mesures-detail no longer applies')
-    const useId = await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
-    const result = await page.evaluate((useId) => {
-      const canvas = window.svgEditor.svgCanvas
-      const symbol = document.getElementById(canvas.getHref(document.getElementById(useId)).slice(1))
-      const detail = symbol.querySelector('#mesures-detail')
-      return {
-        measures: symbol.querySelectorAll('[id^="mesure-"], [id^="synthese-"], [id^="etat-"]').length,
-        detail: detail && getComputedStyle(detail).display
-      }
-    }, useId)
-    expect(result).toEqual({ measures: 30, detail: 'none' })
-  })
-
   test('a file that declares only a viewBox is imported at that size (lot 4)', async ({ page }) => {
     test.fail(true, 'The import is scaled for the canvas, then shrunk again: 53 px wide instead of 1920')
     const useId = await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
@@ -250,14 +266,14 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(await snapshot(page, ['exist', 'exist_text'])).toEqual(before)
   })
 
-  test('a synoptic keeps the attributes of its root: viewBox, id, role (lot 5)', async ({ page }) => {
-    test.fail(true, 'The root is saved with width and height only, without its id and its accessibility attributes')
+  test('a synoptic keeps the id and the accessibility attributes of its root (lot 5)', async ({ page }) => {
+    test.fail(true, 'The root is saved without its id, role and aria-labelledby')
     await openDrawing(page, fixture('synoptique-chaufferie.svg'))
     const root = await page.evaluate(() => {
       const doc = new DOMParser().parseFromString(window.svgEditor.svgCanvas.getSvgString(), 'image/svg+xml')
-      return ['viewBox', 'id', 'role', 'aria-labelledby'].map((name) => doc.documentElement.getAttribute(name))
+      return ['id', 'role', 'aria-labelledby'].map((name) => doc.documentElement.getAttribute(name))
     })
-    expect(root).toEqual(['0 0 1920 1080', 'synoptique-chaufferie', 'img', 'titre-synoptique desc-synoptique'])
+    expect(root).toEqual(['synoptique-chaufferie', 'img', 'titre-synoptique desc-synoptique'])
   })
 
   test('SVG animations are kept (lot 5)', async ({ page }) => {
