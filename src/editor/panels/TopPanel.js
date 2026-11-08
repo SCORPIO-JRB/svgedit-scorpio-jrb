@@ -897,24 +897,15 @@ class TopPanel {
   }
 
   /**
-   * Spacing typed for Distribute and Tidy up, in the drawing's units.
+   * Spacing typed for Distribute, in the drawing's units.
    * @returns {number|null} Null when the field is empty or not a number:
-   *   Distribute then spaces the objects evenly, Tidy up uses their most
-   *   frequent gap.
+   *   Distribute then spaces the objects evenly.
    */
   alignSpacing () {
     const raw = String($id('tool_align_spacing')?.value ?? '').trim().replace(',', '.')
     if (raw === '') { return null }
     const n = Number(raw)
     return Number.isFinite(n) ? this.fromField(n) : null
-  }
-
-  /**
-   * Tidies the selection up into a row, a column or a grid.
-   * @returns {void}
-   */
-  clickTidyUp () {
-    this.editor.svgCanvas.tidyUpSelectedElements({ spacing: this.alignSpacing() })
   }
 
   /**
@@ -1497,7 +1488,6 @@ class TopPanel {
     })
     anchors.addEventListener('keydown', this.keyScaleAnchor.bind(this))
     this.setScaleAnchor('nw')
-    $click($id('tool_tidy_up'), this.clickTidyUp.bind(this))
     ;['selected_x', 'selected_y'].forEach(id =>
       $id(id).addEventListener('change', this.changeSelectionPosition.bind(this))
     )

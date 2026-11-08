@@ -1,11 +1,12 @@
 # Refonte de la sélection — lot M9 « Échelle et rangement »
 
-Branche `refonte-selection-m9`, partie de `refonte-selection-m7`. Ce lot apporte trois nouveautés :
+Branche `refonte-selection-m9`, partie de `refonte-selection-m7`. Ce lot apporte trois changements :
 
 - **L'outil Échelle (K).** La sélection grandit ou rétrécit en gardant ses proportions. L'épaisseur des traits, les pointillés, la taille du texte et le flou suivent la géométrie.
-- **Ranger.** Une sélection disposée à peu près en ligne, en colonne ou en grille devient régulière.
-- **L'espacement imposé.** Un champ « écart » fixe l'espace entre les objets pour la distribution et pour Ranger.
+- **L'espacement imposé.** Un champ « écart » fixe l'espace entre les objets d'une distribution.
 - **Le dégroupage garde les traits.** Les épaisseurs ne changent pas, et un trait, un remplissage ou une police portés par le groupe passent à ses enfants au lieu de disparaître.
+
+La commande « Ranger » prévue au plan a été écrite puis retirée le 8 novembre : pour une rangée ou une colonne, « Aligner » puis « Distribuer » avec un écart font déjà le travail.
 
 Pour les autres gestes existants, la sortie SVG reste identique à celle de M7 à l'octet près.
 
@@ -54,31 +55,14 @@ Avec l'outil actif et une sélection, le panneau du haut remplace les champs L e
 
 L'ancre se choisit à la souris, ou au clavier avec les flèches une fois le focus dessus. Chaque point a un nom lu par les lecteurs d'écran (« En haut à gauche »…). Le calcul dans les champs (`*2`, `/3`, `+10`) fonctionne comme dans les autres champs.
 
-### Ranger
-
-Un bouton « Ranger » s'ajoute aux boutons d'alignement d'une multi-sélection, après la distribution.
-
-| Disposition reconnue | Résultat |
-| --- | --- |
-| Une ligne : tous les objets se chevauchent en hauteur | rangée alignée sur le haut, objets dans leur ordre de gauche à droite |
-| Une colonne | colonne alignée sur la gauche, objets dans leur ordre de haut en bas |
-| Une grille | chaque objet prend le coin haut gauche de sa case ; une colonne a la largeur de son objet le plus large, une ligne la hauteur de son objet le plus haut ; une case vide reste vide |
-
-Règles communes :
-- **L'écart** est l'écart le plus fréquent entre voisins, compté à l'unité près. Quand aucun écart ne se répète, c'est l'écart médian. Il n'est jamais négatif : les objets rangés ne se chevauchent pas.
-- **Le coin haut gauche** de la sélection reste en place.
-- **Une sélection déjà rangée** ne bouge plus.
-- **Une seule étape d'annulation.**
-- **Lignes et colonnes.** Un objet rejoint une ligne quand il chevauche tous les objets de cette ligne. Ainsi, un objet très haut ne fusionne pas deux lignes.
-
 ### L'espacement imposé
 
-Un champ « écart » suit le bouton Ranger.
+Un champ « écart » suit les boutons de distribution.
 
-| Champ | Distribuer | Ranger |
-| --- | --- | --- |
-| vide | espaces égaux entre les objets extrêmes, comme avant | écart le plus fréquent |
-| une valeur | le premier objet reste en place, chaque suivant le suit à cette distance, quelle que soit la référence choisie | cette valeur entre lignes et entre colonnes |
+| Champ | Distribuer |
+| --- | --- |
+| vide | espaces égaux entre les objets extrêmes, comme avant |
+| une valeur | le premier objet reste en place, chaque suivant le suit à cette distance, quelle que soit la référence choisie |
 
 La valeur est dans l'unité du document.
 
@@ -127,7 +111,6 @@ Le redimensionnement par les poignées, outil Échelle éteint, garde exactement
 | --- | --- |
 | `setScaleTool(on)`, `isScaleTool()` | Active ou lit l'outil Échelle ; tout autre mode que `select` l'éteint |
 | `scaleSelectionBy(k, { anchor, x, y })` | Met la sélection à l'échelle k, traits compris, autour d'un point de son cadre (`nw`, `n`, `ne`, `w`, `c`, `e`, `sw`, `s`, `se` ; `nw` par défaut) ou d'un point donné ; une étape d'annulation |
-| `tidyUpSelectedElements({ spacing })` | Ranger ; renvoie `null` si rien ne bouge |
 
 **Méthodes modifiées :**
 - **`alignSelectedElements(type, relativeTo, { spacing })`.** Un troisième argument facultatif impose l'écart d'une distribution. Sans lui, rien ne change.
@@ -136,29 +119,27 @@ Le redimensionnement par les poignées, outil Échelle éteint, garde exactement
 
 **Modules du canevas :**
 - `core/scale-tool.js`, nouveau : l'état de l'outil, la géométrie du geste (`boxPoint`, `anchorOfGrip`, `dragFactor`) et la règle des traits (`readStrokeLengths`, `scaleStrokeLengths`, `scaleNumbers`) ;
-- `core/tidy-up.js`, nouveau : `bandsOf`, `usualGap` et `tidyUpLayout`, des fonctions pures sans accès au DOM ;
 - `core/multi-transform.js` : le geste de l'outil Échelle (`beginGroupScale`, `updateGroupScale`, `commitGroupScale`, `isGroupScaling`). Échap l'annule par `cancelGroupGesture`, comme les autres gestes du cadre commun.
 
 **Éditeur :**
 - bouton `tool_scale` (touche K) dans le panneau de gauche ;
 - `leftPanel.clickScale()` et `leftPanel.chooseSelect()`. `clickSelect()`, appelé par l'éditeur après chaque changement, garde maintenant l'outil Échelle actif ; seul le bouton de sélection ou la touche V l'éteint ;
 - panneau `scale_panel` : champs `scale_factor`, `scale_w`, `scale_h` et ancre `scale_anchor` ;
-- bouton `tool_tidy_up` et champ `tool_align_spacing` ;
+- champ `tool_align_spacing` ;
 - la zone de travail porte la classe `scale_tool` tant que l'outil est actif.
 
-**Traductions.** Dix-huit clés `tools.*` s'ajoutent : `mode_scale`, `scale_*`, `anchor_*`, `tidy_up`, `spacing` et `spacing_label`. Elles sont en français dans `lang.fr.js` et en anglais dans les autres langues.
+**Traductions.** Dix-sept clés `tools.*` s'ajoutent : `mode_scale`, `scale_*`, `anchor_*`, `spacing` et `spacing_label`. Elles sont en français dans `lang.fr.js` et en anglais dans les autres langues.
 
-**Icônes.** `scale.svg` et `tidy_up.svg`, dans le style des icônes existantes.
+**Icône.** `scale.svg`, dans le style des icônes existantes.
 
 ### Performances
 
-`npm run bench` mesure trois nouvelles interactions, avec des budgets à 2 000 objets :
+`npm run bench` mesure deux nouvelles interactions, avec des budgets à 2 000 objets :
 
 | Interaction | 200 objets | 2 000 objets | Budget à 2 000 |
 | --- | --- | --- | --- |
 | Outil Échelle, un mouvement | 14 ms | 57 à 77 ms | 100 ms |
-| Relâchement de l'outil Échelle | 16 ms | 97 à 140 ms | 300 ms |
-| Ranger, tout sélectionné | 17 ms | 106 à 114 ms | 200 ms |
+| Relâchement de l'outil Échelle | 16 ms | 97 à 158 ms | 300 ms |
 
 Les autres mesures restent dans les budgets, aux écarts de mesure près. Une première passe a dépassé deux budgets d'une interaction que M9 ne touche pas (glisser, annuler) ; les deux passes suivantes les respectaient.
 
@@ -182,9 +163,8 @@ Vérifications manuelles conseillées, dans l'éditeur ouvert sur `http://localh
 3. **Côté et centre.** Avec K, tirez la poignée droite : le milieu du côté gauche reste en place. Avec Alt, c'est le centre.
 4. **Panneau.** Avec K et une sélection, tapez 2 dans le champ × : la sélection double depuis son coin haut gauche. Tapez 1 : elle revient. Cliquez le point central de l'ancre, puis tapez une largeur : le centre reste en place.
 5. **Texte, groupe, symbole.** Avec K, agrandissez un texte, un groupe et une pompe (`use`) : tout grossit, rien ne se déforme.
-6. **Ranger.** Disposez quatre rectangles en carré approximatif, sélectionnez-les, cliquez Ranger : ils forment une grille régulière.
-7. **Espacement.** Tapez 10 dans le champ « écart », puis cliquez « Distribuer horizontalement » : 10 unités séparent chaque objet du suivant. Videz le champ pour revenir aux espaces égaux.
-8. **Dégroupage.** Dans la source (Ctrl+U), mettez `stroke="#000" stroke-width="4"` sur un groupe dont les objets n'ont pas de trait. Dégroupez (Ctrl+Maj+G) : chaque objet garde un trait noir de 4.
+6. **Espacement.** Tapez 10 dans le champ « écart », puis cliquez « Distribuer horizontalement » : 10 unités séparent chaque objet du suivant. Videz le champ pour revenir aux espaces égaux.
+7. **Dégroupage.** Dans la source (Ctrl+U), mettez `stroke="#000" stroke-width="4"` sur un groupe dont les objets n'ont pas de trait. Dégroupez (Ctrl+Maj+G) : chaque objet garde un trait noir de 4.
 
 ### Comparer la sortie avec une autre version
 
@@ -203,7 +183,7 @@ node tests/output/compare-output.mjs --ref=http://127.0.0.1:8010 --new=http://12
 
 ## 4. Tests ajoutés
 
-**`tests/unit/scale-m9.test.js` (20 tests) :**
+**`tests/unit/scale-m9.test.js` (13 tests) :**
 - **géométrie de l'outil :** les neuf points de l'ancre, le point fixe de chaque poignée, le facteur mesuré sur la ligne du point fixe à la poignée (1 au départ, plancher à 0,01), la multiplication des valeurs (unités, listes, mots-clés) ;
 - **sur le canevas :**
   - outil éteint par un autre mode ;
@@ -214,35 +194,31 @@ node tests/output/compare-output.mjs --ref=http://127.0.0.1:8010 --new=http://12
   - flou et sa zone, annulation comprise ;
   - ancres ;
   - facteurs refusés ;
-  - espacement imposé à une distribution ;
-  - grille approximative rangée en une étape, puis immobile ;
-- **Ranger, fonctions pures :** lignes qu'un objet haut ne fusionne pas, écart le plus fréquent ou médian, rangée, colonne avec écart imposé, grille de largeurs et hauteurs différentes, case vide, objets d'une même ligne dans une même colonne.
+  - espacement imposé à une distribution.
 
-**`tests/e2e/scale-m9.spec.js` (14 tests, sans erreur dans la page) :**
+**`tests/e2e/scale-m9.spec.js` (13 tests, sans erreur dans la page) :**
 - **outil :** K, V et un outil de dessin ;
 - **gestes :** objet seul, poignée de côté, multi-sélection (proportions, traits, pointillés, positions relatives, aperçu identique au résultat, une étape, annuler et rétablir à l'octet près), Alt, Échap ;
 - **types :** texte, groupe et `use` ; rectangle tourné ;
 - **panneau :** remplacement de L et H, facteur compté depuis la sélection, largeur autour d'une ancre choisie, ancre au clavier ;
-- **Ranger et espacement :** grille approximative en une étape d'annulation, écart imposé à Ranger et à la distribution, champ vide.
+- **Espacement :** champ vide (espaces égaux), puis écart imposé à la distribution.
 - **Dégroupage :** épaisseurs gardées et propriétés du groupe transmises, valeurs propres des enfants gardées, une étape d'annulation ; groupe à matrice.
 
 **`tests/output/`** : deux scénarios de déplacement et un de dégroupage.
 
-**`tests/perf/`** : trois mesures et leurs budgets.
+**`tests/perf/`** : deux mesures et leurs budgets.
 
 Bilan :
 - lint propre ;
-- 755 tests unitaires verts (735 + 20) ;
-- 261 tests E2E verts (247 + 14) ;
+- 748 tests unitaires verts (735 + 13) ;
+- 260 tests E2E verts (247 + 13) ;
 - sortie identique à M7, sauf le dégroupage voulu.
 
 ## 5. Limites connues et décisions à prendre
 
 - **SVG collé en millimètres (M7).** Il arrive dans un groupe mis à l'échelle (×3,78). Une fois dégroupé, ses traits gardent leur valeur et paraissent donc 3,78 fois plus fins qu'avant le dégroupage. C'est la conséquence de la décision du 8 novembre.
-- **Alignement dans une case de Ranger : à confirmer.** Ranger aligne chaque objet sur le haut et la gauche de sa case. Un centrage serait possible si les synoptiques le demandent ; le bouton « Centrer » reste disponible ensuite.
 - **Ce que l'outil Échelle laisse de côté :**
   - les filtres autres que le flou de l'éditeur ;
   - les marqueurs en `markerUnits="userSpaceOnUse"` (ceux de l'éditeur suivent l'épaisseur du trait, donc l'échelle) ;
   - les styles par classe d'une feuille `<style>`.
-- **Écart d'une grille approximative.** Avec peu d'objets, aucun écart ne se répète : Ranger prend l'écart médian. Deux colonnes séparées de 12 et de 9 donnent 10,5. Le champ « écart » impose une valeur ronde.
-- **Raccourcis d'alignement, de distribution et de rangement :** toujours reportés, comme décidé le 7 novembre.
+- **Raccourcis d'alignement et de distribution :** toujours reportés, comme décidé le 7 novembre.

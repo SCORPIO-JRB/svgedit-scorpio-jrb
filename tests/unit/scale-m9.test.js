@@ -6,7 +6,6 @@ import {
   scaleNumbers,
   MIN_SCALE
 } from '../../packages/svgcanvas/core/scale-tool.js'
-import { bandsOf, tidyUpLayout, usualGap } from '../../packages/svgcanvas/core/tidy-up.js'
 
 // M9: the Scale tool.
 describe('Scale tool geometry (M9)', () => {
@@ -176,80 +175,5 @@ describe('Scale tool on the canvas (M9)', () => {
     svgCanvas.selectOnly([byId('c'), byId('a'), byId('b')])
     svgCanvas.alignSelectedElements('distrib_horiz', 'page', { spacing: 5 })
     expect(['a', 'b', 'c'].map((id) => byId(id).getAttribute('x'))).toEqual(['0', '15', '40'])
-  })
-
-  it('tidies a rough grid up, as one undo step', () => {
-    load('<rect id="a" x="0" y="0" width="10" height="10"/>' +
-      '<rect id="b" x="22" y="3" width="10" height="10"/>' +
-      '<rect id="c" x="1" y="20" width="10" height="10"/>' +
-      '<rect id="d" x="20" y="21" width="10" height="10"/>')
-    svgCanvas.selectOnly(['a', 'b', 'c', 'd'].map(byId))
-    const before = svgCanvas.undoMgr.getUndoStackSize()
-    svgCanvas.tidyUpSelectedElements()
-    const at = (id) => ['x', 'y'].map((n) => Number(byId(id).getAttribute(n)))
-    // Gaps 12 and 9 across, 10 and 8 down: their medians.
-    expect(['a', 'b', 'c', 'd'].map(at)).toEqual([[0, 0], [20.5, 0], [0, 19], [20.5, 19]])
-    expect(svgCanvas.undoMgr.getUndoStackSize()).toBe(before + 1)
-    // Tidied, the selection no longer moves.
-    expect(svgCanvas.tidyUpSelectedElements()).toBeNull()
-    svgCanvas.undoMgr.undo()
-    expect(at('b')).toEqual([22, 3])
-  })
-})
-
-describe('Tidy up layout (M9)', () => {
-  const box = (x, y, width = 10, height = 10) => ({ x, y, width, height })
-
-  it('groups boxes into rows without merging them through a tall box', () => {
-    const boxes = [box(0, 0, 10, 20), box(20, 0, 10, 50), box(40, 0, 10, 10), box(0, 40, 10, 20)]
-    expect(bandsOf(boxes, 'y')).toEqual([[0, 1, 2], [3]])
-  })
-
-  it('takes the most frequent gap, or the median when none repeats', () => {
-    expect(usualGap([10, 10, 30, 4])).toBe(10)
-    expect(usualGap([10, 10.2, 30])).toBeCloseTo(10.1, 9)
-    expect(usualGap([10.5, 10.5])).toBe(10.5)
-    expect(usualGap([4, 30, 12])).toBe(12)
-    expect(usualGap([-5, -5, 3])).toBe(0)
-    expect(usualGap([])).toBe(0)
-  })
-
-  it('lines a row up on its top with the usual gap', () => {
-    const boxes = [box(0, 2), box(20, 0), box(41, 5), box(60, 1, 10, 20)]
-    const { layout, positions } = tidyUpLayout(boxes)
-    expect(layout).toBe('row')
-    expect(positions).toEqual([{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 40, y: 0 }, { x: 60, y: 0 }])
-  })
-
-  it('stacks a column on its left with an imposed spacing', () => {
-    const boxes = [box(3, 50), box(0, 0), box(1, 22)]
-    const { layout, positions } = tidyUpLayout(boxes, { spacing: 4 })
-    expect(layout).toBe('column')
-    expect(positions).toEqual([{ x: 0, y: 28 }, { x: 0, y: 0 }, { x: 0, y: 14 }])
-  })
-
-  it('builds a grid from the widest box of each column and the tallest of each row', () => {
-    const boxes = [
-      box(0, 0, 30, 10), box(40, 2), box(60, 1),
-      box(1, 30, 10, 20), box(40, 32), box(61, 31)
-    ]
-    const { layout, positions } = tidyUpLayout(boxes)
-    expect(layout).toBe('grid')
-    // Usual gaps: 10 across (10, 10, 9, 11), 20 down (20, 20, 20).
-    expect(positions).toEqual([
-      { x: 0, y: 0 }, { x: 40, y: 0 }, { x: 60, y: 0 },
-      { x: 0, y: 30 }, { x: 40, y: 30 }, { x: 60, y: 30 }
-    ])
-  })
-
-  it('keeps a hole of a grid, and orders a row whose objects share a column', () => {
-    const holes = tidyUpLayout([box(0, 0), box(40, 1), box(39, 22)])
-    expect(holes.positions).toEqual([{ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 40, y: 21 }])
-    // A and B share the first column: the columns follow the row's order.
-    const shared = tidyUpLayout([box(0, 0, 30, 10), box(5, 0), box(50, 0), box(0, 30), box(50, 30)])
-    expect(shared.layout).toBe('grid')
-    expect(shared.positions).toEqual([
-      { x: 0, y: 0 }, { x: 50, y: 0 }, { x: 80, y: 0 }, { x: 0, y: 30 }, { x: 50, y: 30 }
-    ])
   })
 })

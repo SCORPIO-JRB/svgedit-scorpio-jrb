@@ -35,7 +35,6 @@ import { recalculateDimensions, withStartTransform } from './recalculate.js'
 import { isGecko } from '../common/browser.js'
 import { getParents } from '../common/util.js'
 import { createClipboardPayload } from './clipboard.js'
-import { tidyUpLayout } from './tidy-up.js'
 
 const {
   MoveElementCommand,
@@ -67,7 +66,6 @@ export const init = canvas => {
   svgCanvas.getDuplicateOffset = getDuplicateOffset
   svgCanvas.rememberDuplicate = rememberDuplicate
   svgCanvas.alignSelectedElements = alignSelectedElements // Aligns selected elements.
-  svgCanvas.tidyUpSelectedElements = tidyUpSelectedElements
   svgCanvas.updateCanvas = updateCanvas // Updates the editor canvas width/height/position after a zoom has occurred.
   svgCanvas.cycleElement = cycleElement // Select the next/previous element within the current layer.
   svgCanvas.deleteSelectedElements = deleteSelectedElements // Removes all selected elements from the DOM and adds the change to the history
@@ -586,31 +584,6 @@ const alignSelectedElements = (type, relativeTo, { spacing } = {}) => {
   }
 
   moveSelectedElements(dx, dy)
-}
-
-/**
- * Tidies the selection up into a regular row, column or grid (see
- * tidy-up.js), as one undo step: objects keep their size and their order,
- * the top left corner of the selection stays in place, and the gaps are the
- * most frequent gap between neighbors, or the spacing given.
- * @function module:selected-elem.SvgCanvas#tidyUpSelectedElements
- * @param {PlainObject} [options]
- * @param {number|null} [options.spacing] - Gap between neighbors
- * @fires module:selected-elem.SvgCanvas#event:changed
- * @returns {BatchCommand|null} Null when nothing moved
- */
-const tidyUpSelectedElements = ({ spacing = null } = {}) => {
-  const selectedElements = svgCanvas.getSelectedElements()
-  const count = selectedElements.findIndex((elem) => !elem)
-  const elements = count === -1 ? selectedElements : selectedElements.slice(0, count)
-  if (elements.length < 2) { return null }
-  const boxes = elements.map((elem) => getStrokedBBoxDefaultVisible([elem]))
-  if (boxes.some((box) => !box)) { return null }
-  const { positions } = tidyUpLayout(boxes, { spacing })
-  const dx = positions.map((p, i) => p.x - boxes[i].x)
-  const dy = positions.map((p, i) => p.y - boxes[i].y)
-  if (dx.every((d) => Math.abs(d) < 1e-9) && dy.every((d) => Math.abs(d) < 1e-9)) { return null }
-  return moveSelectedElements(dx, dy) || null
 }
 
 /**

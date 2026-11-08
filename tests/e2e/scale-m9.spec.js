@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures.js'
 import { visitAndApproveStorage } from './helpers.js'
 
-// M9: the Scale tool (K), its panel, Tidy up and the imposed spacing.
+// M9: the Scale tool (K), its panel, the imposed spacing and ungrouping.
 
 const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:se="http://svg-edit.googlecode.com" width="640" height="480">
   <defs><symbol id="sym" viewBox="0 0 20 20"><rect width="20" height="20" stroke="#000" stroke-width="1"/></symbol></defs>
@@ -15,12 +15,8 @@ const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www
   </g>
 </svg>`
 
-const ROUGH = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
+const ROW = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
   <g class="layer"><title>Layer 1</title>
-    <rect id="a" x="100" y="100" width="40" height="40"/>
-    <rect id="b" x="163" y="104" width="40" height="40"/>
-    <rect id="c" x="101" y="161" width="40" height="40"/>
-    <rect id="d" x="160" y="160" width="40" height="40"/>
     <rect id="e" x="300" y="300" width="20" height="20"/>
     <rect id="f" x="330" y="300" width="40" height="20"/>
     <rect id="g" x="420" y="300" width="20" height="20"/>
@@ -311,47 +307,29 @@ test.describe('Scale panel (M9)', () => {
   })
 })
 
-test.describe('Tidy up and imposed spacing (M9)', () => {
+test.describe('Imposed spacing (M9)', () => {
   test.beforeEach(async ({ page }) => {
     errors.length = 0
     page.on('pageerror', (err) => errors.push(err.message))
     await visitAndApproveStorage(page)
-    await loadDrawing(page, ROUGH)
+    await loadDrawing(page, ROW)
   })
 
   test.afterEach(() => {
     expect(errors).toEqual([])
   })
 
-  test('Tidy up puts a rough grid into a regular one, in one undo step', async ({ page }) => {
-    await select(page, ['a', 'b', 'c', 'd'])
-    await expect(page.locator('#tool_tidy_up')).toBeVisible()
-    const before = await layerMarkup(page)
-    await page.locator('#tool_tidy_up').click()
-    const at = async (id) => [await num(page, id, 'x'), await num(page, id, 'y')]
-    const [a, b, c, d] = [await at('a'), await at('b'), await at('c'), await at('d')]
-    expect(a).toEqual([100, 100])
-    expect(b[1]).toBe(a[1])
-    expect(c[0]).toBe(a[0])
-    expect(d).toEqual([b[0], c[1]])
-    expect(await undoSize(page)).toBe(1)
-    await page.keyboard.press('Control+z')
-    expect(await layerMarkup(page)).toBe(before)
-  })
-
-  test('a spacing typed in its field drives Tidy up and Distribute', async ({ page }) => {
+  test('a spacing typed in its field drives Distribute; empty, the spacing is even', async ({ page }) => {
     await select(page, ['e', 'f', 'g'])
+    const xs = async () => [await num(page, 'e', 'x'), await num(page, 'f', 'x'), await num(page, 'g', 'x')]
     const spacing = page.locator('#tool_align_spacing').locator('input')
+    // Empty: even gaps between the outer objects, as before (30 and 30).
+    await page.locator('#tool_align_distrib_horiz').click()
+    expect(await xs()).toEqual([300, 350, 420])
     await spacing.fill('15')
-    await page.locator('#tool_tidy_up').click()
-    expect([await num(page, 'e', 'x'), await num(page, 'f', 'x'), await num(page, 'g', 'x')]).toEqual([300, 335, 390])
-    await spacing.fill('5')
     await page.locator('#tool_align_distrib_horiz').click()
-    expect([await num(page, 'e', 'x'), await num(page, 'f', 'x'), await num(page, 'g', 'x')]).toEqual([300, 325, 370])
-    // Empty: an even distribution between the outer objects, as before.
-    await spacing.fill('')
-    await page.locator('#tool_align_distrib_horiz').click()
-    expect([await num(page, 'e', 'x'), await num(page, 'f', 'x'), await num(page, 'g', 'x')]).toEqual([300, 325, 370])
+    expect(await xs()).toEqual([300, 335, 390])
+    expect(await undoSize(page)).toBe(2)
   })
 })
 
