@@ -163,7 +163,11 @@
             </fieldset>
             <fieldset id="change_grid">
                 <legend id="svginfo_grid_settings"></legend>
-                <label for="svginfo_snap_onoff">
+                <label for="show_grid">
+                    <span id="svginfo_show_grid"></span>
+                    <input type="checkbox" value="show_grid" id="show_grid" />
+                </label>
+                <label for="grid_snapping_on">
                     <span id="svginfo_snap_onoff"></span>
                     <input type="checkbox" value="snapping_on" id="grid_snapping_on" />
                 </label>
@@ -171,9 +175,17 @@
                     <span id="svginfo_snap_step"></span>
                     <input type="text" id="grid_snapping_step" size="3" value="10" />
                 </label>
-                <label>
+                <label for="grid_subdivisions">
+                    <span id="svginfo_grid_subdivisions"></span>
+                    <input type="number" id="grid_subdivisions" min="2" max="100" step="1" value="10" />
+                </label>
+                <label for="grid_color">
                     <span id="svginfo_grid_color"></span>
-                    <input type="text" id="grid_color" size="3" value="#000" />
+                    <input type="text" id="grid_color" size="7" value="" />
+                </label>
+                <label for="object_snapping">
+                    <span id="svginfo_object_snapping"></span>
+                    <input type="checkbox" value="object_snapping" id="object_snapping" checked="checked" />
                 </label>
             </fieldset>
             <fieldset id="units_rulers">

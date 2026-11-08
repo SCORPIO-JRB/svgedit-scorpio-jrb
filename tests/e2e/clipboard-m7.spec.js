@@ -28,7 +28,9 @@ const EXTERNAL = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50
 
 async function loadDrawing (page, svg = DRAWING) {
   await page.evaluate((svg) => {
-    window.svgEditor.setConfig({ gridSnapping: false })
+    // These tests measure the gesture itself, to the unit: no snapping to
+    // the neighbours (lot V2), which has its own tests (snap-v2).
+    window.svgEditor.setConfig({ gridSnapping: false, objectSnapping: false })
     window.svgEditor.svgCanvas.setSvgString(svg)
     window.svgEditor.svgCanvas.setZoom(1)
     window.svgEditor.updateCanvas()

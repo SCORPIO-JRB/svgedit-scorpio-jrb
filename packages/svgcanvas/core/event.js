@@ -9,7 +9,7 @@ import {
   preventClickDefault, setHref, getBBox
 } from './utilities.js'
 import {
-  convertAttrs
+  convertAttrs, getTypeMap
 } from './units.js'
 import {
   transformPoint, hasMatrixTransform, getMatrix, snapToAngle, getTransformList, normalizeRotationAngle
@@ -21,6 +21,7 @@ import * as hstry from './history.js'
 import { findPos } from '../../svgcanvas/common/util.js'
 import { isMac } from '../common/browser.js'
 import { isDeepClick } from './selection-nav.js'
+import { SnapIndex, SNAP_THRESHOLD, measureGuides, snapMove, snapPoint, snapResize } from './snap.js'
 import {
   beginGroupResize,
   updateGroupResize,
@@ -44,6 +45,10 @@ import {
   parentToDrawing
 } from './multi-transform.js'
 
+// The tools whose points snap while drawing (lot V2). The grid keeps its own
+// snapping there, as before.
+const DRAW_SNAP_MODES = new Set(['rect', 'square', 'image', 'foreignObject', 'line', 'ellipse'])
+
 const {
   InsertElementCommand,
   BatchCommand,
@@ -52,6 +57,9 @@ const {
 
 let svgCanvas = null
 let moveSelectionThresholdReached = false
+// Snapping of the move or resize in progress (lot V2): the visible
+// neighbours, indexed once at its start, and the box that moves.
+let snapSession = null
 // Alt was held when the drag started on a selected element: duplicate the
 // selection once the drag really starts, and move the copies.
 let duplicateOnDrag = false
@@ -125,8 +133,44 @@ const refreshHover = (evt) => {
     ...lastHoverPoint,
     buttons: 0,
     ctrlKey: Boolean(evt?.ctrlKey),
-    metaKey: Boolean(evt?.metaKey)
+    metaKey: Boolean(evt?.metaKey),
+    altKey: Boolean(evt?.altKey)
   })
+}
+
+// Whether the guides show a measure (and not the snapping of a gesture).
+let measuring = false
+
+/**
+ * Alt held over an object, or over the page, with a selection: the
+ * distances from the selection to it (lot V2).
+ * @param {MouseEvent} evt
+ * @param {Element|null} target The object under the pointer, if any
+ * @returns {void}
+ */
+const updateMeasure = (evt, target) => {
+  const mgr = svgCanvas.selectorManager
+  const selected = svgCanvas.getSelectedElements().filter(Boolean)
+  if (!evt.altKey || !selected.length || !mgr?.showGuides) {
+    if (measuring) { mgr?.hideGuides?.() }
+    measuring = false
+    return
+  }
+  let from = null
+  let to = null
+  try {
+    from = drawingBoxOf(selected)
+    to = target ? drawingBoxOf([target]) : null
+  } catch (err) {
+    from = null
+  }
+  if (!to) {
+    const res = svgCanvas.getResolution?.()
+    to = { x: 0, y: 0, width: res?.w ?? svgCanvas.contentW, height: res?.h ?? svgCanvas.contentH }
+  }
+  if (!from) { return }
+  mgr.showGuides(measureGuides(from, to))
+  measuring = true
 }
 
 /**
@@ -142,6 +186,8 @@ const updateHover = (evt) => {
   lastHoverPoint = { target: evt.target, clientX: evt.clientX, clientY: evt.clientY }
   if (svgCanvas.getCurrentMode() !== 'select' || evt.buttons || svgCanvas.spaceKey) {
     mgr.hideHover()
+    if (measuring) { mgr.hideGuides?.() }
+    measuring = false
     return
   }
   let target = null
@@ -159,9 +205,13 @@ const updateHover = (evt) => {
   if (!target || target.nodeType !== 1 || target === svgCanvas.getSvgRoot() ||
     target === mgr.selectorParentGroup || svgCanvas.getSelectedElements().includes(target)) {
     mgr.hideHover()
+    // Over the canvas, the page or the selection itself: the distances to
+    // the page.
+    updateMeasure(evt, null)
     return
   }
   mgr.showHover(target)
+  updateMeasure(evt, target)
 }
 
 /**
@@ -263,6 +313,147 @@ const beginDragTransform = (svgRoot, selectedElements) => {
 }
 
 /**
+ * The snapping options of a pointer event, or null when nothing snaps:
+ * neither the objects nor the grid are on, or Ctrl (Cmd) is held.
+ * @param {MouseEvent} evt
+ * @returns {{tolerance: number, grid: number, objects: boolean}|null}
+ */
+const snapOptions = (evt) => {
+  const config = svgCanvas.getCurConfig()
+  const objects = config.objectSnapping !== false
+  let grid = 0
+  if (config.gridSnapping) {
+    // The step is in the base unit (see snapToGrid).
+    const unit = config.baseUnit && config.baseUnit !== 'px' ? (getTypeMap()[config.baseUnit] || 1) : 1
+    grid = (Number(config.snappingStep) || 10) * unit
+  }
+  if ((!objects && !grid) || evt.ctrlKey || evt.metaKey) { return null }
+  return { tolerance: SNAP_THRESHOLD / svgCanvas.getZoom(), grid, objects }
+}
+
+/**
+ * The boxes the gesture can snap to: the visible elements of the visible
+ * layers (and of the group being edited) that are not moving, in the view,
+ * and the page.
+ * @param {Element[]} moving
+ * @returns {module:snap.Box[]}
+ */
+const snapTargets = (moving) => {
+  const content = svgCanvas.getSvgContent()
+  // What moves, and the groups that hold it, are no neighbours.
+  const excluded = new Set()
+  moving.filter(Boolean).forEach((elem) => {
+    for (let node = elem; node && node !== content; node = node.parentNode) { excluded.add(node) }
+  })
+  const candidates = []
+  const visible = (elem) => elem.getAttribute('display') !== 'none' && elem.style?.display !== 'none'
+  const take = (parent) => {
+    for (const elem of parent.children) {
+      if (!excluded.has(elem) && elem.getBBox && visible(elem) && !['title', 'defs', 'desc', 'metadata', 'style'].includes(elem.tagName)) {
+        candidates.push(elem)
+      }
+    }
+  }
+  for (const layer of content.children) {
+    if (layer.tagName === 'g' && visible(layer) && !layer.classList.contains('temp')) { take(layer) }
+  }
+  const group = svgCanvas.getCurrentGroup?.()
+  if (group) { take(group) }
+  const view = svgCanvas.getVisibleRect?.()
+  const boxes = []
+  for (const elem of candidates) {
+    let box = null
+    try { box = drawingBoxOf([elem]) } catch (err) { box = null }
+    if (!box || (!box.width && !box.height)) { continue }
+    if (view && (box.x > view.x + view.width || box.y > view.y + view.height ||
+      box.x + box.width < view.x || box.y + box.height < view.y)) { continue }
+    boxes.push(box)
+  }
+  const res = svgCanvas.getResolution?.()
+  boxes.push({ x: 0, y: 0, width: res?.w ?? svgCanvas.contentW, height: res?.h ?? svgCanvas.contentH, page: true })
+  return boxes
+}
+
+/**
+ * Starts the snapping of a gesture.
+ * @param {Element[]} moving
+ * @param {module:snap.Box|null} frame
+ * @returns {void}
+ */
+const startSnap = (moving, frame) => {
+  const config = svgCanvas.getCurConfig()
+  if (!frame || (config.objectSnapping === false && !config.gridSnapping)) {
+    snapSession = { index: null, frame: null }
+    return
+  }
+  const start = performance.now()
+  const boxes = config.objectSnapping === false ? [] : snapTargets(moving)
+  snapSession = { index: new SnapIndex(boxes), frame }
+  // For the bench: the start of a gesture reads every visible box once.
+  svgCanvas.snapTiming = { index: performance.now() - start, boxes: boxes.length, search: 0 }
+}
+
+/**
+ * A point being drawn, snapped to the visible objects and the page.
+ * @param {MouseEvent} evt
+ * @param {number} x
+ * @param {number} y
+ * @returns {{x: number, y: number}}
+ */
+const snapDrawnPoint = (evt, x, y) => {
+  if (!snapSession) { startSnap([], { x, y, width: 0, height: 0 }) }
+  const options = snapSession.index ? snapOptions(evt) : null
+  if (!options || !options.objects) {
+    svgCanvas.selectorManager.hideGuides?.()
+    return { x, y }
+  }
+  const snapped = snapPoint(snapSession.index, x, y, { ...options, grid: 0 })
+  svgCanvas.selectorManager.showGuides?.(snapped.guides)
+  return { x: snapped.x, y: snapped.y }
+}
+
+/**
+ * Ends the snapping of a gesture and takes its guides away.
+ * @returns {void}
+ */
+const endSnap = () => {
+  snapSession = null
+  svgCanvas.selectorManager?.hideGuides?.()
+}
+
+/**
+ * The pointer of a resize, moved so that the dragged edges come to the
+ * neighbours, to their sizes or to the grid. Only for boxes that follow the
+ * pointer one for one: neither turned nor in a scaled group.
+ * @param {MouseEvent} evt
+ * @param {Element[]} elements
+ * @param {number} x The pointer, in units of the drawing
+ * @param {number} y
+ * @returns {{x: number, y: number}}
+ */
+const snapResizePointer = (evt, elements, x, y) => {
+  if (!snapSession) {
+    const elems = elements.filter(Boolean)
+    const plain = elems.every((elem) => {
+      const P = parentToDrawing(elem)
+      return P.a === 1 && P.d === 1 && !P.b && !P.c && !getRotationAngle(elem)
+    })
+    startSnap(elems, plain ? drawingBoxOf(elems) : null)
+  }
+  const snapping = snapSession.index ? snapOptions(evt) : null
+  if (!snapping) {
+    svgCanvas.selectorManager.hideGuides?.()
+    return { x, y }
+  }
+  const startX = svgCanvas.getRStartX()
+  const startY = svgCanvas.getRStartY()
+  const snapped = snapResize(snapSession.index, snapSession.frame, svgCanvas.getCurrentResizeMode(),
+    x - startX, y - startY, { ...snapping, centered: evt.altKey, proportional: evt.shiftKey })
+  svgCanvas.selectorManager.showGuides?.(snapped.guides)
+  return { x: startX + snapped.dx, y: startY + snapped.dy }
+}
+
+/**
  * Resizes the selectors of the given elements. Every selection box is read
  * first, then every selector is written, so the browser lays out once instead
  * of once per element.
@@ -306,6 +497,7 @@ const cancelGesture = () => {
   if (!svgCanvas.getStarted()) { return false }
   const mode = svgCanvas.getCurrentMode()
   if (!['select', 'resize', 'rotate', 'multiselect'].includes(mode)) { return false }
+  endSnap()
 
   const restoreTransform = (elem, value) => {
     // The drag edited the transform list through the SVG DOM, and the browser
@@ -457,6 +649,9 @@ const mouseMoveEvent = (evt) => {
     x = snapToGrid(x)
     y = snapToGrid(y)
   }
+  if (DRAW_SNAP_MODES.has(svgCanvas.getCurrentMode())) {
+    ({ x, y } = snapDrawnPoint(evt, x, y))
+  }
 
   let tlist
   switch (svgCanvas.getCurrentMode()) {
@@ -465,12 +660,10 @@ const mouseMoveEvent = (evt) => {
       // this transform is removed upon mousing up and the element is
       // relocated to the new location
       if (selected) {
-        dx = x - svgCanvas.getStartX()
-        dy = y - svgCanvas.getStartY()
-        if (svgCanvas.getCurConfig().gridSnapping) {
-          dx = snapToGrid(dx)
-          dy = snapToGrid(dy)
-        }
+        // The move asked by the pointer; the snapping below brings the
+        // edges and middles of what moves to the neighbours and the grid.
+        dx = realX - svgCanvas.getRStartX()
+        dy = realY - svgCanvas.getRStartY()
 
         // Enable moving selection only if the pointer moved more than 3 screen
         // pixels, whatever the zoom. This prevents objects from being
@@ -493,6 +686,18 @@ const mouseMoveEvent = (evt) => {
             beginDragTransform(svgRoot, dragged)
           } else {
             dragged = svgCanvas.getSelectedElements()
+          }
+          if (!snapSession) { startSnap(dragged, svgCanvas.dragStartFrame) }
+          const snapping = snapSession.index ? snapOptions(evt) : null
+          if (snapping) {
+            const searchStart = performance.now()
+            const snapped = snapMove(snapSession.index, snapSession.frame, dx, dy, snapping)
+            if (svgCanvas.snapTiming) { svgCanvas.snapTiming.search = performance.now() - searchStart }
+            dx = snapped.dx
+            dy = snapped.dy
+            svgCanvas.selectorManager.showGuides?.(snapped.guides)
+          } else {
+            svgCanvas.selectorManager.hideGuides?.()
           }
           dragged.forEach((el) => {
             if (el) {
@@ -554,11 +759,12 @@ const mouseMoveEvent = (evt) => {
         break
       }
       if (isGroupResizing()) {
-        // The common frame of a multi-selection: one matrix for all.
-        updateGroupResize(x, y, {
+        // The common frame of a multi-selection: one matrix for all. Its
+        // dragged edges follow the pointer, which snaps for them.
+        const pointer = snapResizePointer(evt, selectedElements, realX, realY)
+        updateGroupResize(pointer.x, pointer.y, {
           alt: evt.altKey,
-          shift: evt.shiftKey,
-          snap: svgCanvas.getCurConfig().gridSnapping ? snapToGrid : undefined
+          shift: evt.shiftKey
         })
         svgCanvas.call('transition', selectedElements)
         break
@@ -570,18 +776,15 @@ const mouseMoveEvent = (evt) => {
       if (!tlist) { break }
       const hasMatrix = hasMatrixTransform(tlist)
       box = hasMatrix ? svgCanvas.getInitBbox() : getBBox(selected)
-      let left = box.x
-      let top = box.y
-      let { width, height } = box
-      dx = (x - svgCanvas.getStartX())
-      dy = (y - svgCanvas.getStartY())
-
-      if (svgCanvas.getCurConfig().gridSnapping) {
-        dx = snapToGrid(dx)
-        dy = snapToGrid(dy)
-        height = snapToGrid(height)
-        width = snapToGrid(width)
-      }
+      const left = box.x
+      const top = box.y
+      const { width, height } = box
+      // The dragged edges follow the pointer, which snaps for them (lot V2).
+      const pointer = !hasMatrix && !getRotationAngle(selected)
+        ? snapResizePointer(evt, [selected], realX, realY)
+        : { x: realX, y: realY }
+      dx = pointer.x - svgCanvas.getRStartX()
+      dy = pointer.y - svgCanvas.getRStartY()
 
       // if rotated, adjust the dx,dy values
       angle = getRotationAngle(selected)
@@ -632,13 +835,6 @@ const mouseMoveEvent = (evt) => {
       const translateOrigin = svgRoot.createSVGTransform()
       const scale = svgRoot.createSVGTransform()
       const translateBack = svgRoot.createSVGTransform()
-
-      if (svgCanvas.getCurConfig().gridSnapping) {
-        left = snapToGrid(left)
-        tx = snapToGrid(tx)
-        top = snapToGrid(top)
-        ty = snapToGrid(ty)
-      }
 
       translateOrigin.setTranslate(-(left + tx), -(top + ty))
       // Shift keeps the proportions, for every kind of element
@@ -1015,6 +1211,7 @@ const mouseUpEvent = (evt) => {
   const useUnit = false // (svgCanvas.getCurConfig().baseUnit !== 'px');
   svgCanvas.setStarted(false)
   svgCanvas.selectorManager.hideDimension?.()
+  endSnap()
   svgCanvas.dragStartFrame = null
   rotateOffset = null
   let t
@@ -1521,6 +1718,7 @@ const mouseDownEvent = (evt) => {
   flushPendingClone()
   svgCanvas.selectorManager.hideHover?.()
   svgCanvas.selectorManager.hideDimension?.()
+  endSnap()
   rotateOffset = null
   circleResize = null
 
@@ -1578,6 +1776,12 @@ const mouseDownEvent = (evt) => {
     y = snapToGrid(y)
     svgCanvas.setStartX(snapToGrid(svgCanvas.getStartX()))
     svgCanvas.setStartY(snapToGrid(svgCanvas.getStartY()))
+  }
+  // The first point of a shape snaps to the objects, as the next ones (V2).
+  if (!rightClick && DRAW_SNAP_MODES.has(svgCanvas.getCurrentMode())) {
+    ({ x, y } = snapDrawnPoint(evt, x, y))
+    svgCanvas.setStartX(x)
+    svgCanvas.setStartY(y)
   }
 
   // if it is a selector grip, then it must be a single element selected,
@@ -1687,7 +1891,8 @@ const mouseDownEvent = (evt) => {
         svgCanvas.setStarted(true)
         svgCanvas.setStartX(x)
         svgCanvas.setStartY(y)
-        beginGroupResize(selectedElements.filter(Boolean), svgCanvas.getCurrentResizeMode(), x, y)
+        // From the pointer itself: the snapping of the move works on it.
+        beginGroupResize(selectedElements.filter(Boolean), svgCanvas.getCurrentResizeMode(), realX, realY)
         break
       }
       if (!tlist) { break }

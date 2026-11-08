@@ -37,6 +37,14 @@ export const formatSize = (width, height, unit = 'px') =>
   withUnit(`${formatNumber(width)} × ${formatNumber(height)}`, unit)
 
 /**
+ * Label of a distance or a spacing (lot V2), in the document's unit.
+ * @param {number} value - Already converted to the unit
+ * @param {string} [unit='px']
+ * @returns {string}
+ */
+export const formatLength = (value, unit = 'px') => withUnit(formatNumber(value), unit)
+
+/**
  * Label of a move: X and Y of the top left corner, in the document's unit.
  * @param {number} x - Already converted to the unit
  * @param {number} y

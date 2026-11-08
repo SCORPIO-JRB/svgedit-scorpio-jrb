@@ -10,6 +10,7 @@ import SvgCanvas from '@svgedit/svgcanvas'
 import Rulers from './Rulers.js'
 import { ThemeController } from './theme.js'
 import { ViewController } from './view.js'
+import { GridLayer } from './grid.js'
 
 /**
    * @fires module:svgcanvas.SvgCanvas#event:svgEditorReady
@@ -133,8 +134,12 @@ class EditorStartup {
       $id('svgcanvas'),
       this.configObj.curConfig
     )
-    // One controller for every move and zoom of the view (lot V2).
+    // One controller for every move and zoom of the view, and the grid it
+    // draws over the whole view (lot V2).
     this.view = new ViewController(this, { mode: this.configObj.curConfig.view })
+    this.grid = new GridLayer(this)
+    // The snapping takes the neighbours in the view.
+    this.svgCanvas.setVisibleRectProvider(() => this.view.visibleRect())
 
     // once svgCanvas is init - adding listener to the changes of the current mode
     this.modeEvent = this.svgCanvas.modeEvent
@@ -355,9 +360,13 @@ class EditorStartup {
     // pointer, what a Ctrl+click takes (M6): refresh the outline when the key
     // goes down or up without the pointer moving.
     const refreshHover = (e) => {
-      if (!e.repeat && (e.key === 'Control' || e.key === 'Meta')) {
+      // Alt shows the distances from the selection (lot V2).
+      if (!e.repeat && (e.key === 'Control' || e.key === 'Meta' || e.key === 'Alt')) {
         this.svgCanvas.refreshHover?.(e)
       }
+      // Alt alone would then take the focus to the menu of the browser
+      // (Windows): not while the canvas has it.
+      if (e.key === 'Alt' && e.target.nodeName === 'BODY') { e.preventDefault() }
     }
     document.addEventListener('keydown', refreshHover)
     document.addEventListener('keyup', refreshHover)

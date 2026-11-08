@@ -85,6 +85,9 @@ class MainMenu {
       gridsnappingon,
       gridsnappingstep,
       gridcolor,
+      showgrid,
+      gridsubdivisions,
+      objectsnapping,
       showrulers,
       baseunit
     } = e.detail
@@ -102,7 +105,9 @@ class MainMenu {
     // set grid setting
     this.editor.configObj.curConfig.gridSnapping = gridsnappingon
     this.editor.configObj.curConfig.snappingStep = gridsnappingstep
-    this.editor.configObj.curConfig.gridColor = gridcolor
+    this.editor.configObj.curConfig.gridColor = gridcolor ?? ''
+    if (gridsubdivisions !== undefined) this.editor.configObj.curConfig.gridSubdivisions = Number(gridsubdivisions) || 10
+    if (objectsnapping !== undefined) this.editor.configObj.curConfig.objectSnapping = Boolean(objectsnapping)
     this.editor.configObj.curConfig.showRulers = showrulers
     // Unchecking the option used to leave the rulers visible.
     this.editor.rulers.display(Boolean(showrulers))
@@ -111,6 +116,8 @@ class MainMenu {
     }
     this.editor.configObj.curConfig.baseUnit = baseunit
     this.editor.svgCanvas.setConfig(this.editor.configObj.curConfig)
+    // The grid shown or not, apart from the snapping (lot V2).
+    if (showgrid !== undefined && this.editor.grid) this.editor.grid.setVisible(Boolean(showgrid))
     this.editor.updateCanvas()
     this.hidePreferences()
   }
@@ -210,8 +217,11 @@ class MainMenu {
     )
     $editDialog.setAttribute(
       'gridcolor',
-      this.editor.configObj.curConfig.gridColor
+      this.editor.configObj.curConfig.gridColor ?? ''
     )
+    $editDialog.setAttribute('showgrid', Boolean(this.editor.configObj.curConfig.showGrid))
+    $editDialog.setAttribute('gridsubdivisions', this.editor.configObj.curConfig.gridSubdivisions ?? 10)
+    $editDialog.setAttribute('objectsnapping', this.editor.configObj.curConfig.objectSnapping !== false)
     $editDialog.setAttribute('canvasbg', canvasBg)
     $editDialog.setAttribute('theme', this.editor.configObj.pref('theme'))
     $editDialog.setAttribute('dialog', 'open')

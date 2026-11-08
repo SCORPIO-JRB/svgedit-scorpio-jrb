@@ -73,6 +73,12 @@ class Editor extends EditorStartup {
       const result = this.configObj.setConfig(opts, cfgCfg)
       // The theme applies at once, also after the editor started (lot V1).
       if (opts && 'theme' in opts) this.theme?.set(this.configObj.pref('theme'))
+      // So do the snapping and the grid (lot V2): the canvas had kept the
+      // options it started with.
+      if (this.svgCanvas) this.svgCanvas.setConfig(this.configObj.curConfig)
+      if (opts && ['showGrid', 'snappingStep', 'gridSubdivisions', 'gridColor'].some((key) => key in opts)) {
+        this.grid?.update()
+      }
       return result
     }
     this.callbacks = []
@@ -420,6 +426,26 @@ class Editor extends EditorStartup {
           }
         }
       },
+      // Alignment and distribution (lot V2, decision D6): Alt and a letter,
+      // as in Figma, except Alt+R for the right edge: Alt+D takes the
+      // address bar of the browsers on Windows. A selection alone aligns on
+      // the page; several on one another, as the reference of the panel
+      // says.
+      ...[
+        ['align_left', 'left', 'alt+a'],
+        ['align_center', 'center', 'alt+h'],
+        ['align_right', 'right', 'alt+r'],
+        ['align_top', 'top', 'alt+w'],
+        ['align_middle', 'middle', 'alt+v'],
+        ['align_bottom', 'bottom', 'alt+s'],
+        ['align_distrib_horiz', 'distrib_horiz', 'alt+shift+h'],
+        ['align_distrib_verti', 'distrib_verti', 'alt+shift+v']
+      ].map(([id, pos, key]) => ({
+        id,
+        label: `tools.${id}`,
+        key: [key, true],
+        fn: () => this.alignSelection(pos)
+      })),
       {
         id: 'select_all_a',
         key: 'a',
@@ -802,6 +828,7 @@ class Editor extends EditorStartup {
     const newCanY = h / 2
     const newCanX = w / 2
     const offset = this.svgCanvas.updateCanvas(w, h)
+    this.grid?.update()
 
     const ratio = newCanX / oldCanX
 
@@ -1328,6 +1355,22 @@ class Editor extends EditorStartup {
    */
   getViewCenter () {
     return this.view.center
+  }
+
+  /**
+   * Aligns or distributes the selection (lot V2, decision D6): on the page
+   * for a selection alone, else on the reference of the panel.
+   * @param {"left"|"center"|"right"|"top"|"middle"|"bottom"|"distrib_horiz"|"distrib_verti"} pos
+   * @returns {void}
+   */
+  alignSelection (pos) {
+    const selected = this.svgCanvas.getSelectedElements().filter(Boolean)
+    if (!selected.length || this.svgCanvas.getMode() !== 'select') return
+    if (selected.length === 1) {
+      if (!pos.startsWith('distrib')) this.svgCanvas.alignSelectedElements(pos, 'page')
+      return
+    }
+    this.topPanel.clickAlign(pos)
   }
 
   /**

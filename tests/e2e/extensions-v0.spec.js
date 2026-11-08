@@ -182,9 +182,12 @@ test.describe('What each button does (V0)', () => {
   })
 
   test('grid: the button shows and hides the grid', async ({ page }) => {
-    const shown = () => page.evaluate(() => document.getElementById('canvasGrid').style.display)
+    // Since V2 the interaction layer draws the grid (#se-grid, over the
+    // whole view) and the button drives it; #canvasGrid is gone.
+    const shown = () => page.evaluate(() => document.getElementById('se-grid').getAttribute('display'))
     await page.locator('#view_grid').click()
-    expect(await shown()).toBe('block')
+    expect(await shown()).toBe('inline')
+    expect(await page.locator('#view_grid').evaluate((button) => button.pressed)).toBe(true)
     await page.locator('#view_grid').click()
     expect(await shown()).toBe('none')
   })

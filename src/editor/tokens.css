@@ -70,6 +70,16 @@
   --se-ruler-tick: #8c8c8c;
 
   /*
+   * Interaction layer (lot V2). The grid is drawn over the canvas and over
+   * the page: a grey that stays visible on both. The guides of the snapping
+   * and the measures stand apart from the blue of the selection.
+   */
+  --se-grid-minor: rgb(128 128 128 / 20%);
+  --se-grid-major: rgb(128 128 128 / 42%);
+  --se-guide: #e0115f;
+  --se-guide-text: #fff;
+
+  /*
    * Markers drawn over a colour being picked (gradient stops, opacity bar):
    * black and white whatever the theme, to stay visible over any colour.
    */
@@ -188,6 +198,11 @@
   --se-ruler-bg: #fff;
   --se-ruler-text: #5e5e5e;
   --se-ruler-tick: #8c8c8c;
+
+  --se-grid-minor: rgb(96 96 96 / 18%);
+  --se-grid-major: rgb(96 96 96 / 38%);
+  --se-guide: #e0115f;
+  --se-guide-text: #fff;
 
   --se-shadow-float: 0 4px 16px rgb(0 0 0 / 12%);
   --se-shadow-menu: 0 8px 24px rgb(0 0 0 / 16%);

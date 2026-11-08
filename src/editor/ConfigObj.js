@@ -125,17 +125,19 @@ export default class ConfigObj {
       * @property {string} [text.font_family="serif"] Text font family
       * @property {Float} [initOpacity=1] Initial opacity (multiplied by 100)
       * @property {module:SVGEditor.XYDimensions} [dimensions=[640, 480]] The default width/height of a new document. Use an array in `setConfig` (e.g., `[800, 600]`) and comma separated numbers in the URL.
-      * @property {boolean} [gridSnapping=false] Enable snap to grid by default. Set in Editor Options.
-      * @property {string} [gridColor="#000"] Accepts hex, e.g., '#000'. Set in Editor Options. Defaults to black.
+      * @property {boolean} [gridSnapping=false] Snap to the grid: the edges and middles of what is moved, resized or drawn come to its lines within 6 pixels of the screen. Set in Editor Options. Apart from `showGrid` since V2.
+      * @property {string} [gridColor=""] A colour, e.g. '#000', for the lines of the grid; empty, those of the theme (since V2). Set in Editor Options.
       * @property {string} [baseUnit="px"] Set in Editor Options.
-      * @property {Float} [snappingStep=10] Set the default grid snapping value. Set in Editor Options.
+      * @property {Float} [snappingStep=10] The step of the grid: where its lines are and where the drawing snaps. Set in Editor Options.
+      * @property {Integer} [gridSubdivisions=10] A major line of the grid every so many steps (lot V2). Set in Editor Options.
+      * @property {boolean} [objectSnapping=true] Snap to the edges and middles of the visible objects and of the page, to equal spacings and to equal sizes, with guides (lot V2). Holding Ctrl suspends every snapping. Set in Editor Options.
       * @property {boolean} [showRulers=true] Initial state of ruler display (v2.6). Set in Editor Options.
       * @property {string} [initTool="select"] The initially selected tool. Must be either the ID of the button for the tool, or the ID without `tool_` prefix (e.g., "select").
       * @property {boolean} [wireframe=false] Start in wireframe mode
       * @property {boolean} [showlayers=false] Open the layers side-panel by default.
       * @property {"new"|"same"} [exportWindowType="new"] Can be "new" or "same" to indicate whether new windows will be generated for each export;
       *   the `window.name` of the export window is namespaced based on the `canvasName` (and incremented if "new" is selected as the type). Introduced 2.8.
-      * @property {boolean} [showGrid=false] Set by `ext-grid.js`; determines whether or not to show the grid by default
+      * @property {boolean} [showGrid=false] Whether the grid is shown; the button of `ext-grid.js` and Editor Options set it. Drawn over the whole view by the interaction layer since V2 (see grid.js).
       * @property {boolean} [show_outside_canvas=true] Defines whether or not elements outside the canvas should be visible. Set and used in `svgcanvas.js`.
       * @property {boolean} [selectNew=true] If true, will replace the selection with the current element and automatically select element objects (when not in "path" mode) after they are created, showing their grips (v2.6).
       * @property {boolean} [layerView=false] Set for 'ext-layer_view.js'; determines whether or not only current layer is shown by default
@@ -182,9 +184,11 @@ export default class ConfigObj {
       // EDITOR OPTIONS
       // Change the following to preferences (already in the Editor Options dialog)?
       gridSnapping: false,
-      gridColor: '#000',
+      gridColor: '',
       baseUnit: 'px',
       snappingStep: 10,
+      gridSubdivisions: 10,
+      objectSnapping: true,
       showRulers: true,
       // The editor zooms with Ctrl/Cmd + wheel and pinch; Shift + wheel scrolls
       // horizontally instead of zooming (canvas default: true).

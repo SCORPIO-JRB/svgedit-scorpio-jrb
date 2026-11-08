@@ -109,6 +109,15 @@ export class ViewController {
     this.size = null
     this.frame = null
     if (this.borderless) editor.workarea.classList.add('se-view-borderless')
+    // A side panel that opens changes the view, not the window: the middle
+    // of the view stays where it is, and the rulers follow.
+    if (this.borderless && typeof ResizeObserver === 'function') {
+      this.resizeObserver = new ResizeObserver(() => {
+        const { width, height } = this.viewport
+        if (this.size && (width !== this.size.width || height !== this.size.height)) editor.updateCanvas()
+      })
+      this.resizeObserver.observe(editor.workarea)
+    }
   }
 
   get borderless () {
@@ -193,6 +202,8 @@ export class ViewController {
       surface.style.height = `${surfaceH}px`
       this.canvas.updateCanvas(surfaceW, surfaceH, place.offset)
       this.offset = place.offset
+      // In the same frame as the drawing.
+      this.editor.grid?.update()
     }
     this.slack = slack
     this.size = { width, height }
