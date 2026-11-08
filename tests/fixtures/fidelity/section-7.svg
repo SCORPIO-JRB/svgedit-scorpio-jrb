@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" id="synoptique" x="0" y="0" width="400" height="300" viewBox="-20 -10 400 300">
+  <title>Fidelity fixture: one case per row of section 7 of the plan</title>
+  <metadata><rdf:RDF><rdf:Description dc:title="Synoptique d'essai" dc:creator="SCorp-io"/></rdf:RDF></metadata>
+  <defs>
+    <linearGradient id="chaud" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="200" y2="0"><stop offset="0" stop-color="#f60"/><stop offset="1" stop-color="#fc0"/></linearGradient>
+    <linearGradient id="via-style"><stop offset="0" stop-color="#36a"/><stop offset="1" stop-color="#6af"/></linearGradient>
+    <style>.tuyau { fill: url(#via-style); } @keyframes clignote { from { opacity: 1 } to { opacity: 0.2 } } .alarme { animation: clignote 1s infinite; }</style>
+  </defs>
+  <g class="layer" inkscape:label="Equipements" inkscape:groupmode="layer">
+    <title>Equipements</title>
+    <rect id="pompe-1" class="pompe" data-tag="P-101" data-point="007" data-scale="0.125" x="10.125" y="20" width="60" height="40" fill="url(#chaud)" inkscape:label="Pompe 1"/>
+    <rect id="pompe-2" x="100" y="20" width="60" height="40" fill="url(#chaud)"/>
+    <rect id="tuyau" class="tuyau" x="10" y="80" width="200" height="10"/>
+    <circle id="voyant" class="alarme" cx="250" cy="40" r="10" fill="#d33" style="animation: clignote 1s infinite; transform-origin: 250px 40px"/>
+    <circle id="ventilateur" cx="300" cy="40" r="15" fill="#999"><animateTransform id="rotation" attributeName="transform" type="rotate" from="0 300 40" to="360 300 40" dur="2s" repeatCount="indefinite"/></circle>
+    <g id="ligne" stroke="#000" stroke-width="3" data-tag="L-01">
+      <rect id="sans-trait" x="10" y="120" width="40" height="20" stroke="none" fill="#3a6"/>
+      <rect id="coin" x="60" y="120" width="40" height="20" rx="0" ry="5" fill="#36a"/>
+    </g>
+    <text id="valeur" x="10" y="180" font-size="14" paint-order="stroke" visibility="visible" data-unit="degC">21,1</text>
+    <rect id="doublon" x="120" y="120" width="20" height="20" fill="#000"/>
+    <rect id="doublon" x="150" y="120" width="20" height="20" fill="#333"/>
+    <use id="renvoi-doublon" href="#doublon" x="0" y="40"/>
+    <svg id="imbrique" x="200" y="150" width="50" height="50" viewBox="0 0 10 10"><rect id="dans-imbrique" width="10" height="10" fill="#a63"/></svg>
+  </g>
+  <rect id="hors-calque" x="300" y="200" width="30" height="30" fill="#963"/>
+</svg>
