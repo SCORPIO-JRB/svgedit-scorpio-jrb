@@ -31,8 +31,49 @@ const svgGenericWhiteList = ['class', 'id', 'display', 'transform', 'style', 'vi
  */
 const isScorpioAttribute = (name) => name.startsWith('scorp_') || name === 'instanceId' || name === 'representationId'
 
+/**
+ * Accessibility attributes (`role`, `aria-labelledby`...): they only name
+ * and describe, so they are kept on every element the filter keeps.
+ * @param {string} name - Attribute name, without namespace
+ * @returns {boolean}
+ */
+const isAccessibilityAttribute = (name) => name === 'role' || /^aria-[a-z]+$/.test(name)
+
+/**
+ * Namespaces whose elements and attributes the browser interprets. The
+ * attributes of any other namespace are data of another application
+ * (`inkscape:label`, `sodipodi:nodetypes`...): the browser ignores them.
+ */
+const INTERPRETED_NS = new Set([NS.SVG, NS.HTML, NS.MATH, NS.XLINK, NS.XML, NS.XMLNS])
+const isForeignNamespace = (uri) => Boolean(uri) && !INTERPRETED_NS.has(uri)
+
+/**
+ * Attributes that the browser ignores, or that only describe: those of
+ * another application (`inkscape:label`), the XLink ones other than `href`
+ * (`xlink:type`, `xlink:show`...) and the language (`xml:lang`, `lang`).
+ * `xml:base`, which changes where links lead, is not one of them.
+ * @param {Attr} attr
+ * @returns {boolean}
+ */
+const isInertAttribute = ({ namespaceURI, localName }) => {
+  if (namespaceURI === NS.XLINK) return localName !== 'href'
+  if (namespaceURI === NS.XML) return localName === 'lang' || localName === 'space'
+  return namespaceURI ? isForeignNamespace(namespaceURI) : localName === 'lang'
+}
+
+/** SVG animation elements (SMIL). */
+export const ANIMATION_ELEMENTS = new Set(['animate', 'animateMotion', 'animateTransform', 'set'])
+const ANIMATION_TIMING = ['begin', 'dur', 'end', 'min', 'max', 'restart', 'repeatCount', 'repeatDur', 'fill', 'href', 'xlink:href', 'requiredFeatures', 'systemLanguage']
+const ANIMATION_VALUES = ['from', 'to', 'by', 'values', 'calcMode', 'keyTimes', 'keySplines', 'additive', 'accumulate']
+const PRESENTATION = ['clip-path', 'clip-rule', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'mask', 'opacity', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width']
+
 const svgWhiteList_ = {
   // SVG Elements
+  animate: ['attributeName', 'attributeType', ...ANIMATION_TIMING, ...ANIMATION_VALUES],
+  animateMotion: [...ANIMATION_TIMING, ...ANIMATION_VALUES, 'keyPoints', 'origin', 'path', 'rotate'],
+  animateTransform: ['attributeName', 'attributeType', ...ANIMATION_TIMING, ...ANIMATION_VALUES, 'type'],
+  mpath: ['href', 'xlink:href'],
+  set: ['attributeName', 'attributeType', ...ANIMATION_TIMING, 'to'],
   a: ['clip-path', 'clip-rule', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'href', 'mask', 'opacity', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'xlink:href', 'xlink:title'],
   circle: ['clip-path', 'clip-rule', 'cx', 'cy', 'enable-background', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'mask', 'opacity', 'r', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage'],
   clipPath: ['clipPathUnits'],
@@ -69,7 +110,9 @@ const svgWhiteList_ = {
   rect: ['clip-path', 'clip-rule', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'height', 'mask', 'opacity', 'requiredFeatures', 'rx', 'ry', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'width', 'x', 'y'],
   stop: ['offset', 'requiredFeatures', 'stop-opacity', 'systemLanguage', 'stop-color', 'gradientUnits', 'gradientTransform'],
   style: ['type'],
-  svg: ['clip-path', 'clip-rule', 'enable-background', 'filter', 'height', 'mask', 'preserveAspectRatio', 'requiredFeatures', 'systemLanguage', 'version', 'viewBox', 'width', 'x', 'xmlns', 'xmlns:se', 'xmlns:xlink', 'xmlns:oi', 'oi:animations', 'y', 'stroke-linejoin', 'fill-rule', 'aria-label', 'stroke-width', 'fill-rule', 'xml:space'],
+  // The presentation attributes of the root apply to the whole file
+  // (`fill="none"` of the files exported by Figma)
+  svg: [...FONT_ATTRIBUTES, ...PRESENTATION, 'enable-background', 'height', 'preserveAspectRatio', 'requiredFeatures', 'systemLanguage', 'text-anchor', 'version', 'viewBox', 'width', 'x', 'xmlns', 'xmlns:se', 'xmlns:xlink', 'xmlns:oi', 'oi:animations', 'y', 'xml:space'],
   switch: ['requiredFeatures', 'systemLanguage'],
   symbol: [...FONT_ATTRIBUTES, 'fill', 'fill-opacity', 'fill-rule', 'filter', 'opacity', 'overflow', 'preserveAspectRatio', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'viewBox', 'width', 'height'],
   text: [...FONT_ATTRIBUTES, 'clip-path', 'clip-rule', 'alignment-baseline', 'dominant-baseline', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'mask', 'opacity', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'text-anchor', 'letter-spacing', 'word-spacing', 'text-decoration', 'textLength', 'lengthAdjust', 'x', 'xml:space', 'y'],
@@ -89,6 +132,10 @@ const svgWhiteList_ = {
   feDisplacementMap: ['in', 'in2', 'scale', 'xChannelSelector', 'yChannelSelector'],
   feTurbulence: ['baseFrequency', 'numOctaves', 'result', 'seed', 'stitchTiles', 'type'],
   feTile: ['in'],
+  feDropShadow: ['dx', 'dy', 'flood-color', 'flood-opacity', 'in', 'result', 'stdDeviation'],
+  feDistantLight: ['azimuth', 'elevation'],
+  fePointLight: ['x', 'y', 'z'],
+  feSpotLight: ['x', 'y', 'z', 'pointsAtX', 'pointsAtY', 'pointsAtZ', 'specularExponent', 'limitingConeAngle'],
 
   // MathML Elements
   annotation: ['encoding'],
@@ -238,24 +285,88 @@ const hasUnsafeCss = (css) => {
  * When CSS escapes hide such a construct, the whole stylesheet is dropped.
  * @function module:sanitize.sanitizeCss
  * @param {string} css
+ * @param {string[]} [removed] - What is removed is added to it
  * @returns {string}
  */
-export const sanitizeCss = (css) => {
+export const sanitizeCss = (css, removed = []) => {
   const cleaned = String(css)
-    .replace(CSS_IMPORT, '')
-    .replace(CSS_URL, (match, quote, url) => (isSafeCssUrl(url) ? match : 'none'))
-    .replace(CSS_SCRIPTING, '')
-  return hasUnsafeCss(decodeCssEscapes(cleaned)) ? '' : cleaned
+    .replace(CSS_IMPORT, (match) => { report(removed, shorten(match.trim())); return '' })
+    .replace(CSS_URL, (match, quote, url) => {
+      if (isSafeCssUrl(url)) return match
+      report(removed, `url(${shorten(url)})`)
+      return 'none'
+    })
+    .replace(CSS_SCRIPTING, (match) => { report(removed, match.trim()); return '' })
+  if (hasUnsafeCss(decodeCssEscapes(cleaned))) {
+    report(removed, '<style>')
+    return ''
+  }
+  return cleaned
 }
 
 /**
-* Sanitizes the input node and its children.
-* It only keeps what is allowed from our whitelist defined above.
-* @function module:sanitize.sanitizeSvg
-* @param {Text|Element} node - The DOM element to be checked (we'll also check its children) or text node to be cleaned up
-* @returns {void}
-*/
-export const sanitizeSvg = (node) => {
+ * Adds an item, once, to the list of what the filter removed.
+ * @param {string[]} removed
+ * @param {string} item
+ * @returns {void}
+ */
+const report = (removed, item) => {
+  if (!removed.includes(item)) removed.push(item)
+}
+
+/**
+ * A value as shown in that list: a long one (a data URL) is cut.
+ * @param {string} value
+ * @returns {string}
+ */
+const shorten = (value) => value.length > 40 ? `${value.slice(0, 39)}…` : value
+
+/**
+ * Why an animation element cannot be kept, if so: it would animate an
+ * element of another document, change a link (`href`) or an event handler,
+ * or set a script or an external resource.
+ * @param {Element} node - `<animate>`, `<set>`...
+ * @returns {string|null} The offending attribute, as the file wrote it
+ */
+const unsafeAnimation = (node) => {
+  // Without its target, it would animate its parent instead
+  const href = getHref(node)
+  if (href && href[0] !== '#') return `href="${shorten(href)}"`
+  const target = node.getAttribute('attributeName') || ''
+  const name = target.replace(/^[^:]*:/, '').trim().toLowerCase()
+  if (name === 'href' || name.startsWith('on')) return `attributeName="${target}"`
+  for (const attr of ['from', 'to', 'by', 'values']) {
+    const value = node.getAttribute(attr)
+    if (!value) continue
+    // eslint-disable-next-line no-control-regex
+    const plain = value.replace(/[\u0000- \u007F]/g, '').toLowerCase()
+    if (/(?:java|vb)script:/.test(plain) || [...value.matchAll(CSS_URL)].some(([, , url]) => !isSafeCssUrl(url))) {
+      return `${attr}="${shorten(value)}"`
+    }
+  }
+  return null
+}
+
+/**
+ * Sanitizes the input node and its children: only what the whitelist above
+ * allows is kept. What is removed is listed, for the user.
+ * @function module:sanitize.sanitizeSvg
+ * @param {Text|Element} node - The DOM element to be checked (we'll also check its children) or text node to be cleaned up
+ * @param {string[]} [removed] - What is removed is added to it: elements
+ *   (`<script>`), attributes (`onclick`), unsafe values (`href="javascript:…"`)
+ * @returns {string[]} `removed`
+ */
+export const sanitizeSvg = (node, removed = []) => {
+  sanitizeNode(node, removed)
+  return removed
+}
+
+/**
+ * @param {Text|Element} node
+ * @param {string[]} removed
+ * @returns {void}
+ */
+const sanitizeNode = (node, removed) => {
   // Cleanup text nodes
   if (node.nodeType === 3) { // 3 === TEXT_NODE
     // Trim whitespace, except inside a <text>: the spaces of its <tspan> and
@@ -282,6 +393,14 @@ export const sanitizeSvg = (node) => {
     return
   }
 
+  // The metadata of another application (RDF, Dublin Core...) is kept: the
+  // browser neither shows nor runs it.
+  if (isForeignNamespace(node.namespaceURI) && parent.nodeType === 1 && parent.closest('metadata')) {
+    let i = node.childNodes.length
+    while (i--) { sanitizeNode(node.childNodes.item(i), removed) }
+    return
+  }
+
   // Own properties only: element names such as "constructor" must not match Object.prototype
   const allowedAttrs = {}.hasOwnProperty.call(svgWhiteList_, node.nodeName) ? svgWhiteList_[node.nodeName] : undefined
   const allowedAttrsNS = svgWhiteListNS_[node.nodeName]
@@ -300,9 +419,12 @@ export const sanitizeSvg = (node) => {
       if (attrNsURI !== allowedAttrsNS[attrLocalName] && attrNsURI !== NS.XMLNS &&
        !(attrNsURI === NS.XMLNS && REVERSE_NS[attr.value])) {
         // Special cases: href without namespace when it is in the whitelist,
-        // and the SCorp-io binding attributes
+        // the SCorp-io binding, accessibility, and the attributes of another
+        // application, which the browser ignores
         const isHrefAttribute = (attrLocalName === 'href' && allowedAttrs.includes('href'))
-        if (!isHrefAttribute && !(!attrNsURI && isScorpioAttribute(attrName))) {
+        const isKept = isHrefAttribute || isInertAttribute(attr) ||
+          (!attrNsURI && (isScorpioAttribute(attrName) || isAccessibilityAttribute(attrName)))
+        if (!isKept) {
           // Bypassing the whitelist to allow se: and oi: prefixes
           // We can add specific namepaces on demand for now.
           // Is there a more appropriate way to do this?
@@ -313,6 +435,7 @@ export const sanitizeSvg = (node) => {
           } else {
             warn(`attribute ${attrName} in element ${node.nodeName} not in whitelist is removed: ${node.outerHTML}`, null, 'sanitize')
             node.removeAttributeNS(attrNsURI, attrLocalName)
+            report(removed, attrName)
           }
         }
       }
@@ -328,7 +451,12 @@ export const sanitizeSvg = (node) => {
           const styleAttrName = declaration.slice(0, colon).trim()
           const styleAttrVal = declaration.slice(colon + 1).trim()
           // Now check that this attribute is supported
-          if (colon === -1 || !allowedAttrs.includes(styleAttrName) || STYLE_FORBIDDEN_PROPS.includes(styleAttrName)) return
+          if (colon === -1 || STYLE_FORBIDDEN_PROPS.includes(styleAttrName)) return
+          if (!allowedAttrs.includes(styleAttrName)) {
+            // The properties of another application (-inkscape-...) do not show
+            if (!styleAttrName.startsWith('-')) report(removed, styleAttrName)
+            return
+          }
           if (ruled.has(styleAttrName)) {
             kept.push(`${styleAttrName}:${styleAttrVal}`)
           } else {
@@ -354,18 +482,31 @@ export const sanitizeSvg = (node) => {
       node.setAttributeNS(ns, att, val)
     })
 
+    // An animation must not change a link or an event handler, nor set a
+    // script or an external resource: it is removed with what it holds.
+    if (ANIMATION_ELEMENTS.has(node.nodeName)) {
+      const reason = unsafeAnimation(node)
+      if (reason) {
+        warn(`unsafe animation removed: ${node.outerHTML}`, null, 'sanitize')
+        node.remove()
+        report(removed, `<${node.nodeName} ${reason}>`)
+        return
+      }
+    }
+
     // Never keep script-capable URLs (javascript:, vbscript:, non-image data:)
     const rawHref = getHref(node)
     if (rawHref && !isSafeHref(node.nodeName, rawHref)) {
       warn(`unsafe href removed from element ${node.nodeName}`, null, 'sanitize')
       node.removeAttribute('href')
       node.removeAttributeNS(NS.XLINK, 'href')
+      report(removed, `href="${shorten(rawHref)}"`)
     }
 
     // Stylesheets must not load external resources or run code
     if (node.nodeName === 'style') {
       const css = node.textContent
-      const safeCss = sanitizeCss(css)
+      const safeCss = sanitizeCss(css, removed)
       if (safeCss !== css) {
         warn('unsafe CSS removed from a style element', null, 'sanitize')
         node.textContent = safeCss
@@ -376,19 +517,21 @@ export const sanitizeSvg = (node) => {
     // (but not for links and other elements where external hrefs are allowed)
     const href = getHref(node)
     if (href &&
-      ['filter', 'linearGradient', 'pattern',
-        'radialGradient', 'textPath', 'use'].includes(node.nodeName) && href[0] !== '#') {
+      ['filter', 'linearGradient', 'pattern', 'radialGradient', 'textPath', 'use', 'mpath'].includes(node.nodeName) &&
+      href[0] !== '#') {
       // remove the attribute (but keep the element)
       setHref(node, '')
       warn(`attribute href in element ${node.nodeName} pointing to a non-local reference (${href}) is removed: ${node.outerHTML}`, null, 'sanitize')
       node.removeAttributeNS(NS.XLINK, 'href')
       node.removeAttribute('href')
+      report(removed, `href="${shorten(href)}"`)
     }
 
     // Safari crashes on a <use> without a xlink:href, so we just remove the node here
     if (node.nodeName === 'use' && !getHref(node)) {
       warn(`element ${node.nodeName} without a xlink:href or href is removed: ${node.outerHTML}`, null, 'sanitize')
       node.remove()
+      report(removed, '<use>')
       return
     }
     // if the element has attributes pointing to a non-local reference,
@@ -402,18 +545,19 @@ export const sanitizeSvg = (node) => {
           node.setAttribute(attr, '')
           warn(`attribute ${attr} in element ${node.nodeName} pointing to a non-local reference (${val}) is removed: ${node.outerHTML}`, null, 'sanitize')
           node.removeAttribute(attr)
+          report(removed, `${attr}="url(${shorten(val)})"`)
         }
       }
     })
 
     // recurse to children
     i = node.childNodes.length
-    while (i--) { sanitizeSvg(node.childNodes.item(i)) }
+    while (i--) { sanitizeNode(node.childNodes.item(i), removed) }
   // else (element not supported), remove it
   } else {
     // remove all children from this node and insert them before this node
-    // TODO: in the case of animation elements this will hardly ever be correct
     warn(`element ${node.nodeName} not supported is removed: ${node.outerHTML}`, null, 'sanitize')
+    report(removed, `<${node.nodeName}>`)
     const children = []
     while (node.hasChildNodes()) {
       children.push(parent.insertBefore(node.firstChild, node))
@@ -424,6 +568,6 @@ export const sanitizeSvg = (node) => {
 
     // call sanitizeSvg on each of those children
     let i = children.length
-    while (i--) { sanitizeSvg(children[i]) }
+    while (i--) { sanitizeNode(children[i], removed) }
   }
 }

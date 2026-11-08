@@ -5,9 +5,7 @@ import { visitAndApproveStorage } from './helpers.js'
 
 /**
  * Importing an SVG file must never change the objects already in the drawing.
- * Files are dropped on the work area, as a user does. The tests marked
- * `test.fail` describe defects that later lots of the import plan fix: they
- * are expected to fail until then.
+ * Files are dropped on the work area, as a user does.
  */
 
 const NS = 'http://www.w3.org/2000/svg'
@@ -141,17 +139,7 @@ test.describe('SVG import: integrity of the drawing', () => {
         img.onerror = reject
         img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(text)
       })
-      // The saved root has width and height instead of the viewBox (see lot 5
-      // below), which alone moves a few pixels of antialiasing: the drawing
-      // is compared under the same root.
-      const sameRoot = (text) => {
-        const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
-        doc.documentElement.removeAttribute('width')
-        doc.documentElement.removeAttribute('height')
-        doc.documentElement.setAttribute('viewBox', '0 0 1920 1080')
-        return new XMLSerializer().serializeToString(doc)
-      }
-      const [a, b] = await Promise.all([pixels(source), pixels(sameRoot(saved))])
+      const [a, b] = await Promise.all([pixels(source), pixels(saved)])
       let differ = 0
       for (let i = 0; i < a.length; i += 4) {
         if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 30) differ++
@@ -348,8 +336,7 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(result).toEqual({ group: 'turned', size: [100, 50] })
   })
 
-  test('a synoptic keeps the id and the accessibility attributes of its root (lot 5)', async ({ page }) => {
-    test.fail(true, 'The root is saved without its id, role and aria-labelledby')
+  test('a synoptic keeps the id and the accessibility attributes of its root', async ({ page }) => {
     await openDrawing(page, fixture('synoptique-chaufferie.svg'))
     const root = await page.evaluate(() => {
       const doc = new DOMParser().parseFromString(window.svgEditor.svgCanvas.getSvgString(), 'image/svg+xml')
@@ -358,8 +345,7 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(root).toEqual(['synoptique-chaufferie', 'img', 'titre-synoptique desc-synoptique'])
   })
 
-  test('SVG animations are kept (lot 5)', async ({ page }) => {
-    test.fail(true, 'Animation elements are removed by the import filter')
+  test('SVG animations are kept', async ({ page }) => {
     const useId = await importFile(page, 'anim.svg', `<svg xmlns="${NS}" width="10" height="10"><rect width="5" height="5"><animate attributeName="opacity" from="1" to="0" dur="1s" repeatCount="indefinite"/></rect></svg>`)
     const count = await page.evaluate((useId) => {
       const canvas = window.svgEditor.svgCanvas
@@ -367,5 +353,35 @@ test.describe('SVG import: integrity of the drawing', () => {
       return symbol.querySelectorAll('animate').length
     }, useId)
     expect(count).toBe(1)
+  })
+
+  test('the animations of an opened drawing run in the editor, and are saved', async ({ page }) => {
+    await openDrawing(page, `<svg xmlns="${NS}" width="640" height="480"><g class="layer"><title>L</title>` +
+      '<rect id="grows" width="10" height="10" fill="green"><set attributeName="width" to="50" fill="freeze"/></rect></g></svg>')
+    await page.waitForFunction(() => document.getElementById('grows').width.animVal.value === 50)
+    const saved = await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())
+    expect(saved).toContain('<set attributeName="width" to="50" fill="freeze"/>')
+  })
+
+  test('an import says in one message all it removed, and keeps the rest', async ({ page }) => {
+    const before = await snapshot(page, ['exist'])
+    const alerts = await page.evaluate(() => document.querySelectorAll('se-elix-alert-dialog').length)
+    const useId = await importFile(page, 'mixte.svg', `<svg xmlns="${NS}" width="20" height="20"><script>alert(1)</script>` +
+      '<style>body { margin: 0 } .p { fill: orange }</style>' +
+      '<animate href="#exist" attributeName="fill" to="red"/>' +
+      '<rect class="p" width="20" height="20" onclick="alert(2)"><animate attributeName="opacity" values="1;0.5;1" dur="1s" repeatCount="indefinite"/></rect></svg>')
+    await page.waitForFunction((alerts) => document.querySelectorAll('se-elix-alert-dialog').length > alerts, alerts)
+
+    const message = await page.evaluate(() => [...document.querySelectorAll('se-elix-alert-dialog')].pop().textContent)
+    for (const item of ['onclick', '<script>', '<animate href="#exist">', 'body']) expect(message).toContain(item)
+    // One message only
+    expect(await page.evaluate(() => document.querySelectorAll('se-elix-alert-dialog').length)).toBe(alerts + 1)
+    const kept = await page.evaluate((useId) => {
+      const canvas = window.svgEditor.svgCanvas
+      const symbol = document.getElementById(canvas.getHref(document.getElementById(useId)).slice(1))
+      return [symbol.querySelectorAll('rect animate').length, symbol.querySelectorAll('script, [onclick]').length]
+    }, useId)
+    expect(kept).toEqual([1, 0])
+    expect(await snapshot(page, ['exist'])).toEqual(before)
   })
 })

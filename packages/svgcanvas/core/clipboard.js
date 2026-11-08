@@ -1,3 +1,5 @@
+import { remapTimingIds } from './utilities.js'
+
 const CLIPBOARD_DATA_VERSION = 2
 const documentIds = new WeakMap()
 let documentSequence = 0
@@ -259,6 +261,9 @@ export const remapJsonReferences = (roots, idMap) => {
         if (hrefAttributeNames.has(attrName) && attrValue.startsWith('#')) {
           const replacement = idMap.get(attrValue.slice(1))
           if (replacement) node.attr[attrName] = `#${replacement}`
+        }
+        if (attrName === 'begin' || attrName === 'end') {
+          node.attr[attrName] = remapTimingIds(attrValue, (id) => idMap.get(id))
         }
 
         node.attr[attrName] = remapUrlReferences(node.attr[attrName], idMap)

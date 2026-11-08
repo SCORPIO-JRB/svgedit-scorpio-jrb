@@ -407,10 +407,10 @@ const groupSvgElem = (elem) => {
  * Runs the SVG Document through the sanitizer and then updates its paths.
  * @function module:svgcanvas.SvgCanvas#prepareSvg
  * @param {XMLDocument} newDoc - The SVG DOM document
- * @returns {void}
+ * @returns {string[]} What the sanitizer removed
  */
 const prepareSvg = (newDoc) => {
-  svgCanvas.sanitizeSvg(newDoc.documentElement)
+  const removed = svgCanvas.sanitizeSvg(newDoc.documentElement)
 
   // convert paths into absolute commands
   const paths = [...newDoc.getElementsByTagNameNS(NS.SVG, 'path')]
@@ -419,6 +419,7 @@ const prepareSvg = (newDoc) => {
     path.setAttribute('d', convertedPath)
     svgCanvas.pathActions.fixEnd(path)
   })
+  return removed
 }
 
 /**

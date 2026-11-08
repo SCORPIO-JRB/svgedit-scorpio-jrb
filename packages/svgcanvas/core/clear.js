@@ -5,6 +5,7 @@
  * @copyright 2011 Jeff Schiller
  */
 import { NS } from './namespaces.js'
+import dataStorage from './dataStorage.js'
 
 let svgCanvas = null
 
@@ -32,6 +33,9 @@ export const clearSvgContentElementInit = () => {
       el.removeAttribute(attr.name)
     }
   }
+  // and what the save writes back of its root (identifier, declared size)
+  dataStorage.remove(el, 'rootId')
+  dataStorage.remove(el, 'declaredSize')
 
   const pel = svgCanvas.getSvgRoot()
   el.setAttribute('id', 'svgcontent')

@@ -18,7 +18,8 @@ import {
   preventClickDefault,
   toXml,
   getStrokedBBoxDefaultVisible,
-  getBBox as utilsGetBBox
+  getBBox as utilsGetBBox,
+  remapTimingIds
 } from './utilities.js'
 import {
   transformPoint,
@@ -34,8 +35,9 @@ import * as pathModule from './path.js'
 import { NS } from './namespaces.js'
 import * as draw from './draw.js'
 import { getClosest } from '../common/util.js'
-import { parseSvgText, getDeclaredSize } from './svg-paste.js'
+import { parseSvgText, getDeclaredSize, removeOutsideAnimations } from './svg-paste.js'
 import { scopeStyleSheet, keyframesNames } from './css-scope.js'
+import { ANIMATION_ELEMENTS } from './sanitize.js'
 
 const {
   InsertElementCommand,
@@ -123,6 +125,42 @@ const svgCanvasToString = () => {
 }
 
 /**
+ * The prefix under which a namespace is written. A namespace new to the
+ * drawing (that of another application, `inkscape:label`) gets the prefix
+ * the file gave it when it is free, else `ns1`, `ns2`...
+ * @param {PlainObject<string, string>} nsMap - Prefix of each namespace; the
+ *   new one is added to it
+ * @param {string} uri
+ * @param {string|null} wanted
+ * @returns {string}
+ */
+const namespacePrefix = (nsMap, uri, wanted) => {
+  if (nsMap[uri]) return nsMap[uri]
+  const used = new Set(Object.values(nsMap))
+  let prefix = wanted && !/^xml/i.test(wanted) && !used.has(wanted) ? wanted : null
+  for (let n = 1; !prefix; n++) {
+    if (!used.has(`ns${n}`)) prefix = `ns${n}`
+  }
+  nsMap[uri] = prefix
+  return prefix
+}
+
+/**
+ * The name of an element or an attribute as written: a namespaced one with
+ * the prefix declared on the root.
+ * @param {Element|Attr} node
+ * @param {PlainObject<string, string>} nsMap
+ * @returns {string}
+ */
+const qualifiedName = (node, nsMap) => {
+  const uri = node.namespaceURI
+  if (!uri || uri === NS.SVG || uri === NS.XMLNS || (node.nodeType === 1 && !node.prefix)) {
+    return node.nodeType === 1 ? node.localName : node.nodeName
+  }
+  return `${namespacePrefix(nsMap, uri, node.prefix)}:${node.localName}`
+}
+
+/**
  * Sub function ran on each SVG element to convert it to a string as desired.
  * @function module:svgcanvas.SvgCanvas#svgToString
  * @param {Element} elem - The SVG element to convert
@@ -144,11 +182,19 @@ const svgToString = (elem, indent) => {
     for (let i = 0; i < indent; i++) {
       out.push(' ')
     }
+    const tagName = qualifiedName(elem, nsMap)
     out.push('<')
-    out.push(elem.localName)
+    out.push(tagName)
     if (elem.id === 'svgcontent') {
       // Process root element separately
       const res = svgCanvas.getResolution()
+
+      // The identifier the opened file gave its root, unless an element of
+      // the drawing took it since
+      const rootId = svgCanvas.getDataStorage().get(elem, 'rootId')
+      if (rootId && ![...elem.querySelectorAll('[id]')].some((other) => other.id === rootId)) {
+        out.push(` id="${toXml(rootId)}"`)
+      }
 
       let vb = ''
       // TODO: Allow this by dividing all values by current baseVal
@@ -194,6 +240,8 @@ const svgToString = (elem, indent) => {
         // const el = this;
         // for some elements have no attribute
         const uri = el.namespaceURI
+        // A namespace new to the drawing gets a prefix, declared here
+        if (uri && uri !== NS.SVG && el.prefix) namespacePrefix(nsMap, uri, el.prefix)
         if (
           uri &&
           !nsuris[uri] &&
@@ -207,6 +255,7 @@ const svgToString = (elem, indent) => {
         if (el.attributes.length > 0) {
           for (const [, attr] of Object.entries(el.attributes)) {
             const u = attr.namespaceURI
+            if (u && u !== NS.XMLNS) namespacePrefix(nsMap, u, attr.prefix)
             if (u && !nsuris[u] && nsMap[u] !== 'xmlns' && nsMap[u] !== 'xml') {
               nsuris[u] = true
               out.push(` xmlns:${nsMap[u]}="${u}"`)
@@ -242,7 +291,7 @@ const svgToString = (elem, indent) => {
           (!attr.namespaceURI || nsMap[attr.namespaceURI])
         ) {
           out.push(' ')
-          out.push(attr.nodeName)
+          out.push(qualifiedName(attr, nsMap))
           out.push('="')
           out.push(attrVal)
           out.push('"')
@@ -255,6 +304,9 @@ const svgToString = (elem, indent) => {
       }
 
       const mozAttrs = ['-moz-math-font-style', '_moz-math-font-style']
+      // The values of an animation, or of the data of another application,
+      // are kept as written
+      const round = elem.namespaceURI === NS.SVG && !ANIMATION_ELEMENTS.has(elem.localName)
       // Do not iterate attributes in reverse order!
       for (let i = 0; i < attrs.length; i++) {
         const attr = attrs[i]
@@ -284,9 +336,9 @@ const svgToString = (elem, indent) => {
             attrVal = svgCanvas.pathActions.convertPath(elem, true)
           }
           // Properly parse attribute value if it is a number!
-          if (!isNaN(attrVal) && !isNaN(parseFloat(attrVal))) {
+          if (round && !isNaN(attrVal) && !isNaN(parseFloat(attrVal))) {
             attrVal = shortFloat(attrVal)
-          } else if (unitRe.test(attrVal)) {
+          } else if (round && unitRe.test(attrVal)) {
             attrVal = shortFloat(attrVal) + unit
           }
 
@@ -311,7 +363,7 @@ const svgToString = (elem, indent) => {
             attr.namespaceURI === NS.SVG ||
             nsMap[attr.namespaceURI]
           ) {
-            out.push(attr.nodeName)
+            out.push(qualifiedName(attr, nsMap))
             out.push('="')
             out.push(attrVal)
             out.push('"')
@@ -386,7 +438,7 @@ const svgToString = (elem, indent) => {
         }
       }
       out.push('</')
-      out.push(elem.localName)
+      out.push(tagName)
       out.push('>')
     } else {
       out.push('/>')
@@ -402,8 +454,9 @@ const SELECTOR_ID = /#([\w\u00A0-\uFFFF-]+)(?=[^{};]*\{)/g
 
 /**
  * Points the references of a subtree to elements that changed identifier:
- * `url(#old)` in any attribute, `href="#old"`, the connectors of SVG-Edit
- * and the `#old` selectors of the style sheets.
+ * `url(#old)` in any attribute, `href="#old"`, the connectors of SVG-Edit,
+ * the start and end of animations (`begin="old.end"`) and the `#old`
+ * selectors of the style sheets.
  * @param {Element} root
  * @param {Map<string, string>} ids - New identifier of each old one
  * @returns {void}
@@ -419,6 +472,8 @@ const remapReferences = (root, ids) => {
         if (value.startsWith('#') && ids.has(value.slice(1))) next = `#${ids.get(value.slice(1))}`
       } else if (attr.localName === 'connector' && attr.namespaceURI === NS.SE) {
         next = value.split(/\s+/).map((id) => ids.get(id) || id).join(' ')
+      } else if ((attr.localName === 'begin' || attr.localName === 'end') && !attr.namespaceURI) {
+        next = remapTimingIds(value, (id) => ids.get(id))
       } else if (value.includes('url(')) {
         next = value.replace(URL_REFERENCE, remapUrl)
       }
@@ -478,12 +533,14 @@ const renameDuplicateIds = (content) => {
  * @fires module:svgcanvas.SvgCanvas#event:setnonce
  * @fires module:svgcanvas.SvgCanvas#event:unsetnonce
  * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @fires module:svgcanvas.SvgCanvas#event:contentRemoved
  * @returns {boolean} This function returns `false` if the set was
  *     unsuccessful, `true` otherwise.
  */
 const setSvgString = (xmlString, preventUndo) => {
   const curConfig = svgCanvas.getCurConfig()
   const dataStorage = svgCanvas.getDataStorage()
+  let removed
   try {
     // convert string into XML document
     const newDoc = text2xml(xmlString)
@@ -494,7 +551,7 @@ const setSvgString = (xmlString, preventUndo) => {
       return false
     }
 
-    svgCanvas.prepareSvg(newDoc)
+    removed = svgCanvas.prepareSvg(newDoc)
 
     const batchCmd = new BatchCommand('Change Source')
 
@@ -607,7 +664,9 @@ const setSvgString = (xmlString, preventUndo) => {
 
     let percs = false
 
-    // Kept for the save, which writes back the size attributes declared
+    // Kept for the save, which writes back the identifier of the root (the
+    // drawing uses its own), and the size attributes declared
+    if (content.id) dataStorage.put(content, 'rootId', content.id)
     dataStorage.put(content, 'declaredSize', {
       viewBox: content.hasAttribute('viewBox'),
       size: content.hasAttribute('width') || content.hasAttribute('height') || !content.hasAttribute('viewBox')
@@ -706,6 +765,9 @@ const setSvgString = (xmlString, preventUndo) => {
     error('Error setting SVG string', e, 'svg-exec')
     return false
   }
+  if (removed.length) {
+    svgCanvas.call('contentRemoved', { action: 'open', items: removed })
+  }
 
   return true
 }
@@ -750,8 +812,9 @@ const cancelGroupTransform = (parent, layer) => {
 /**
  * This function imports the input SVG XML as a `<symbol>` in the `<defs>`, then adds a
  * `<use>` to the current layer, at the size the file declares. The stylesheets
- * of the file apply only to it. The import is one undo step; when it fails,
- * the drawing is put back as it was.
+ * and the animations of the file apply only to it. The import is one undo
+ * step; when it fails, the drawing is put back as it was. What the import
+ * could not keep is listed in one message (`contentRemoved`).
  * @function module:svgcanvas.SvgCanvas#importSvgString
  * @param {string} xmlString - The SVG as XML text.
  * @param {boolean} [_preserveDimension] - No longer used: the import always
@@ -774,7 +837,7 @@ const importSvgString = (xmlString, _preserveDimension, _doNotUseExisting) => {
     if (!newDoc) {
       throw new Error('Not an SVG document')
     }
-    svgCanvas.prepareSvg(newDoc)
+    removed = svgCanvas.prepareSvg(newDoc)
 
     // import new svg document into our document
     // If DOM3 adoptNode() available, use it. Otherwise fall back to DOM2 importNode()
@@ -783,6 +846,7 @@ const importSvgString = (xmlString, _preserveDimension, _doNotUseExisting) => {
       : svgCanvas.getDOMDocument().importNode(newDoc.documentElement, true)
 
     svgCanvas.uniquifyElems(svg)
+    removed.push(...removeOutsideAnimations(svg))
     const { width, height } = getDeclaredSize(svg)
 
     const symbol = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'symbol')
@@ -810,18 +874,19 @@ const importSvgString = (xmlString, _preserveDimension, _doNotUseExisting) => {
       symbol.append(first)
     }
     // The size of the root goes to the <use>: the <symbol> keeps its view
-    // box, which scales the file to that size.
+    // box, which scales the file to that size. The namespaces are declared
+    // on the root of the drawing when it is saved.
     for (const attr of svg.attributes) {
-      if (!['x', 'y', 'width', 'height'].includes(attr.nodeName)) {
-        symbol.setAttribute(attr.nodeName, attr.value)
-      }
+      if (attr.namespaceURI === NS.XMLNS) continue
+      if (!attr.namespaceURI && ['x', 'y', 'width', 'height'].includes(attr.localName)) continue
+      symbol.setAttributeNS(attr.namespaceURI, attr.nodeName, attr.value)
     }
     // In the drawing before any new identifier is chosen: the identifiers of
     // the file are kept, so a new one must not take one of them.
     defs.append(symbol)
     batchCmd.addSubCommand(new InsertElementCommand(symbol))
     if (!symbol.id) symbol.id = svgCanvas.getNextId()
-    removed = scopeImportedStyles(symbol)
+    removed.push(...scopeImportedStyles(symbol))
 
     useEl = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'use')
     useEl.id = svgCanvas.getNextId()
@@ -1153,6 +1218,9 @@ const uniquifyElemsMethod = g => {
   svgCanvas.getDOMDocument().querySelectorAll('[id]').forEach((elem) => {
     if (!g.contains(elem)) taken.add(elem.id)
   })
+  // The identifier of the root of the drawing, written back on save
+  const rootId = svgCanvas.getDataStorage().get(svgCanvas.getSvgContent(), 'rootId')
+  if (rootId) taken.add(rootId)
   const own = new Set(inside.map((elem) => elem.id))
   const seen = new Set()
   const renamed = new Map()
@@ -1224,29 +1292,19 @@ const removeUnusedDefElemsMethod = () => {
 
   const defelemUses = []
   let numRemoved = 0
-  const attrs = [
-    'fill',
-    'stroke',
-    'filter',
-    'marker-start',
-    'marker-mid',
-    'marker-end'
-  ]
-  const alen = attrs.length
 
   const allEls = svgCanvas.getSvgContent().getElementsByTagNameNS(NS.SVG, '*')
-  const allLen = allEls.length
 
-  let i
-  let j
-  for (i = 0; i < allLen; i++) {
-    const el = allEls[i]
-    for (j = 0; j < alen; j++) {
-      const ref = svgCanvas.getUrlFromAttr(el.getAttribute(attrs[j]))
-      if (ref) {
-        defelemUses.push(ref.substr(1))
-      }
+  // A reference in any attribute (the values of an animation, a style
+  // attribute) or stylesheet keeps its element
+  const addReferences = (text) => {
+    for (const [, , id] of text.matchAll(URL_REFERENCE)) defelemUses.push(id)
+  }
+  for (const el of allEls) {
+    for (const attr of el.attributes) {
+      if (attr.value.includes('url(')) addReferences(attr.value)
     }
+    if (el.localName === 'style') addReferences(el.textContent)
 
     // gradients can refer to other gradients
     const href = getHref(el)

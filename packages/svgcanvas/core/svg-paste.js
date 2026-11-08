@@ -9,10 +9,11 @@
 
 import { NS } from './namespaces.js'
 import * as hstry from './history.js'
-import { text2xml } from './utilities.js'
+import { text2xml, getHref } from './utilities.js'
 import { convertToNum } from './units.js'
 import { finishPaste } from './paste-elem.js'
 import { splitTopLevel } from './css-scope.js'
+import { ANIMATION_ELEMENTS } from './sanitize.js'
 
 const { BatchCommand, InsertElementCommand } = hstry
 
@@ -356,6 +357,28 @@ const sortContent = (root) => {
 }
 
 /**
+ * Removes the animations of a tree being added that aim at an element
+ * outside it (`<animate href="#title">`): they would change an object of the
+ * drawing that happens to have that identifier.
+ * @function module:svg-paste.removeOutsideAnimations
+ * @param {Element} root - Its identifiers already made unique in the drawing
+ * @returns {string[]} The animations removed, for the user
+ */
+export const removeOutsideAnimations = (root) => {
+  const ids = new Set([root, ...root.querySelectorAll('[id]')].map((elem) => elem.id))
+  const removed = []
+  root.querySelectorAll([...ANIMATION_ELEMENTS].join(',')).forEach((animation) => {
+    const href = getHref(animation)
+    if (href?.startsWith('#') && !ids.has(href.slice(1))) {
+      animation.remove()
+      const item = `<${animation.localName} href="${href}">`
+      if (!removed.includes(item)) removed.push(item)
+    }
+  })
+  return removed
+}
+
+/**
  * Pastes SVG text from outside the editor, as one undo step, and selects the
  * pasted objects. The text goes through the import filter of an opened file:
  * scripts, event handlers, external references and unsafe CSS are removed.
@@ -378,6 +401,7 @@ export const pasteSvgString = (text, type, x, y) => {
   const domDocument = svgCanvas.getDOMDocument()
   const root = domDocument.importNode(doc.documentElement, true)
   svgCanvas.uniquifyElems(root)
+  removeOutsideAnimations(root)
   const scale = getRootScale(root)
   let { drawables, resources } = sortContent(root)
   if (!drawables.length) return []
