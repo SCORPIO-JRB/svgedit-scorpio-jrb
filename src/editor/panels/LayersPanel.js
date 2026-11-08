@@ -1,5 +1,6 @@
 import SvgCanvas from '@svgedit/svgcanvas'
 import LayersPanelHtml from './LayersPanel.html'
+import { askText } from '../components/askText.js'
 
 const { $id, $click } = SvgCanvas
 
@@ -47,7 +48,9 @@ class LayersPanel {
     const { i18next } = this.editor
 
     template.innerHTML = LayersPanelHtml
-    this.editor.$svgEditor.append(template.content.cloneNode(true))
+    // Each control in its zone of the layout (lot V3).
+    if (this.editor.layout) this.editor.layout.attach(template.content.cloneNode(true), 'layers')
+    else this.editor.$svgEditor.append(template.content.cloneNode(true))
     // layer menu added to DOM
     const menuMore = document.createElement('se-cmenu-layers')
     menuMore.setAttribute('id', 'se-cmenu-layers-more')
@@ -68,11 +71,27 @@ class LayersPanel {
     $click($id('layer_rename'), this.layerRename.bind(this))
     $id('se-cmenu-layers-more').addEventListener('change', this.lmenuFunc.bind(this))
     $id('se-cmenu-layers-list').addEventListener('change', (e) => { this.lmenuFunc(e) })
-    $click($id('sidepanel_handle'), () => this.toggleSidePanel())
+    if ($id('sidepanel_handle')) $click($id('sidepanel_handle'), () => this.toggleSidePanel())
     this.toggleSidePanel(this.editor.configObj.curConfig.showlayers)
   }
 
+  /**
+   * Shows or hides the layers: the side panel of the classic layout, the
+   * Layers tab of the right panel in the canvas layout.
+   * @param {boolean} [displayFlag] Toggles when left out
+   * @returns {void}
+   */
   toggleSidePanel (displayFlag) {
+    const { layout } = this.editor
+    if (layout?.canvas) {
+      if (displayFlag) {
+        layout.setPanelOpen(true)
+        layout.selectTab('layers')
+      } else if (displayFlag === undefined) {
+        layout.setPanelOpen()
+      }
+      return
+    }
     if (displayFlag === undefined) {
       this.editor.$svgEditor.classList.toggle('open')
     } else if (displayFlag) {
@@ -83,24 +102,49 @@ class LayersPanel {
   }
 
   /**
-   * @returns {void}
+   * A unique name for a new layer: "Layer 2", "Layer 3"…
+   * @param {string} [base]
+   * @returns {string}
    */
-  newLayer () {
-    let uniqName
-    let i = this.editor.svgCanvas.getCurrentDrawing().getNumLayers()
+  uniqueLayerName (base) {
+    const drawing = this.editor.svgCanvas.getCurrentDrawing()
+    if (base && !drawing.hasLayer(base)) return base
+    let i = drawing.getNumLayers()
+    let name
     do {
-      uniqName = this.editor.i18next.t('layers.layer') + ' ' + ++i
-    } while (this.editor.svgCanvas.getCurrentDrawing().hasLayer(uniqName))
+      name = base ? `${base} ${++i}` : this.editor.i18next.t('layers.layer') + ' ' + ++i
+    } while (drawing.hasLayer(name))
+    return name
+  }
 
-    const newName = prompt(
+  /**
+   * Asks for the name of a layer in place (lot V3: no more prompt()).
+   * @param {string} label
+   * @param {string} value
+   * @param {Element} [anchor]
+   * @returns {Promise<string|null>} A name no layer has, or null
+   */
+  async askLayerName (label, value, anchor) {
+    const name = (await askText(this.editor, { label, value, anchor }))?.trim()
+    if (!name) return null
+    if (this.editor.svgCanvas.getCurrentDrawing().hasLayer(name)) {
+      this.editor.toast(this.editor.i18next.t('notification.dupeLayerName'), { type: 'error' })
+      return null
+    }
+    return name
+  }
+
+  /**
+   * @param {Element} [anchor] The control that asked
+   * @returns {Promise<void>}
+   */
+  async newLayer (anchor) {
+    const newName = await this.askLayerName(
       this.editor.i18next.t('notification.enterUniqueLayerName'),
-      uniqName
+      this.uniqueLayerName(),
+      anchor instanceof Element ? anchor : $id('layer_new')
     )
     if (!newName) {
-      return
-    }
-    if (this.editor.svgCanvas.getCurrentDrawing().hasLayer(newName)) {
-      alert(this.editor.i18next.t('notification.dupeLayerName'))
       return
     }
     this.editor.svgCanvas.createLayer(newName)
@@ -131,19 +175,15 @@ class LayersPanel {
    *
    * @returns {void}
    */
-  cloneLayer () {
+  async cloneLayer (anchor) {
     const name =
       this.editor.svgCanvas.getCurrentDrawing().getCurrentLayerName() + ' copy'
-
-    const newName = prompt(
+    const newName = await this.askLayerName(
       this.editor.i18next.t('notification.enterUniqueLayerName'),
-      name
+      this.uniqueLayerName(name),
+      anchor instanceof Element ? anchor : $id('layer_moreopts')
     )
     if (!newName) {
-      return
-    }
-    if (this.editor.svgCanvas.getCurrentDrawing().hasLayer(newName)) {
-      alert(this.editor.i18next.t('notification.dupeLayerName'))
       return
     }
     this.editor.svgCanvas.cloneLayer(newName)
@@ -185,20 +225,24 @@ class LayersPanel {
   }
 
   /**
-   * @returns {void}
+   * @param {Element} [anchor] The control that asked
+   * @returns {Promise<void>}
    */
-  layerRename () {
-    const ele = document.querySelector('#layerlist tr.layersel td.layername')
-    const oldName = (ele) ? ele.textContent : ''
-    const newName = prompt(this.editor.i18next.t('notification.enterNewLayerName'), '')
-    if (!newName) {
+  async layerRename (anchor) {
+    // In the canvas layout, the name is edited in its row of the tree.
+    const tree = this.editor.layout?.layerTree
+    if (tree?.renameCurrent()) return
+    const oldName = this.editor.svgCanvas.getCurrentDrawing().getCurrentLayerName()
+    const newName = (await askText(this.editor, {
+      label: this.editor.i18next.t('notification.enterNewLayerName'),
+      value: oldName,
+      anchor: anchor instanceof Element ? anchor : $id('layer_rename')
+    }))?.trim()
+    if (!newName || newName === oldName) {
       return
     }
-    if (
-      oldName === newName ||
-      this.editor.svgCanvas.getCurrentDrawing().hasLayer(newName)
-    ) {
-      alert(this.editor.i18next.t('notification.layerHasThatName'))
+    if (this.editor.svgCanvas.getCurrentDrawing().hasLayer(newName)) {
+      this.editor.toast(this.editor.i18next.t('notification.layerHasThatName'), { type: 'error' })
       return
     }
     this.editor.svgCanvas.renameCurrentLayer(newName)
@@ -285,6 +329,7 @@ class LayersPanel {
         })
         evt.currentTarget.parentNode.classList.add('layersel')
         self.editor.svgCanvas.setCurrentLayer(evt.currentTarget.textContent)
+        self.editor.layout?.layersChanged()
         // run extension when different layer is selected from listener
         self.editor.svgCanvas.runExtensions(
           'layersChanged'
@@ -318,13 +363,15 @@ class LayersPanel {
     while (num-- > 0) {
       // TODO: there must a better way to do this
       const tlayer = document.createElement('tr')
-      tlayer.innerHTML = '<td style="color:white">_</td><td/>'
+      tlayer.innerHTML = '<td style="visibility:hidden">_</td><td/>'
       layerlist.append(tlayer)
     }
     // run extension when layer panel is populated
     self.editor.svgCanvas.runExtensions(
       'layersChanged'
     )
+    // The current layer in the toolbar, the tree of the Layers tab (lot V3).
+    self.editor.layout?.layersChanged()
   }
 }
 

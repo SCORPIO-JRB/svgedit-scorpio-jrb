@@ -1,4 +1,4 @@
-import SePlainAlertDialog from './SePlainAlertDialog.js'
+import SePlainAlertDialog, { openInEditor } from './SePlainAlertDialog.js'
 /**
  * @class SePromptDialog
  */
@@ -36,13 +36,13 @@ export class SePromptDialog extends HTMLElement {
         }
         this.dialog.textContent = newValue
         this.dialog.choices = ['Cancel']
-        this.dialog.open()
+        openInEditor(this.dialog)
         break
       case 'close':
         if (this.dialog.opened) {
           this.dialog.close()
         } else {
-          this.dialog.open()
+          openInEditor(this.dialog)
         }
         break
       default:

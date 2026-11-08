@@ -17,7 +17,9 @@
     "packages/react-test"
   ],
   "scripts": {
-    "lint": "standard .",
+    "lint": "standard . && npm run lint:colors && npm run lint:labels",
+    "lint:colors": "node scripts/check-colors.mjs",
+    "lint:labels": "node scripts/check-labels.mjs",
     "pretest": "npm run lint",
     "test": "vitest run --coverage && node scripts/run-e2e.mjs",
     "build": "vite build packages/svgcanvas && vite build packages/react-test && vite build",
@@ -27,6 +29,7 @@
     "start:iife": "npm run build && vite preview --host --port 8000 --strictPort --outDir dist/editor --open /iife-index.html",
     "start:e2e": "vite preview --host --port 8000 --strictPort --outDir dist/editor",
     "bench": "node tests/perf/canvas-bench.mjs --budgets=tests/perf/budgets.json",
+    "fidelity": "node tests/output/fidelity.mjs",
     "open-docs-no-start": "open-cli http://localhost:8000/docs/jsdoc/",
     "open-docs": "run-p start open-docs-no-start",
     "build-docs-remove": "rimraf \"docs/jsdoc/\"",
@@ -92,6 +95,7 @@
     "svg2pdf.js": "2.7.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "^1.61.1",
     "@rollup/plugin-dynamic-import-vars": "2.1.5",
     "@vitest/coverage-v8": "^4.1.10",

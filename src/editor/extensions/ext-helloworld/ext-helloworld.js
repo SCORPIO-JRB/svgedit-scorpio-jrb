@@ -73,8 +73,8 @@ export default {
 
           // We do our own formatting
           const text = svgEditor.i18next.t(`${name}:text`, { x, y })
-          // Show the text using the custom alert function
-          alert(text)
+          // A message that does not block (lot V3: no more alert()).
+          svgEditor.toast(text)
         }
       }
     }

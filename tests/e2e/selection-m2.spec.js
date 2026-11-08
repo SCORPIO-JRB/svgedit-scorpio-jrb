@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, canonical } from './helpers.js'
 
 // M2: common frame of a multi-selection and collective resize.
 
@@ -16,7 +16,9 @@ const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:se="http://svg-ed
 
 async function loadDrawing (page) {
   await page.evaluate((svg) => {
-    window.svgEditor.setConfig({ gridSnapping: false })
+    // These tests measure the gesture itself, to the unit: no snapping to
+    // the neighbours (lot V2), which has its own tests (snap-v2).
+    window.svgEditor.setConfig({ gridSnapping: false, objectSnapping: false })
     window.svgEditor.svgCanvas.setSvgString(svg)
     window.svgEditor.svgCanvas.setZoom(1)
     window.svgEditor.updateCanvas()
@@ -238,7 +240,7 @@ test.describe('Rules by element type (M2)', () => {
   test('a group keeps a matrix, as when it is resized alone', async ({ page }) => {
     await select(page, ['grp', 'r1'])
     await page.evaluate(() => window.svgEditor.svgCanvas.scaleSelectedElements(2, 2, 0, 0))
-    expect(await attr(page, 'grp', 'transform')).toMatch(/^matrix\(2[ ,]0[ ,]0[ ,]2[ ,]0[ ,]0\)$/)
+    expect(canonical(await attr(page, 'grp', 'transform'))).toBe('matrix(2 0 0 2 0 0)')
     expect(await num(page, 'g1', ['x', 'width'])).toEqual({ x: 450, width: 40 })
   })
 
@@ -310,7 +312,9 @@ test.describe('Other element types (M2)', () => {
   test.beforeEach(async ({ page }) => {
     await visitAndApproveStorage(page)
     await page.evaluate((svg) => {
-      window.svgEditor.setConfig({ gridSnapping: false })
+      // These tests measure the gesture itself, to the unit: no snapping to
+      // the neighbours (lot V2), which has its own tests (snap-v2).
+      window.svgEditor.setConfig({ gridSnapping: false, objectSnapping: false })
       window.svgEditor.svgCanvas.setSvgString(svg)
       window.svgEditor.svgCanvas.setZoom(1)
       window.svgEditor.updateCanvas()
@@ -328,7 +332,7 @@ test.describe('Other element types (M2)', () => {
     expect(await attr(page, 'p1', 'transform')).toBeNull()
     expect(await attr(page, 'pl', 'points')).toBe('400,15 460,60 520,15')
     // use keeps a matrix.
-    expect(await attr(page, 'u1', 'transform')).toMatch(/^matrix\(2[ ,]0[ ,]0[ ,]1\.5[ ,]0[ ,]0\)$/)
+    expect(canonical(await attr(page, 'u1', 'transform'))).toBe('matrix(2 0 0 1.5 0 0)')
     // Boxes: geometry rewritten.
     expect(await num(page, 'im', ['x', 'y', 'width', 'height'])).toEqual({ x: 20, y: 150, width: 80, height: 45 })
     expect(await num(page, 'fo', ['x', 'y', 'width', 'height'])).toEqual({ x: 200, y: 150, width: 120, height: 60 })

@@ -76,9 +76,7 @@ class BottomPanel {
           // In pathedit mode, use zoomImage to update path points correctly.
           this.editor.zoomImage(newZoom / zoom)
         } else {
-          const { workarea } = this.editor
-          // Use helper function to compute center only once.
-          const center = getWorkareaCenter(workarea, zoom)
+          const center = this.editor.view.center
           this.editor.zoomChanged(
             window,
             {
@@ -102,13 +100,13 @@ class BottomPanel {
   updateToolButtonState () {
     const bNoFill = this.editor.svgCanvas.getColor('fill') === 'none'
     const bNoStroke = this.editor.svgCanvas.getColor('stroke') === 'none'
-    const buttonsNeedingStroke = ['tool_fhpath', 'tool_line']
-    const buttonsNeedingFillAndStroke = [
-      'tools_rect',
-      'tools_ellipse',
-      'tool_text',
-      'tool_path'
-    ]
+    // The rectangle and ellipse groups exist in the classic layout only;
+    // the canvas layout has their tools in its Shapes menu (lot V3).
+    const present = (ids) => ids.filter((id) => $id(id))
+    const buttonsNeedingStroke = present(['tool_fhpath', 'tool_line'])
+    const buttonsNeedingFillAndStroke = present($id('tools_rect')
+      ? ['tools_rect', 'tools_ellipse', 'tool_text', 'tool_path']
+      : ['tool_rect', 'tool_square', 'tool_fhrect', 'tool_ellipse', 'tool_circle', 'tool_fhellipse', 'tool_text', 'tool_path'])
 
     if (bNoStroke) {
       buttonsNeedingStroke.forEach(btn => {
@@ -214,7 +212,9 @@ class BottomPanel {
     const { i18next } = this.editor
 
     template.innerHTML = BottomPanelHtml
-    this.editor.$svgEditor.append(template.content.cloneNode(true))
+    // Each control in its zone of the layout (lot V3).
+    if (this.editor.layout) this.editor.layout.attach(template.content.cloneNode(true), 'bottom')
+    else this.editor.$svgEditor.append(template.content.cloneNode(true))
     $id('palette').addEventListener('change', this.handlePalette.bind(this))
     $id('palette').init(i18next)
     const { curConfig } = this.editor.configObj
@@ -227,7 +227,9 @@ class BottomPanel {
         solidColor: curConfig.initStroke.color
       })
     )
-    $id('zoom').addEventListener('change', e =>
+    // The zoom field of the classic layout; the canvas layout has the zoom
+    // menu of its view group instead.
+    $id('zoom')?.addEventListener('change', e =>
       this.changeZoom.bind(this)(e.detail.value)
     )
     $id('stroke_color').addEventListener('change', evt =>
@@ -299,16 +301,6 @@ class BottomPanel {
       this.editor.selectedElement,
       apply
     )
-  }
-}
-
-// Helper function to get the center of the workarea
-const getWorkareaCenter = (workarea, zoom) => {
-  const width = parseFloat(getComputedStyle(workarea).width.replace('px', ''))
-  const height = parseFloat(getComputedStyle(workarea).height.replace('px', ''))
-  return {
-    x: (workarea.scrollLeft + width / 2) / zoom,
-    y: (workarea.scrollTop + height / 2) / zoom
   }
 }
 

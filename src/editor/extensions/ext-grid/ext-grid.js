@@ -28,6 +28,30 @@ export default {
     await loadExtensionTranslation(svgEditor)
     const { svgCanvas } = svgEditor
     const { $id, $click, NS } = svgCanvas
+    if (svgEditor.grid) {
+      // Since V2 the interaction layer of the editor draws the grid, over
+      // the whole view (see grid.js): the extension keeps its button.
+      return {
+        name: svgEditor.i18next.t(`${name}:name`),
+        zoomChanged () {},
+        callback () {
+          const buttonTemplate = document.createElement('template')
+          buttonTemplate.innerHTML = `
+            <se-button id="view_grid" title="${name}:buttons.0.title" src="grid.svg" shortcut="mod+'"></se-button>
+          `
+          $id('editor_panel').append(buttonTemplate.content.cloneNode(true))
+          const button = $id('view_grid')
+          const sync = () => { button.pressed = svgEditor.grid.visible }
+          $click(button, () => {
+            svgEditor.grid.setVisible(!svgEditor.grid.visible)
+            sync()
+          })
+          svgEditor.$container?.addEventListener('se-gridchange', sync)
+          svgEditor.grid.update()
+          sync()
+        }
+      }
+    }
     const svgdoc = $id('svgcanvas').ownerDocument
     const { assignAttributes } = svgCanvas
     const hcanvas = document.createElement('canvas')

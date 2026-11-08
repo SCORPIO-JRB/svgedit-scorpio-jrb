@@ -1,12 +1,1 @@
-<svg width="50" height="50" xmlns="http://www.w3.org/2000/svg">
- <defs>
-  <linearGradient y2="0.1" x2="0.9" y1="0.9" x1="0.1" id="svg_7">
-   <stop stop-color="#000000" offset="0"/>
-   <stop stop-opacity="0" stop-color="#000000" offset="1"/>
-  </linearGradient>
- </defs>
-  <rect id="svg_4" height="50" width="50" y="0" x="0" fill="#ffffff"/>
-  <rect id="svg_1" height="25" width="25" y="0" x="0" fill="#a0a0a0"/>
-  <rect id="svg_2" height="25" width="25" y="25" x="25" fill="#a0a0a0"/>
-  <rect id="svg_3" height="50" width="50" y="0" x="0" stroke-width="2" stroke="url(#svg_7)" fill="url(#svg_7)"/>
- </svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="24" height="24" fill="currentColor"><path d="M253.5-210.5Q160-301 160-434q0-66 25.5-123T255-658l193-191q7-7 15.5-10t16.5-3q8 0 16.5 3t15.5 10l193 191q44 44 69.5 101T800-434q0 133-93.5 223.5T480-120q-133 0-226.5-90.5ZM223-400h514q13-69-15-127t-56-85L480-795 294-612q-28 27-56 85t-15 127Z"/></svg>

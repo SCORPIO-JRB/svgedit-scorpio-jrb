@@ -1,105 +1,108 @@
 /* globals svgEditor */
+import './seIcon.js'
+import { t } from '../locale.js'
 const template = document.createElement('template')
 template.innerHTML = `
   <style>
   input{
-    border:unset;
-    background-color:var(--input-color);
-    min-width:unset;
-    width:40px;
-    height:23px;
-    padding:1px 2px;
-    border:2px;
+    box-sizing: border-box;
+    width: 44px;
+    height: var(--se-control-size);
+    min-width: unset;
+    margin: 0 1px 0 4px;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: var(--se-radius-field) 0 0 var(--se-radius-field);
+    background-color: var(--se-control);
+    color: var(--se-text);
     font: inherit;
-    margin: 2px 1px 0px 2px;
-    box-sizing:border-box;
+    font-variant-numeric: tabular-nums;
     text-align: center;
-    border-radius: 3px 0px 0px 3px;
+  }
+  input:hover {
+    border-color: var(--se-border-control);
+  }
+  input:focus-visible {
+    outline: 2px solid var(--se-focus-ring);
+    outline-offset: 1px;
   }
   #tool-wrapper{
-    height:20px;
+    height: var(--se-control-size);
     display:flex;
     align-items:center;
   }
   #icon{
-    margin-bottom:1px
+    color: var(--se-icon);
   }
   #spinner{
     display:flex;
     flex-direction:column;
+    gap: 1px;
   }
   #spinner > div {
-    height: 11px;
-    width: 7px;
+    height: 13px;
+    width: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 7px;
-    border-left:solid 1px transparent;
-    border-right:solid 1px transparent;
-    background-color:var(--input-color);
-  }
-  #arrow-up{
-    height:9px;
-    margin-top: 2px;
-    margin-bottom: 1px;
+    background-color: var(--se-control);
+    color: var(--se-text-secondary);
+    cursor: pointer;
   }
   #arrow-up, #arrow-down {
     user-select: none;
   }
-  @keyframes hover-arrows {
-    from {
-      background: transparent;
-      color: var(--icon-bg-color-hover);
-    }
-
-    to {
-      background: var(--icon-bg-color-hover);
-      color: var(--orange-color);
-    }
-  }
   #arrow-up:hover, #arrow-down:hover {
-    animation: hover-arrows 0.2s forwards;
+    background-color: var(--se-control-hover);
+    color: var(--se-accent);
   }
   #down{
-    width:18px;
-    height:23px;
+    width: 20px;
+    height: var(--se-control-size);
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color:var(--input-color);
-    border-radius: 0px 3px 3px 0px;
-    margin: 2px 5px 0px 1px;
+    margin: 0 4px 0 1px;
+    border-radius: 0 var(--se-radius-field) var(--se-radius-field) 0;
+    background-color: var(--se-control);
+    color: var(--se-text-secondary);
+    cursor: pointer;
   }
-  #down > img {
-    margin-top: 2px;
+  #down:hover {
+    color: var(--se-text);
   }
   #options-container {
-    position:fixed
-    display:flex;
-    flex-direction:column;
-    background-color:var(--icon-bg-color);
-    border:solid 1px white;
-    box-shadow:0 0px 10px rgb(0 0 0 / 50%);
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    border: 1px solid var(--se-border);
+    border-radius: var(--se-radius-float);
+    background-color: var(--se-surface-raised);
+    box-shadow: var(--se-shadow-menu);
+    z-index: 20;
   }
   ::slotted(*) {
-    margin:2px;
-    padding:3px;
-    color:white;
+    margin: 0;
+    padding: 4px 8px;
+    border-radius: var(--se-radius-field);
+    color: var(--se-text);
+    cursor: pointer;
   }
   ::slotted(*:hover) {
-    background-color: rgb(43, 60, 69);
+    background-color: var(--se-control-hover);
   }
   </style>
   <div id="tool-wrapper">
-    <img id="icon" alt="icon" width="18" height="18"/>
+    <se-icon id="icon"></se-icon>
     <input/>
     <div id="spinner">
       <div id="arrow-up">▲</div>
       <div id="arrow-down">▼</div>
     </div>
     <div id="down">
-      <img width="16" height="8" src="arrow_down.svg" alt="Zoom dropdown"/>
+      <se-icon data-src="arrow_down.svg" size="16"></se-icon>
     </div>
   </div>
   <div id="options-container" style="display:none">
@@ -140,14 +143,14 @@ class SeZoom extends HTMLElement {
 
     this.imgPath = svgEditor.configObj.curConfig.imgPath
 
-    this.downImageElement = this.clickArea.querySelector('img')
+    this.downImageElement = this.clickArea.querySelector('se-icon')
     this.downImageElement.setAttribute(
       'src',
-      (this.imgPath + '/' + this.downImageElement.getAttribute('src'))
+      (this.imgPath + '/' + this.downImageElement.dataset.src)
     )
 
     // set src for imageElement
-    this.imageElement = this._shadowRoot.querySelector('img')
+    this.imageElement = this._shadowRoot.querySelector('#icon')
     this.imageElement.setAttribute(
       'src',
       (this.imgPath + '/' + this.getAttribute('src'))
@@ -183,6 +186,20 @@ class SeZoom extends HTMLElement {
 
   static get observedAttributes () {
     return ['value']
+  }
+
+  /**
+   * The title is a translation key: it becomes the tooltip and the
+   * accessible name of the field (lot V1).
+   * @returns {void}
+   */
+  connectedCallback () {
+    const titleKey = this.getAttribute('title')
+    if (titleKey) {
+      this.seTooltip = { label: t(titleKey) }
+      this.inputElement.setAttribute('aria-label', t(titleKey))
+      this.removeAttribute('title')
+    }
   }
 
   /**
@@ -283,7 +300,6 @@ class SeZoom extends HTMLElement {
    */
   handleSelect (e) {
     this.value = e.target.getAttribute('value')
-    this.title = e.target.getAttribute('text')
   }
 
   /**

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, revealControl } from './helpers.js'
 
 // M1: flip of a multi-selection, Alt+drag as one undo step, Escape cancels
 // the gesture in progress.
@@ -94,6 +94,7 @@ test.describe('Flip of a multi-selection (M1)', () => {
 
   test('the flip buttons are shown for a multi-selection', async ({ page }) => {
     await select(page, ['r1', 'r2'])
+    await revealControl(page, 'tool_flip_h_multi')
     await expect(page.locator('#tool_flip_h_multi')).toBeVisible()
     await page.locator('#tool_flip_h_multi').click()
     expect((await attrs(page, 'r1', ['x'])).x).toBe(240)

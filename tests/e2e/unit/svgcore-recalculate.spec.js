@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures.js'
+import { canonical } from '../helpers.js'
 
 test.describe('SVG core recalculate', () => {
   test.beforeEach(async ({ page }) => {
@@ -112,7 +113,7 @@ test.describe('SVG core recalculate', () => {
     })
     expect(result.textAttrs.x).toBe('200')
     expect(result.textAttrs.y).toBe('150')
-    expect(result.textAttrs.transform).toContain('matrix(1 0 0 1 100 50)')
+    expect(canonical(result.textAttrs.transform)).toContain('matrix(1 0 0 1 100 50)')
     expect(result.tspanAttrs).toEqual({ x: '200', y: '150' })
   })
 })

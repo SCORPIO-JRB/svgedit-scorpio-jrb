@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { setSvgSource, visitAndApproveStorage } from './helpers.js'
+import { setSvgSource, visitAndApproveStorage, clickControl } from './helpers.js'
 
 test.describe('Regression issues', () => {
   test.beforeEach(async ({ page }) => {
@@ -13,8 +13,8 @@ test.describe('Regression issues', () => {
         <rect fill="#ffff00" height="70" width="165" x="179.5" y="146.5"/>
       </g>
      </svg>`)
-    await page.locator('#tool_undo').click()
-    await page.locator('#tool_redo').click()
+    await clickControl(page, 'tool_undo')
+    await clickControl(page, 'tool_redo')
   })
 
   test('issue 407: ellipse rotation preserves center', async ({ page }) => {

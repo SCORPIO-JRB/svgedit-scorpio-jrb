@@ -1,11 +1,12 @@
 import SvgCanvas from '@svgedit/svgcanvas'
 /* globals svgEditor */
 import imagePropertiesDialogHTML from './imagePropertiesDialog.html'
+import { dialogStyles } from './dialogStyles.js'
 
 const { isValidUnit } = SvgCanvas
 
 const template = document.createElement('template')
-template.innerHTML = imagePropertiesDialogHTML
+template.innerHTML = dialogStyles + imagePropertiesDialogHTML
 /**
  * @class SeImgPropDialog
  */
@@ -39,6 +40,7 @@ export class SeImgPropDialog extends HTMLElement {
     this.setAttribute('common-ok', i18next.t('common.ok'))
     this.setAttribute('common-cancel', i18next.t('common.cancel'))
     this.setAttribute('config-image_props', i18next.t('config.image_props'))
+    this.$dialog.setAttribute('aria-label', i18next.t('config.image_props'))
     this.setAttribute('config-doc_title', i18next.t('config.doc_title'))
     this.setAttribute('config-doc_dims', i18next.t('config.doc_dims'))
     this.setAttribute('common-width', i18next.t('common.width'))
@@ -120,7 +122,7 @@ export class SeImgPropDialog extends HTMLElement {
           if (data.length > 1) {
             this._shadowRoot.querySelector('#image_opt_embed').setAttribute('title', data[1])
             this._shadowRoot.querySelector('#image_opt_embed').setAttribute('disabled', 'disabled')
-            this._shadowRoot.querySelector('#image_opt_embed').style.color = '#666'
+            this._shadowRoot.querySelector('#image_opt_embed').style.opacity = '0.38'
           }
         }
         break

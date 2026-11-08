@@ -1,6 +1,1 @@
-<?xml version="1.0"?>
-<svg width="31" height="28" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
-  <!-- Created with SVG-edit - https://github.com/SVG-Edit/svgedit-->
-  <text fill="#000000" font-family="serif" font-size="24" id="svg_1" stroke="#000000" stroke-width="0" text-anchor="middle" text-decoration="0" x="16" xml:space="preserve" y="21.5">ab</text>
-  <line fill="none" id="svg_2" stroke="#f9bc01" stroke-width="2" x1="1" x2="29.70526" y1="24" y2="24"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="24" height="24" fill="currentColor"><path d="M230-140q-13 0-21.5-8.5T200-170q0-13 8.5-21.5T230-200h500q13 0 21.5 8.5T760-170q0 13-8.5 21.5T730-140H230Zm93.5-198.5Q267-397 267-497v-302q0-17 12.5-29t29.5-12q17 0 29 12t12 29v302q0 63 34 101t96 38q62 0 96-38t34-101v-302q0-17 12.5-29t29.5-12q17 0 29 12t12 29v302q0 100-56.5 158.5T480-280q-100 0-156.5-58.5Z"/></svg>

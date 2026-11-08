@@ -1142,6 +1142,25 @@ class SvgCanvas {
     }
   }
 
+  /**
+   * Tells the canvas which part of the drawing its host shows, so that
+   * the snapping only takes the visible neighbours (lot V2).
+   * @function module:svgcanvas.SvgCanvas#setVisibleRectProvider
+   * @param {(() => {x: Float, y: Float, width: Float, height: Float})|null} provider
+   * @returns {void}
+   */
+  setVisibleRectProvider (provider) {
+    this.visibleRectProvider = provider
+  }
+
+  /**
+   * @function module:svgcanvas.SvgCanvas#getVisibleRect
+   * @returns {{x: Float, y: Float, width: Float, height: Float}|null} The part of the drawing shown, if the host says
+   */
+  getVisibleRect () {
+    return this.visibleRectProvider?.() ?? null
+  }
+
   getColor (type) {
     return this.curProperties[type]
   }

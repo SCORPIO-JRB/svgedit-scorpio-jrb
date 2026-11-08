@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures.js'
+import { canonical } from '../helpers.js'
 
 test.describe('SVG core remap extras', () => {
   test.beforeEach(async ({ page }) => {
@@ -134,7 +135,7 @@ test.describe('SVG core remap extras', () => {
     expect(result.rect.height).toBe('5')
     expect(result.rect.x).toBe('-10')
     expect(result.rect.y).toBe('-5')
-    expect(result.path.startsWith('M3,')).toBe(true)
-    expect(result.path).toContain('a2,6')
+    expect(canonical(result.path).startsWith('M 3 ')).toBe(true)
+    expect(canonical(result.path)).toContain('a 2 6')
   })
 })

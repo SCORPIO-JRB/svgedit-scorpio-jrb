@@ -68,14 +68,18 @@ export const putLocale = async function (givenParam, goodLangs) {
     langParam = 'en'
   }
   const module = await import(`./locale/lang.${encodeURIComponent(langParam)}.js`)
+  // A key missing from a language falls back to English rather than showing
+  // its name.
+  const resources = { [langParam]: { translation: module.default } }
+  if (langParam !== 'en') {
+    const english = await import('./locale/lang.en.js')
+    resources.en = { translation: english.default }
+  }
   i18next.init({
     lng: langParam,
+    fallbackLng: 'en',
     debug: false,
-    resources: {
-      [langParam]: {
-        translation: module.default
-      }
-    }
+    resources
   })
   return { langParam, i18next }
 }

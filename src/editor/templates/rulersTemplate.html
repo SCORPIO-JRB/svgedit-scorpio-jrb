@@ -2,8 +2,15 @@
   /* Rulers
 ——————————————————————————————————————*/
 
+  #ruler_corner,
+  #ruler_x,
+  #ruler_y {
+    color: var(--se-ruler-text);
+    font-family: var(--se-font-ui);
+  }
+
   #ruler_corner {
-    background: var(--ruler-color);
+    background: var(--se-ruler-bg);
     grid-area: corner;
     width: 15px;
     height: 15px;
@@ -11,20 +18,20 @@
   }
 
   #ruler_x {
-    background: var(--ruler-color);
+    background: var(--se-ruler-bg);
     grid-area: rulerX;
     height: 15px;
-    border-bottom: 1px solid;
-    border-left: 1px solid #777;
+    border-bottom: 1px solid var(--se-border);
+    border-left: 1px solid var(--se-border);
     overflow: hidden;
   }
 
   #ruler_y {
-    background: var(--ruler-color);
+    background: var(--se-ruler-bg);
     grid-area: rulerY;
     width: 15px;
-    border-right: 1px solid;
-    border-top: 1px solid #777;
+    border-right: 1px solid var(--se-border);
+    border-top: 1px solid var(--se-border);
     overflow: hidden;
   }
 

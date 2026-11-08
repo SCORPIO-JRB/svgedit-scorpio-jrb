@@ -1,24 +1,33 @@
 /* globals svgEditor */
+import './seIcon.js'
 import { t } from '../locale.js'
 
 const template = document.createElement('template')
 template.innerHTML = `
   <style>
-  [aria-label="option"]{
-    padding:0.25rem 0.125rem !important;
-    background-color: var(--icon-bg-color);
+  [role="option"]{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 2px !important;
+    border-radius: var(--se-radius-field);
+    color: var(--se-icon);
+    background-color: transparent;
   }
-  [aria-label="option"]:hover{
-    background-color: var(--icon-bg-color-hover);
+  [role="option"]:hover{
+    background-color: var(--se-control-hover);
+    color: var(--se-text);
   }
 
   .selected {
-    background-color: var(--icon-bg-color-hover);
+    background-color: var(--se-accent-bg);
+    color: var(--se-accent);
   }
 
   </style>
-  <div aria-label="option">
-    <img alt="icon" />
+  <div role="option">
+    <se-icon></se-icon>
     <slot></slot>
   </div>
 `
@@ -34,10 +43,10 @@ export class SeListItem extends HTMLElement {
     // create the shadowDom and insert the template
     this._shadowRoot = this.attachShadow({ mode: 'open' })
     this._shadowRoot.append(template.content.cloneNode(true))
-    this.$menuitem = this._shadowRoot.querySelector('[aria-label=option]')
+    this.$menuitem = this._shadowRoot.querySelector('[role=option]')
     // this.$svg = this.$menuitem.shadowRoot.querySelector('#checkmark')
     // this.$svg.setAttribute('style', 'display: none;')
-    this.$img = this._shadowRoot.querySelector('img')
+    this.$img = this._shadowRoot.querySelector('se-icon')
     this.$img.setAttribute('style', 'display: none;')
     this.imgPath = svgEditor.configObj.curConfig.imgPath
     this.$menuitem.addEventListener('mousedown', e => {
@@ -79,7 +88,7 @@ export class SeListItem extends HTMLElement {
         this.$img.setAttribute('title', t(newValue))
         break
       case 'img-height':
-        this.$img.setAttribute('height', newValue)
+        this.$img.setAttribute('size', Number.parseFloat(newValue) * 0.8 || 16)
         break
       case 'selected':
         if (newValue === 'true') {

@@ -1698,18 +1698,21 @@ const ungroupSelectedElement = () => {
  * @function module:svgcanvas.SvgCanvas#updateCanvas
  * @param {Float} w - Float with the new width
  * @param {Float} h - Float with the new height
+ * @param {{x: Float, y: Float}} [offset] - Where the origin of the drawing goes
+ *   on the canvas; in the middle by default. The borderless view of the editor
+ *   places it (lot V2).
  * @fires module:svgcanvas.SvgCanvas#event:ext_canvasUpdated
  * @returns {module:svgcanvas.CanvasInfo}
  */
-const updateCanvas = (w, h) => {
+const updateCanvas = (w, h, offset) => {
   svgCanvas.getSvgRoot().setAttribute('width', w)
   svgCanvas.getSvgRoot().setAttribute('height', h)
   const zoom = svgCanvas.getZoom()
   const bg = document.getElementById('canvasBackground')
   const oldX = Number(svgCanvas.getSvgContent().getAttribute('x'))
   const oldY = Number(svgCanvas.getSvgContent().getAttribute('y'))
-  const x = (w - svgCanvas.contentW * zoom) / 2
-  const y = (h - svgCanvas.contentH * zoom) / 2
+  const x = offset ? offset.x : (w - svgCanvas.contentW * zoom) / 2
+  const y = offset ? offset.y : (h - svgCanvas.contentH * zoom) / 2
 
   assignAttributes(svgCanvas.getSvgContent(), {
     width: svgCanvas.contentW * zoom,

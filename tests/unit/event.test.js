@@ -122,6 +122,14 @@ describe('event', () => {
       setRStartY (y) {
         this.rStartY = y
       },
+      // Where the gesture started, before any snapping: a move is measured
+      // from there since V2.
+      getRStartX () {
+        return this.rStartX ?? this.startX
+      },
+      getRStartY () {
+        return this.rStartY ?? this.startY
+      },
       getMouseTarget () {
         return contentGroup
       },

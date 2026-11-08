@@ -1,14 +1,1 @@
-<svg width="222" height="222" xmlns="http://www.w3.org/2000/svg">
-  <path id="svg_1" d="m93.75,118.44922c-4.5,13.58447 -14.66553,11.5 -28.25,11.5l-34,0c-13.58447,0 -24.5,-7.16553 -24.5,-21.5c0,-14.33447 10.91553,-20.5 24.5,-20.5l34,0c13.58447,0 19.75,-2.33447 26.5,10.75" stroke-width="13" stroke="#3f3f3f" fill="none"/>
-  <g id="svg_11">
-   <line id="svg_4" y2="65.94563" x2="83.07683" y1="28.27895" x1="45.41017" stroke-linecap="round" stroke-width="8" stroke="#007fff" fill="none"/>
-   <line id="svg_5" y2="15.01293" x2="109.41467" y1="65.94638" x1="109.41467" stroke-linecap="round" stroke-width="8" stroke="#007fff" fill="none"/>
-   <line id="svg_6" y2="29.31928" x2="177.58937" y1="65.94638" x1="140.96227" stroke-linecap="round" stroke-width="8" stroke="#007fff" fill="none"/>
-  </g>
-  <g id="svg_12" transform="rotate(-180, 108, 172.111)">
-   <line y2="190.94563" x2="79.57683" y1="153.27895" x1="41.91017" stroke-linecap="round" stroke-width="8" stroke="#007fff" fill="none" id="svg_13"/>
-   <line y2="140.01293" x2="105.91467" y1="190.94638" x1="105.91467" stroke-linecap="round" stroke-width="8" stroke="#007fff" fill="none" id="svg_14"/>
-   <line y2="154.31928" x2="174.08937" y1="190.94638" x1="137.46227" stroke-linecap="round" stroke-width="8" stroke="#007fff" fill="none" id="svg_15"/>
-  </g>
-  <path transform="rotate(-180, 172.125, 108.926)" id="svg_2" d="m215.5,118.44901c-4.5,13.58499 -14.6655,11.5 -28.25,11.5l-34,0c-13.5845,0 -24.5,-7.16501 -24.5,-21.5c0,-14.3343 10.9155,-20.4998 24.5,-20.4998l34,0c13.5845,0 19.75,-2.3345 26.5,10.75" stroke-width="13" stroke="#3f3f3f" fill="none"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="24" height="24" fill="currentColor"><path d="m594-447-60-60h71q13 0 21.5 8.5T635-477q0 13-8.5 21.5T605-447h-11ZM836-78q-9 9-21.5 9T793-78L84-786q-9-9-9-21.5t9-21.5q9-9 21.5-9t21.5 9l709 709q9 9 9 21t-9 21ZM280-280q-83 0-141.5-58.5T80-480q0-72 44.5-127T238-676l56 56h-14q-58 0-99 41t-41 99q0 58 41 99t99 41h140q13 0 21.5 8.5T450-310q0 13-8.5 21.5T420-280H280Zm75-170q-13 0-21.5-8.5T325-480q0-13 8.5-21.5T355-510h49l60 60H355Zm366 139q-5-11-.5-23t15.5-17q38-17 61-50.5t23-75.5q0-58-41-99t-99-41H555q-13 0-21.5-8.5T525-647q0-13 8.5-21.5T555-677h125q83 0 141.5 58.5T880-477q0 59-32.5 106.5T763-297q-11 6-24 2t-18-16Z"/></svg>

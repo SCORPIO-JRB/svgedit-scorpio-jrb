@@ -1,36 +1,50 @@
 import 'elix/define/Input.js'
 import { t } from '../locale.js'
+import './seIcon.js'
 
 const template = document.createElement('template')
 template.innerHTML = `
   <style>
   div {
-    height: 24px;
-    margin: 5px 1px;
-    padding: 3px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: var(--se-control-size);
+    margin: 4px 1px;
+    padding: 0 2px;
   }
-  img {
-    top: 2px;
-    left: 4px;
-    position: relative;
+  se-icon {
+    color: var(--se-icon);
   }
   span {
-    bottom: 1px;
-    right: -4px;
-    position: relative;
-    margin-right: 4px;
-    color: #fff;
+    color: var(--se-text-label);
   }
   elix-input {
-    background-color: var(--input-color);
-    border-radius: 3px;
-    height: 24px;
+    height: var(--se-control-size);
+    border-radius: var(--se-radius-field);
+    background-color: var(--se-control);
+    color: var(--se-text);
+  }
+  elix-input::part(input) {
+    padding: 0 6px;
+    border: 1px solid transparent;
+    border-radius: var(--se-radius-field);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+  elix-input::part(input):hover {
+    border-color: var(--se-border-control);
+  }
+  elix-input::part(input):focus-visible {
+    outline: 2px solid var(--se-focus-ring);
+    outline-offset: 1px;
   }
   </style>
-  <div>
-  <img alt="icon" width="12" height="12" />
-  <span id="label">label</span>
-  <elix-input></elix-input>
+  <div part="field">
+  <se-icon size="14" part="icon"></se-icon>
+  <span id="label" part="label"></span>
+  <elix-input part="box" exportparts="input"></elix-input>
   </div>
 `
 
@@ -48,7 +62,7 @@ export class SEInput extends HTMLElement {
     this._shadowRoot.append(template.content.cloneNode(true))
     // locate the component
     this.$div = this._shadowRoot.querySelector('div')
-    this.$img = this._shadowRoot.querySelector('img')
+    this.$img = this._shadowRoot.querySelector('se-icon')
     this.$label = this.shadowRoot.getElementById('label')
     this.$event = new CustomEvent('change')
     this.$input = this._shadowRoot.querySelector('elix-input')

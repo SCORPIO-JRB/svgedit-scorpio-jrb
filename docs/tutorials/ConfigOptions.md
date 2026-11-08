@@ -168,3 +168,146 @@ whether the file existed or not. With version 3.0, the move was made to
 be fully modular and let plugins add their default stylesheets to
 `$.loadingStylesheets` which SVGEdit would load dynamically, so that HTML
 would not need to indicate such style-information in a non-modular fashion.)
+
+## Theme and design tokens
+
+The interface is dark by default and also comes in a light theme. The
+`theme` preference chooses between them: `"system"` (the default) follows
+the operating system and switches live with it, `"dark"` and `"light"`
+force one. The user sets it in the editor preferences; a host page can set
+it with the other options:
+
+```js
+svgEditor.setConfig({ theme: 'light' })
+```
+
+or at any time, without reloading:
+
+```js
+svgEditor.setTheme('dark')
+```
+
+The theme only changes the workspace, never the document: the SVG written
+is the same in both themes.
+
+Every colour, font, size, radius and duration of the interface is a
+`--se-*` custom property of `src/editor/tokens.css`. The tokens are set on
+the element given to `new Editor(container)`, which receives the class
+`se-editor` and a `data-se-theme` attribute (`"dark"` or `"light"`); they
+are never set on `:root`, so that they do not leak into the host page. A
+host can adjust them on that element, for instance:
+
+```css
+#container.se-editor { --se-accent: #8b6fd4; }
+```
+
+The fonts (Roboto Flex, Space Grotesk) and the icons ship with the editor:
+it loads nothing from another origin.
+
+## View, grid and snapping
+
+The drawing has no edge: the view scrolls with the wheel (Shift+wheel
+sideways), zooms around the pointer with Ctrl+wheel or a pinch, from 1 % to
+6 400 %, and moves with Space+drag or the middle button. Nothing bounds it,
+and none of it changes the document. The `view` option, read at start,
+keeps the canvas of SVG-Edit with its scroll bars until the end of V3:
+
+```js
+svgEditor.setConfig({ view: 'scroll' }) // or ?view=scroll in the URL
+```
+
+One controller, `svgEditor.view`, moves and zooms the view for every
+gesture; a host can use it too:
+
+```js
+svgEditor.view.centerOn(100000, 100000) // a point of the drawing in the middle
+svgEditor.view.zoomAt(4)                // 400 %, around the middle of the view
+svgEditor.view.visibleRect()            // the part of the drawing shown
+```
+
+The grid is drawn over the whole view, never in the document. Showing it and
+snapping to it are two settings, both in the editor preferences:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `showGrid` | `false` | Shows the grid (button of `ext-grid`, Ctrl+') |
+| `gridSnapping` | `false` | Snaps edges and middles to its lines |
+| `snappingStep` | `10` | Step of the grid, in the base unit |
+| `gridSubdivisions` | `10` | A major line every so many steps |
+| `gridColor` | `""` | Colour of the lines; empty, those of the theme |
+| `objectSnapping` | `true` | Snaps to the visible objects and the page |
+
+The minor lines hide when they would be closer than 8 pixels on the screen.
+
+What is moved, resized or drawn snaps within 6 pixels of the screen to the
+edges and middles of the visible objects and of the page, to equal spacings
+between neighbours, to equal sizes and to the grid, with guides during the
+gesture. Boxes are those of the X, Y, W and H fields, stroke excluded, so a
+drag gives the same SVG as a typed value. Holding Ctrl suspends every
+snapping. Holding Alt over an object, with a selection, shows the distances
+from the selection to it.
+
+Alignment shortcuts follow Figma, except Alt+R for the right edge, since
+Alt+D takes the address bar of the browsers on Windows: Alt+A left, Alt+H
+horizontal centres, Alt+R right, Alt+W top, Alt+V vertical centres, Alt+S
+bottom, Alt+Shift+H and Alt+Shift+V distribute. A single object aligns on
+the page.
+
+## Layout
+
+The canvas takes the whole editor under a top bar of 40 px (lot V3):
+
+- the top bar holds the home of the host application and its breadcrumb,
+  then the name of the document, which opens the document menu; in the
+  middle the save state ("Unsaved changes", then "Saved"); on the right,
+  Export and Save;
+- the tools float over the canvas at the top left: current layer ▾ (which
+  also holds the layer commands: new, duplicate, rename, delete, move up and
+  down), Select, Scale, Hand, Text, Shapes ▾, Paths ▾, Image, Connector,
+  Library and More ▾;
+- the view group floats at the top right: the right panel (Ctrl+\) and the
+  zoom menu, which also holds the view options (rulers, grid, wireframe and
+  the buttons of the extensions), Undo and Redo;
+- the right panel has three tabs: Properties (one inspector, with sections
+  at fixed places, and the verbs on the selection in its "…" menu), Layers
+  (the search and the tree of the layers and their objects) and Code (the
+  SVG source of the selection, or of the document, coloured and editable).
+
+The rulers are hidden at first, as in the mockups: Shift+R or the zoom menu
+shows them. `showRulers: true`, or `?showRulers=true`, shows them at start;
+in the classic layout they are shown unless `showRulers` is false.
+
+Its width goes from 240 to 420 px, with the handle on its left edge, and is
+kept with the preferences. Below 1 280 px wide the panel becomes a drawer
+over the canvas; below 1 024 px the groups of tools fold into More ▾ and
+Export goes into the document menu.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `layout` | `"canvas"` | `"classic"` keeps the layout of SVG-Edit until the end of V4; read at start, also `?layout=classic` |
+| `homeUrl` | `""` | Link of the home button; http(s) only |
+| `breadcrumb` | `[]` | Breadcrumb before the name of the document: labels or `{label, href}` |
+
+`homeUrl` and `breadcrumb` are given by the host application and are never
+read from the URL:
+
+```js
+svgEditor.setConfig({
+  homeUrl: '/projets/le-perreux',
+  breadcrumb: ['Le Perreux', { label: 'Synoptiques', href: '/projets/le-perreux/synoptiques' }]
+})
+```
+
+A host that saves the document itself tells the editor so, and the top bar
+shows "Saved":
+
+```js
+svgEditor.showSaveWarning = false
+```
+
+Ctrl+\ is read by the key next to Enter, whatever character it types (on
+AZERTY, the key of "*").
+
+The questions the editor asks (name of a layer, address of an image or of a
+link) open in place under the control that asked, never in a window of the
+browser.

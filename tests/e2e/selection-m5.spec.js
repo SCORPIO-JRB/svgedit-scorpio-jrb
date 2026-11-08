@@ -19,7 +19,9 @@ const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480
 
 async function loadDrawing (page, svg = DRAWING) {
   await page.evaluate((svg) => {
-    window.svgEditor.setConfig({ gridSnapping: false })
+    // These tests measure the gesture itself, to the unit: no snapping to
+    // the neighbours (lot V2), which has its own tests (snap-v2).
+    window.svgEditor.setConfig({ gridSnapping: false, objectSnapping: false })
     window.svgEditor.svgCanvas.setSvgString(svg)
     window.svgEditor.svgCanvas.setZoom(1)
     window.svgEditor.updateCanvas()
@@ -387,7 +389,9 @@ test.describe('Oriented cursors and rotation from the corners (M5)', () => {
 
     const before = await undoSize(page)
     const text = await dragAround(page, from, pivot, 40, { during: async () => (await label(page)).text })
-    expect(Math.abs(await angleOf(page, 'r2') - 40)).toBeLessThan(0.5)
+    // Firefox gives mouse events whole pixels: about 30 pixels from the
+    // pivot, the angle the pointer turns is known within half a degree.
+    expect(Math.abs(await angleOf(page, 'r2') - 40)).toBeLessThan(1)
     expect(text).toMatch(/^(39|40)(\.\d)?°$/)
     expect(await undoSize(page)).toBe(before + 1)
 

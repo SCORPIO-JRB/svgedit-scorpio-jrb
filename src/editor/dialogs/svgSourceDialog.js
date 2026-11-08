@@ -1,8 +1,9 @@
 /* globals svgEditor */
 import svgSourceDialogHTML from './svgSourceDialog.html'
+import { dialogStyles } from './dialogStyles.js'
 
 const template = document.createElement('template')
-template.innerHTML = svgSourceDialogHTML
+template.innerHTML = dialogStyles + svgSourceDialogHTML
 /**
  * @class SeSvgSourceEditorDialog
  */
@@ -35,6 +36,8 @@ export class SeSvgSourceEditorDialog extends HTMLElement {
     this.setAttribute('tools-source_save', i18next.t('tools.source_save'))
     this.setAttribute('common-cancel', i18next.t('common.cancel'))
     this.setAttribute('notification-source_dialog_note', i18next.t('notification.source_dialog_note'))
+    this.$dialog.setAttribute('aria-label', i18next.t('tools.tool_source'))
+    this._shadowRoot.querySelector('#tool_source_dynamic_label').textContent = i18next.t('ui.dynamic_size')
     this.setAttribute('config-done', i18next.t('config.done'))
   }
 

@@ -13,7 +13,7 @@ import { NS } from './namespaces'
 import { warn } from '../common/logger.js'
 import { convertUnit } from './units.js'
 import {
-  CORNER_ANGLES, GRIP_ANGLES, formatAngle, formatPosition, formatSize, gripLayout,
+  CORNER_ANGLES, GRIP_ANGLES, formatAngle, formatLength, formatPosition, formatSize, gripLayout,
   namedResizeCursors, resizeCursor, rotateCursor
 } from './feedback.js'
 
@@ -33,6 +33,12 @@ const LABEL_HEIGHT = 18
 const LABEL_PADDING = 6
 const LABEL_FONT_SIZE = 11
 const LABEL_FONT_FAMILY = 'sans-serif'
+// Guides of the snapping and measures (lot V2): the colours of the editor's
+// theme, with fallbacks for a canvas used alone.
+const GUIDE_STROKE = 'stroke: var(--se-guide, #e0115f)'
+const GUIDE_FILL = 'fill: var(--se-guide, #e0115f)'
+const GUIDE_TEXT = 'fill: var(--se-guide-text, #fff)'
+const GUIDE_TICK = 4
 
 // Text width, measured on a detached canvas: measuring the SVG text itself
 // would force a layout of the whole drawing during a gesture.
@@ -690,6 +696,125 @@ export class SelectorManager {
   */
   showAngle (angle) {
     this.showDimension(formatAngle(angle))
+  }
+
+  /**
+  * Draws the guides of a snapping or of a measure (lot V2): lines through
+  * aligned edges and middles, spacings and sizes with their value. They are
+  * in the screen's pixels, whatever the zoom.
+  * @param {module:snap.Guide[]} guides - In the drawing's coordinates
+  * @returns {void}
+  */
+  showGuides (guides) {
+    if (!guides?.length) {
+      this.hideGuides()
+      return
+    }
+    if (!this.guidesGroup) {
+      this.guidesGroup = svgCanvas.createSVGElement({
+        element: 'g',
+        attr: { id: 'selectorGuides', style: 'pointer-events:none' }
+      })
+      this.guidesPath = svgCanvas.createSVGElement({
+        element: 'path',
+        attr: { fill: 'none', 'stroke-width': 1, 'shape-rendering': 'crispEdges', style: GUIDE_STROKE }
+      })
+      this.guidesLabels = svgCanvas.createSVGElement({ element: 'g', attr: {} })
+      this.guidesGroup.append(this.guidesPath, this.guidesLabels)
+    }
+    if (this.guidesGroup.parentNode !== this.selectorParentGroup || this.guidesGroup.nextSibling) {
+      this.selectorParentGroup.append(this.guidesGroup)
+    }
+    const zoom = svgCanvas.getZoom()
+    const z = (value) => Math.round(value * zoom) + 0.5
+    const unit = svgCanvas.getCurConfig?.()?.baseUnit || 'px'
+    let d = ''
+    const labels = []
+    for (const guide of guides) {
+      const vertical = guide.axis === 'x'
+      // A line on x is vertical; a spacing or a size on x is horizontal.
+      const alongX = guide.type === 'line' ? !vertical : vertical
+      const segment = (from, to, at) => alongX
+        ? `M${z(from)} ${z(at)}H${z(to)}`
+        : `M${z(at)} ${z(from)}V${z(to)}`
+      const ticks = (from, to, at) => {
+        const c = z(at)
+        return vertical
+          ? `M${z(from)} ${c - GUIDE_TICK}V${c + GUIDE_TICK}M${z(to)} ${c - GUIDE_TICK}V${c + GUIDE_TICK}`
+          : `M${c - GUIDE_TICK} ${z(from)}H${c + GUIDE_TICK}M${c - GUIDE_TICK} ${z(to)}H${c + GUIDE_TICK}`
+      }
+      if (guide.type === 'line') {
+        d += segment(guide.from, guide.to, guide.at)
+        continue
+      }
+      // Spacings and measures at their place, sizes a little outside the box.
+      const at = guide.type === 'size' ? guide.at - (GUIDE_TICK * 2) / zoom : guide.at
+      d += segment(guide.from, guide.to, at) + ticks(guide.from, guide.to, at)
+      if (guide.type !== 'size') {
+        const middle = (guide.from + guide.to) / 2
+        const length = Math.abs(guide.to - guide.from)
+        const value = unit === 'px' ? length : convertUnit(length, unit)
+        // Under a horizontal segment, right of a vertical one.
+        labels.push(vertical
+          ? { text: formatLength(value, unit), x: middle * zoom, y: at * zoom + LABEL_GAP + LABEL_HEIGHT / 2 }
+          : { text: formatLength(value, unit), x: at * zoom + LABEL_GAP, y: middle * zoom, start: true })
+      }
+    }
+    this.guidesPath.setAttribute('d', d)
+    this.#drawGuideLabels(labels)
+    this.guidesGroup.removeAttribute('display')
+  }
+
+  /**
+  * @param {{text: string, x: number, y: number}[]} labels - In the screen's pixels
+  * @returns {void}
+  */
+  #drawGuideLabels (labels) {
+    const pool = this.guidesLabels
+    while (pool.childNodes.length < labels.length) {
+      const label = svgCanvas.createSVGElement({ element: 'g', attr: {} })
+      label.append(
+        svgCanvas.createSVGElement({ element: 'rect', attr: { height: LABEL_HEIGHT, rx: 3, ry: 3, style: GUIDE_FILL } }),
+        svgCanvas.createSVGElement({
+          element: 'text',
+          attr: {
+            'font-size': LABEL_FONT_SIZE,
+            'font-family': LABEL_FONT_FAMILY,
+            'text-anchor': 'middle',
+            'dominant-baseline': 'central',
+            style: GUIDE_TEXT
+          }
+        })
+      )
+      pool.append(label)
+    }
+    Array.from(pool.childNodes).forEach((label, i) => {
+      const item = labels[i]
+      if (!item) {
+        label.setAttribute('display', 'none')
+        return
+      }
+      const [back, text] = label.childNodes
+      if (text.textContent !== item.text) { text.textContent = item.text }
+      const width = Math.ceil(measureText(item.text)) + 2 * LABEL_PADDING
+      const center = item.start ? item.x + width / 2 : item.x
+      back.setAttribute('x', center - width / 2)
+      back.setAttribute('y', item.y - LABEL_HEIGHT / 2)
+      back.setAttribute('width', width)
+      text.setAttribute('x', center)
+      text.setAttribute('y', item.y)
+      label.removeAttribute('display')
+    })
+  }
+
+  /**
+  * Takes the guides away, at the end of a gesture or a measure.
+  * @returns {void}
+  */
+  hideGuides () {
+    if (this.guidesGroup && !this.guidesGroup.hasAttribute('display')) {
+      this.guidesGroup.setAttribute('display', 'none')
+    }
   }
 
   /**

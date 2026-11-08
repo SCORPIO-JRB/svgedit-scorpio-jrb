@@ -3,21 +3,10 @@
         display: none;
     }
 
-    /* Force the scroll bar to appear so we see it hide when overlay opens. */
-    body::-webkit-scrollbar {
-        background: lightgray;
-    }
-
-    body::-webkit-scrollbar-thumb {
-        background: darkgray;
-    }
 
     #svg_source_editor #svg_source_container {
-        background-color: #5a6162;
-        color: #c5c5c5;
-        opacity: 1.0;
+        padding: 16px;
         text-align: center;
-        border: 1px outset #777;
         z-index: 6;
     }
 
@@ -50,7 +39,6 @@
 
     #tool_source_save {
         width: 20%;
-        background-color: #c79605;
         margin-left: 30%;
         margin-top: 5px;
     }
@@ -71,10 +59,9 @@
 
     #tool_source_cancel {
         width: 20%;
-        background-color: #c8c8c8;
     }
 </style>
-<elix-dialog id="svg_source_editor" aria-label="SVG Source Editor" closed>
+<elix-dialog id="svg_source_editor" closed>
     <div id="svg_source_container">
         <div id="tool_source_back" class="toolbar_button">
             <button id="tool_source_save"></button>
@@ -88,7 +75,7 @@
             <textarea id="svg_source_textarea" spellcheck="false" rows="5" cols="80"></textarea>
         </form>
         <label class="tool_label" for="tool_source_dynamic">
-          <input type="checkbox" id="tool_source_dynamic" checked>Toggle dynamic size
+          <input type="checkbox" id="tool_source_dynamic" checked><span id="tool_source_dynamic_label"></span>
         </label>
     </div>
 </elix-dialog>

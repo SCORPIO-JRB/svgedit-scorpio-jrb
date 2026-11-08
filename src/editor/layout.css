@@ -1,0 +1,1284 @@
+/*
+ * Canvas layout of the editor (lot V3; plan v2, sections 3 and 4).
+ *
+ * A top bar of 40 px; under it the canvas, with the tools and the view group
+ * floating over it; on the right, the panel with the Properties, Layers and
+ * Code tabs. The classic layout (`layout: 'classic'`) does not read these
+ * rules: they all start with .se-layout-canvas or name elements that only
+ * exist in this layout. Colours come from the tokens (tokens.css).
+ */
+
+.svg_editor.se-layout-canvas {
+  --se-ruler-size: 15px;
+  --se-panel-width: 280px;
+  position: relative;
+  overflow: hidden;
+  grid-template-rows: var(--se-bar-height) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) var(--se-panel-width);
+  grid-template-areas:
+    "topbar topbar"
+    "stage panel";
+}
+
+.svg_editor.se-layout-canvas.se-rulers-hidden {
+  --se-ruler-size: 0px;
+}
+
+.svg_editor.se-layout-canvas.se-panel-closed,
+.svg_editor.se-layout-canvas.se-panel-drawer {
+  grid-template-columns: minmax(0, 1fr) 0;
+}
+
+/* Shared controls of the layout
+—————————————————————————————*/
+
+.se-layout-canvas .se-icon-button,
+.se-layout-canvas .se-text-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: var(--se-control-size);
+  margin: 0;
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--se-duration-state) var(--se-ease-out);
+}
+
+.se-layout-canvas .se-icon-button {
+  width: var(--se-control-size);
+  padding: 0;
+  color: var(--se-icon);
+}
+
+.se-layout-canvas .se-text-button {
+  padding: 0 8px;
+}
+
+.se-layout-canvas .se-icon-button:hover,
+.se-layout-canvas .se-text-button:hover,
+.se-layout-canvas .se-text-button[aria-expanded="true"] {
+  background: var(--se-control-hover);
+  color: var(--se-text);
+}
+
+.se-layout-canvas .se-icon-button[aria-pressed="true"] {
+  background: var(--se-accent-bg);
+  color: var(--se-accent);
+}
+
+.se-layout-canvas .se-icon-button:focus-visible,
+.se-layout-canvas .se-text-button:focus-visible,
+.se-layout-canvas .se-link-button:focus-visible,
+.se-layout-canvas [role="tab"]:focus-visible,
+.se-layout-canvas .se-panel-resize:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+}
+
+.se-layout-canvas .se-text-button se-icon {
+  --se-icon-size: 14px;
+}
+
+.se-layout-canvas .se-primary {
+  background: var(--se-action);
+  color: var(--se-action-text);
+  font-weight: 600;
+}
+
+.se-layout-canvas .se-primary:hover {
+  background: var(--se-action);
+  color: var(--se-action-text);
+  filter: brightness(1.1);
+}
+
+.se-layout-canvas .se-float {
+  background: var(--se-surface);
+  border: 1px solid var(--se-border-float);
+  border-radius: var(--se-radius-float);
+  box-shadow: var(--se-shadow-float);
+}
+
+.se-layout-canvas .se-sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--se-border);
+}
+
+.se-layout-canvas .se-link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--se-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.se-layout-canvas .se-link-button:hover {
+  text-decoration: underline;
+}
+
+/* Menus of the layout (se-popover): shortcut on the right, check marks. */
+.se-layout-canvas se-popover kbd {
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--se-text-secondary);
+  font: inherit;
+  white-space: nowrap;
+}
+
+.se-layout-canvas se-popover [role^="menuitem"] {
+  min-width: 200px;
+}
+
+.se-layout-canvas se-popover[menu] [role^="menuitem"]::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  color: var(--se-accent);
+}
+
+.se-layout-canvas se-popover [aria-checked="true"]::before,
+.se-layout-canvas se-popover [data-zoom][aria-current="true"]::before {
+  content: '✓';
+}
+
+.se-layout-canvas se-popover .se-menu-caption {
+  padding: 6px 8px 2px 30px;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+}
+
+/* Top bar
+—————————————————————————————*/
+
+#se-topbar {
+  grid-area: topbar;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--se-space-2);
+  min-width: 0;
+  height: var(--se-bar-height);
+  padding: 0 var(--se-space-2) 0 var(--se-space-3);
+  background: var(--se-surface-top);
+  border-bottom: 1px solid var(--se-border-top);
+}
+
+.se-topbar-start,
+.se-topbar-end {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: var(--se-space-1);
+  min-width: 0;
+}
+
+.se-topbar-end {
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.se-topbar-center {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--se-text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#se-breadcrumb ol {
+  display: flex;
+  gap: var(--se-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--se-text-secondary);
+  white-space: nowrap;
+}
+
+#se-breadcrumb li::after {
+  content: '›';
+  margin-left: var(--se-space-1);
+}
+
+#se-breadcrumb a {
+  color: inherit;
+  text-decoration: none;
+}
+
+#se-breadcrumb a:hover {
+  color: var(--se-text);
+  text-decoration: underline;
+}
+
+.se-layout-canvas #main_button.se-doc-menu {
+  /* The button inside the menu reads its size from this token. */
+  --se-font-size-control: var(--se-font-size-doc);
+  grid-area: auto;
+  min-width: 0;
+  height: var(--se-control-size);
+  padding: 0;
+  color: var(--se-text);
+  font-family: var(--se-font-display);
+  font-size: var(--se-font-size-doc);
+  font-weight: 600;
+}
+
+/* Undo and Redo are in the zoom menu, as in the mockups; the buttons stay in
+   the page for their shortcuts and their state. */
+.se-layout-canvas #history_panel {
+  display: none;
+}
+
+#se-export {
+  background: var(--se-control);
+}
+
+/* Canvas, rulers and floating bars
+—————————————————————————————*/
+
+#se-stage {
+  grid-area: stage;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--se-ruler-size) minmax(0, 1fr);
+  grid-template-rows: var(--se-ruler-size) minmax(0, 1fr);
+  grid-template-areas:
+    "corner rulerX"
+    "rulerY workarea";
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--se-canvas);
+}
+
+.se-layout-canvas #workarea {
+  border: 0;
+}
+
+.se-layout-canvas.se-rulers-hidden #ruler_corner,
+.se-layout-canvas.se-rulers-hidden #ruler_x,
+.se-layout-canvas.se-rulers-hidden #ruler_y {
+  display: none;
+}
+
+.se-layout-canvas #tools_left.se-toolbar {
+  grid-area: auto;
+  position: absolute;
+  top: calc(var(--se-ruler-size) + var(--se-space-3));
+  left: calc(var(--se-ruler-size) + var(--se-space-3));
+  z-index: 3;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - var(--se-ruler-size) - 2 * var(--se-space-3));
+  height: 40px;
+  margin: 0;
+  padding: 0 6px;
+  overflow: visible;
+}
+
+.se-layout-canvas .se-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.se-layout-canvas .se-tool-group[hidden] {
+  display: none;
+}
+
+#se-layer-button {
+  max-width: 160px;
+}
+
+#se-layer-button .se-layer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#se-viewgroup {
+  position: absolute;
+  top: calc(var(--se-ruler-size) + var(--se-space-3));
+  right: var(--se-space-3);
+  z-index: 3;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  padding: 0 6px;
+}
+
+/* Its buttons have an entry each in the zoom menu (see ViewGroup.js). */
+#se-viewgroup #editor_panel {
+  display: none;
+}
+
+#se-zoom-button .se-zoom-value {
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.se-layout-canvas #cur_context_panel {
+  grid-area: auto;
+  position: absolute;
+  left: calc(var(--se-ruler-size) + var(--se-space-2));
+  bottom: var(--se-space-2);
+  z-index: 3;
+  max-width: 60%;
+  padding: 4px 10px;
+  border: 1px solid var(--se-border-float);
+  border-radius: var(--se-radius-float);
+  background: var(--se-surface);
+  box-shadow: var(--se-shadow-float);
+}
+
+.se-layout-canvas #cur_context_panel:empty {
+  display: none;
+}
+
+/* Right panel
+—————————————————————————————*/
+
+#se-panel {
+  grid-area: panel;
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--se-surface);
+  border-left: 1px solid var(--se-border);
+}
+
+.se-panel-closed #se-panel {
+  display: none;
+}
+
+/* Below 1 280 px the panel is a drawer over the canvas. */
+.se-panel-drawer #se-panel {
+  position: absolute;
+  top: var(--se-bar-height);
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  width: var(--se-panel-width);
+  box-shadow: var(--se-shadow-menu);
+}
+
+.se-panel-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  z-index: 2;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.se-panel-resize:hover,
+.se-panel-resizing .se-panel-resize {
+  background: linear-gradient(to right, transparent 3px, var(--se-accent) 3px, var(--se-accent) 4px, transparent 4px);
+}
+
+.se-panel-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.se-panel-tabs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--se-space-1);
+  padding: 6px var(--se-space-3);
+  border-bottom: 1px solid var(--se-border);
+}
+
+.se-panel-tabs [role="tab"] {
+  height: var(--se-control-size);
+  padding: 0 var(--se-space-2);
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: transparent;
+  color: var(--se-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.se-panel-tabs [role="tab"]:hover {
+  color: var(--se-text);
+}
+
+.se-panel-tabs [role="tab"][aria-selected="true"] {
+  background: var(--se-surface-tab-active);
+  color: var(--se-text);
+}
+
+.se-tabpanel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.se-tabpanel[hidden] {
+  display: none;
+}
+
+/* Inspector (Properties tab)
+—————————————————————————————*/
+
+.se-inspector-head {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--se-space-2);
+  min-height: 44px;
+  padding: 0 var(--se-space-3) 0 var(--se-space-4);
+  border-bottom: 1px solid var(--se-border);
+  font-weight: 600;
+}
+
+.se-inspector-type {
+  flex: none;
+}
+
+.se-inspector-id {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--se-text-secondary);
+  font-family: var(--se-font-mono);
+  font-size: var(--se-font-size-label);
+  font-weight: normal;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#se-actions-button {
+  flex: none;
+  margin-right: -4px;
+}
+
+#se-actions-button[hidden] {
+  display: none;
+}
+
+.se-layout-canvas #tools_top.se-inspector {
+  display: block;
+  min-height: 0;
+  border: 0;
+  background: none;
+}
+
+.se-layout-canvas #tools_top.se-inspector > .se-section {
+  display: block;
+  padding: var(--se-space-3) var(--se-space-4);
+  border-bottom: 1px solid var(--se-border);
+  background: none;
+}
+
+.se-layout-canvas #tools_top.se-inspector > .se-section[hidden] {
+  display: none;
+}
+
+.se-section-title {
+  margin: 0 0 var(--se-space-2);
+  color: var(--se-text);
+  font-size: var(--se-font-size-control);
+  line-height: var(--se-line-height-control);
+  font-weight: 600;
+}
+
+.se-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--se-space-2);
+}
+
+/* A group of fields: two fields per row, the buttons of the group first. */
+.se-inspector .se-section-body > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--se-space-2);
+  background: none;
+}
+
+.se-inspector .tool_sep {
+  display: none;
+}
+
+/* The fields, as in the mockups: a grey box of 28 px with the label inside. */
+.se-layout-canvas .se-inspector se-spin-input,
+.se-layout-canvas .se-inspector se-input {
+  display: block;
+  flex: 0 1 calc(50% - var(--se-space-1));
+  min-width: 0;
+}
+
+/* The controls of the bottom bar (fill, stroke, opacity) sit side by side. */
+.se-layout-canvas .se-inspector [data-section="fill"] > .se-section-body,
+.se-layout-canvas .se-inspector [data-section="stroke"] > .se-section-body,
+.se-layout-canvas .se-inspector [data-section="appearance"] > .se-section-body {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--se-space-2);
+}
+
+.se-layout-canvas .se-inspector se-input,
+.se-layout-canvas .se-inspector se-select,
+.se-layout-canvas .se-inspector se-colorpicker {
+  flex: 1 1 100%;
+}
+
+.se-layout-canvas .se-inspector #stroke_style {
+  flex: 0 1 calc(50% - var(--se-space-1));
+}
+
+.se-layout-canvas .se-inspector se-spin-input::part(field),
+.se-layout-canvas .se-inspector se-input::part(field) {
+  box-sizing: border-box;
+  gap: 6px;
+  width: 100%;
+  height: var(--se-control-size);
+  margin: 0;
+  padding: 0 var(--se-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+.se-layout-canvas .se-inspector se-spin-input::part(field):hover,
+.se-layout-canvas .se-inspector se-input::part(field):hover {
+  border-color: var(--se-border-control);
+}
+
+.se-layout-canvas .se-inspector se-spin-input::part(field):focus-within,
+.se-layout-canvas .se-inspector se-input::part(field):focus-within {
+  border-color: var(--se-focus-ring);
+}
+
+.se-layout-canvas .se-inspector se-spin-input::part(label),
+.se-layout-canvas .se-inspector se-input::part(label) {
+  flex: none;
+  min-width: 12px;
+  margin: 0;
+  color: var(--se-text-label);
+  font-weight: 500;
+}
+
+.se-layout-canvas .se-inspector se-spin-input::part(label) {
+  text-transform: uppercase;
+}
+
+.se-layout-canvas .se-inspector #stroke_width::part(label) {
+  text-transform: none;
+}
+
+.se-layout-canvas .se-inspector se-spin-input::part(icon),
+.se-layout-canvas .se-inspector se-input::part(icon) {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--se-text-label);
+}
+
+.se-layout-canvas .se-inspector se-spin-input::part(box),
+.se-layout-canvas .se-inspector se-input::part(box) {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  outline: none;
+}
+
+.se-layout-canvas .se-inspector se-spin-input::part(input),
+.se-layout-canvas .se-inspector se-input::part(input) {
+  width: 100% !important;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  text-align: left;
+}
+
+/* No arrows: the arrow keys and expressions (+10, *2) change the value. */
+.se-layout-canvas .se-inspector se-spin-input::part(spin-button) {
+  display: none;
+}
+
+/* Lists and selects: a grey box too. */
+.se-layout-canvas .se-inspector se-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector se-select::part(label) {
+  margin: 0;
+  color: var(--se-text-label);
+  font-weight: 500;
+}
+
+.se-layout-canvas .se-inspector se-select::part(select) {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.se-layout-canvas .se-inspector se-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.se-layout-canvas .se-inspector se-list::part(label) {
+  color: var(--se-text-label);
+}
+
+.se-layout-canvas .se-inspector se-list::part(label):empty {
+  display: none;
+}
+
+.se-layout-canvas .se-inspector se-list::part(select) {
+  box-sizing: border-box;
+  min-width: 40px;
+  height: var(--se-control-size);
+  margin: 0;
+  padding: 0 6px;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+/* The buttons of a group (bold, italic, nodes…) before its fields; the ratio
+   lock stays next to the width and the height. */
+.se-layout-canvas .se-inspector .se-section-body > div > se-button {
+  order: -1;
+}
+
+.se-layout-canvas .se-inspector .wh_panel {
+  flex-wrap: nowrap;
+}
+
+.se-layout-canvas .se-inspector .wh_panel > se-spin-input {
+  flex: 1 1 0;
+}
+
+.se-layout-canvas .se-inspector .wh_panel > #tool_ratio_lock {
+  order: 0;
+}
+
+/* Fill and stroke: the swatch, the colour in hexadecimal, its opacity. */
+.se-layout-canvas .se-inspector se-colorpicker {
+  display: block;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector se-colorpicker::part(picker) {
+  box-sizing: border-box;
+  justify-content: flex-start;
+  gap: var(--se-space-2);
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--se-space-2);
+}
+
+.se-layout-canvas .se-inspector se-colorpicker::part(logo) {
+  display: none;
+}
+
+.se-layout-canvas .se-inspector se-colorpicker::part(swatch) {
+  display: flex;
+  float: none;
+  width: 14px;
+  height: 14px;
+  overflow: hidden;
+}
+
+.se-layout-canvas .se-inspector se-colorpicker::part(value) {
+  display: inline;
+  overflow: hidden;
+  color: var(--se-text);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.se-layout-canvas .se-inspector se-colorpicker::part(alpha) {
+  display: inline;
+  margin-left: auto;
+  color: var(--se-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The quick palette of the classic bottom bar has no place in the mockups:
+   the colour picker gives every colour. */
+.se-layout-canvas .se-inspector #palette {
+  display: none;
+}
+
+/* The "…" menu: the verbs, one per line with their shortcut. It is a child
+   of #tools_top, whose rule for its groups must not show it. */
+.se-layout-canvas #tools_top > #se-actions-menu {
+  display: none;
+  background-color: var(--se-surface-raised);
+}
+
+.se-layout-canvas #tools_top > #se-actions-menu[open] {
+  display: block;
+}
+
+#se-actions-menu {
+  min-width: 240px;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+}
+
+#se-actions-menu .se-actions,
+#se-actions-menu .se-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border: 0;
+}
+
+#se-actions-menu .se-section-body > div {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+#se-actions-menu .se-section-body > div + div:not([style*="none"]) {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--se-border);
+}
+
+#se-actions-menu #align_menu {
+  display: flex;
+  flex-direction: column;
+}
+
+#se-actions-menu #tool_align_popup {
+  position: static;
+  margin: 4px 8px;
+}
+
+#se-actions-menu #tool_position {
+  align-self: flex-start;
+  margin: 4px 8px;
+}
+
+/* Document section: the same fields, the label inside the box. */
+.se-layout-canvas .se-field,
+.se-layout-canvas .se-check {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--se-text-label);
+}
+
+.se-layout-canvas .se-field {
+  flex: 0 1 calc(50% - var(--se-space-1));
+  min-width: 0;
+  height: var(--se-control-size);
+  padding: 0 var(--se-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  font-weight: 500;
+}
+
+.se-layout-canvas .se-field:hover {
+  border-color: var(--se-border-control);
+}
+
+.se-layout-canvas .se-field:focus-within {
+  border-color: var(--se-focus-ring);
+}
+
+.se-layout-canvas .se-field-short {
+  text-transform: uppercase;
+}
+
+.se-layout-canvas .se-field-wide,
+.se-layout-canvas .se-check {
+  flex-basis: 100%;
+}
+
+.se-layout-canvas .se-check {
+  color: var(--se-text);
+}
+
+.se-layout-canvas .se-field input {
+  flex: 1;
+  box-sizing: border-box;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-weight: normal;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  outline: none;
+}
+
+.se-layout-canvas [data-section="document"] > .se-section-body {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.se-layout-canvas .se-section-links {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: var(--se-space-3);
+}
+
+/* Layers tab: as in the mockups, the search and the tree; the layer
+   commands are in the layer menu of the toolbar (new, duplicate, rename,
+   delete, move), objects move by dragging. The buttons and the move-to list
+   stay in the page for their ids and shortcuts. */
+.se-layout-canvas #layerpanel {
+  padding: 0;
+}
+
+.se-layout-canvas #layerbuttons,
+.se-layout-canvas #selLayerNames {
+  display: none;
+}
+
+.se-tree-help {
+  flex: none;
+  margin: 0;
+  padding: var(--se-space-3) var(--se-space-4);
+  border-top: 1px solid var(--se-border);
+  color: var(--se-text-secondary);
+}
+
+/* Small screens
+—————————————————————————————*/
+
+.se-layout-canvas.se-compact #se-breadcrumb,
+.se-layout-canvas.se-compact .se-topbar-center {
+  display: none;
+}
+
+.se-layout-canvas #sidepanels,
+.se-layout-canvas #sidepanel_content {
+  display: block;
+}
+
+.se-layout-canvas .se-icon-button[hidden],
+.se-layout-canvas .se-text-button[hidden] {
+  display: none;
+}
+
+/* Layers tab: buttons, search and the tree, which scrolls alone.
+—————————————————————————————*/
+
+.se-layout-canvas #se-tabpanel-layers:not([hidden]),
+.se-layout-canvas #se-tabpanel-layers #sidepanels,
+.se-layout-canvas #se-tabpanel-layers #sidepanel_content,
+.se-layout-canvas #se-tabpanel-layers #layerpanel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.se-layout-canvas #layerlist {
+  display: none;
+}
+
+.se-tree-wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.se-tree-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--se-space-2) var(--se-space-3) var(--se-space-1);
+  padding: 0 8px;
+  border: 1px solid var(--se-border-control);
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text-secondary);
+}
+
+.se-tree-search input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  outline: none;
+}
+
+.se-tree-search:focus-within {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -1px;
+}
+
+.se-tree {
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  outline: none;
+}
+
+.se-tree:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--se-focus-ring);
+}
+
+.se-tree-spacer {
+  width: 1px;
+}
+
+.se-tree-row {
+  position: absolute;
+  right: 0;
+  left: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding-right: 4px;
+  color: var(--se-text);
+  cursor: default;
+  user-select: none;
+}
+
+.se-tree-row:hover {
+  background: var(--se-control-hover);
+}
+
+.se-tree-row[aria-selected="true"] {
+  background: var(--se-accent-row);
+}
+
+.se-tree-row.se-tree-current {
+  font-weight: 600;
+}
+
+.se-tree:focus-visible .se-tree-row.se-tree-focus {
+  box-shadow: inset 0 0 0 1px var(--se-focus-ring);
+}
+
+.se-tree-row.se-tree-hidden .se-tree-name,
+.se-tree-row.se-tree-hidden .se-tree-icon {
+  opacity: 0.5;
+}
+
+.se-tree-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--se-icon);
+  --se-icon-size: 14px;
+}
+
+.se-tree-toggle se-icon {
+  transform-origin: center;
+}
+
+.se-tree-row[aria-expanded="true"] .se-tree-toggle se-icon {
+  transform: rotate(90deg);
+}
+
+.se-tree-icon {
+  color: var(--se-icon);
+  --se-icon-size: 14px;
+}
+
+.se-tree-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.se-tree-type {
+  flex: none;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+}
+
+.se-tree-eye {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-icon);
+  cursor: pointer;
+  opacity: 0;
+  --se-icon-size: 14px;
+}
+
+.se-tree-row:hover .se-tree-eye,
+.se-tree-row.se-tree-hidden .se-tree-eye,
+.se-tree-row.se-tree-focus .se-tree-eye {
+  opacity: 1;
+}
+
+.se-tree-eye:hover {
+  background: var(--se-control);
+  color: var(--se-text);
+}
+
+.se-tree-rename {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--se-focus-ring);
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text);
+  font: inherit;
+}
+
+.se-tree-row.se-tree-drop-before {
+  box-shadow: inset 0 2px 0 var(--se-accent);
+}
+
+.se-tree-row.se-tree-drop-after {
+  box-shadow: inset 0 -2px 0 var(--se-accent);
+}
+
+.se-tree-row.se-tree-drop-into {
+  box-shadow: inset 0 0 0 2px var(--se-accent);
+}
+
+.se-tree-empty {
+  margin: var(--se-space-3);
+  color: var(--se-text-secondary);
+}
+
+/* Code tab
+—————————————————————————————*/
+
+.se-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--se-space-2);
+  padding: var(--se-space-3) var(--se-space-4);
+}
+
+/* The field and, under it, the same text in colour: same box, same font,
+   same wrapping, so that each character falls on its coloured twin. */
+.se-code-editor {
+  position: relative;
+}
+
+.se-code-text,
+.se-code-highlight {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--se-border);
+  border-radius: var(--se-radius-float);
+  font-family: var(--se-font-mono);
+  font-size: 11.5px;
+  line-height: 19px;
+  letter-spacing: normal;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  scrollbar-gutter: stable;
+}
+
+.se-code-highlight {
+  position: absolute;
+  inset: 0 0 auto;
+  overflow: hidden;
+  background: var(--se-code-bg);
+  color: var(--se-text);
+  pointer-events: none;
+}
+
+.se-code-text {
+  position: relative;
+  display: block;
+  height: 50vh;
+  min-height: 240px;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--se-text);
+  resize: vertical;
+}
+
+.se-code-text::selection {
+  background: var(--se-accent-bg);
+  color: transparent;
+}
+
+/* A source too long to colour shows in plain text. */
+.se-code-text.se-code-plain {
+  background: var(--se-code-bg);
+  color: var(--se-text);
+}
+
+.se-code-tag {
+  color: var(--se-code-tag);
+}
+
+.se-code-attr {
+  color: var(--se-code-attr);
+}
+
+.se-code-value {
+  color: var(--se-code-value);
+}
+
+.se-code-comment {
+  color: var(--se-code-comment);
+}
+
+.se-code-text:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -1px;
+}
+
+.se-code-text[aria-invalid="true"] {
+  border-color: var(--se-danger);
+}
+
+.se-code-status:empty {
+  display: none;
+}
+
+.se-code-status {
+  margin: 0;
+  color: var(--se-text-secondary);
+}
+
+.se-code-status.se-code-error {
+  color: var(--se-danger);
+}
+
+.se-code-help {
+  margin: 0;
+  color: var(--se-text-secondary);
+}
+
+.se-code-actions {
+  display: flex;
+  gap: var(--se-space-2);
+}
+
+.se-layout-canvas .se-secondary {
+  background: var(--se-control);
+}
+
+.se-layout-canvas .se-text-button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+/* Question asked in place (askText.js), in both layouts.
+—————————————————————————————*/
+
+.se-ask form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--se-space-2);
+  min-width: 260px;
+  padding: var(--se-space-1);
+}
+
+.se-ask label {
+  color: var(--se-text);
+}
+
+.se-ask input {
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--se-border-control);
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text);
+  font: inherit;
+}
+
+.se-ask input:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -1px;
+}
+
+.se-ask-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--se-space-2);
+}
+
+.se-ask .se-text-button {
+  box-sizing: border-box;
+  height: var(--se-control-size);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: var(--se-surface-overlay);
+  color: var(--se-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.se-ask .se-text-button.se-primary {
+  background: var(--se-action);
+  color: var(--se-action-text);
+  font-weight: 600;
+}

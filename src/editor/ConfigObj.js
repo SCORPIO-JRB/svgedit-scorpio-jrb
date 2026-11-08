@@ -14,10 +14,12 @@ export const regexEscape = function (str) {
 /**
  * Configuration keys that can never be set from the URL query string.
  * A path such as `extPath` would let a crafted link load and run
- * third-party code; `forceStorage` would bypass the user's storage consent.
+ * third-party code; `forceStorage` would bypass the user's storage consent;
+ * `homeUrl` and `breadcrumb` (lot V3) would put a link of the sender's choice
+ * in the top bar.
  * @type {string[]}
  */
-export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins']
+export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins', 'homeUrl', 'breadcrumb']
 
 /**
  * Tells whether a configuration key must be ignored when it comes from the URL.
@@ -68,13 +70,23 @@ export default class ConfigObj {
         * height and 'm' otherwise.
         */
       bkgd_color: '#FFF',
+      /**
+        * Theme of the interface: "system" follows the system, otherwise
+        * "dark" or "light". It never changes the document.
+        */
+      theme: 'system',
       bkgd_url: '',
       // DOCUMENT PROPERTIES (DIALOG)
       img_save: 'embed',
       // ALERT NOTICES
       // Only shows in UI as far as alert notices, but useful to remember, so keeping as pref
       save_notice_done: false,
-      export_notice_done: false
+      export_notice_done: false,
+      // RIGHT PANEL OF THE CANVAS LAYOUT (lot V3): shown, width in pixels
+      // (240 to 420), and the tab open.
+      panel_open: 'true',
+      panel_width: '280',
+      panel_tab: 'properties'
     }
     /**
       * @tutorial ConfigOptions
@@ -105,7 +117,11 @@ export default class ConfigObj {
       *   Besides explicit domains, one might add '*' to allow all domains (not recommended for privacy/data integrity of your user's content!),
       *   `window.location.origin` for allowing the same origin (should be safe if you trust all apps on your domain), 'null' to allow `file:///` URL usage
       * @property {string} [paramurl] This was available via URL only. Allowed an un-encoded URL within the query string (use "url" or "source" with a data: URI instead)
-      * @property {Float} [canvas_expansion=3] The minimum area visible outside the canvas, as a multiple of the image dimensions. The larger the number, the more one can scroll outside the canvas.
+      * @property {Float} [canvas_expansion=3] The minimum area visible outside the canvas, as a multiple of the image dimensions. The larger the number, the more one can scroll outside the canvas. Scroll view only.
+      * @property {"canvas"|"classic"} [layout="canvas"] The layout of the editor (lot V3): "canvas" puts the canvas under a top bar of 40 px, the tools in a floating bar and properties, layers and code in a right panel that Ctrl+\ hides; "classic" is the layout of SVG-Edit, kept until the end of V4. Read at start; `?layout=classic` in the URL.
+      * @property {string} [homeUrl=""] Link of the home button of the top bar, given by the host application (canvas layout); http(s) only, never from the URL.
+      * @property {Array<string|{label: string, href?: string}>} [breadcrumb=[]] Breadcrumb of the host application before the name of the document, such as `["Le Perreux", {label: "Synoptiques", href: "/synoptiques"}]` (canvas layout); never from the URL.
+      * @property {"borderless"|"scroll"} [view="borderless"] The view of the drawing (lot V2): "borderless" has no edge and no scroll bar, the wheel scrolls it and Ctrl+wheel zooms from 1 % to 6 400 %; "scroll" is the canvas of SVG-Edit with scroll bars, kept until the end of V3. Read at start.
       * @property {PlainObject} [initFill] Init fill properties
       * @property {string} [initFill.color="FF0000"] The initial fill color. Must be a hex code string. Defaults to solid red.
       * @property {Float} [initFill.opacity=1] The initial fill opacity. Must be a number between 0 and 1
@@ -119,17 +135,19 @@ export default class ConfigObj {
       * @property {string} [text.font_family="serif"] Text font family
       * @property {Float} [initOpacity=1] Initial opacity (multiplied by 100)
       * @property {module:SVGEditor.XYDimensions} [dimensions=[640, 480]] The default width/height of a new document. Use an array in `setConfig` (e.g., `[800, 600]`) and comma separated numbers in the URL.
-      * @property {boolean} [gridSnapping=false] Enable snap to grid by default. Set in Editor Options.
-      * @property {string} [gridColor="#000"] Accepts hex, e.g., '#000'. Set in Editor Options. Defaults to black.
+      * @property {boolean} [gridSnapping=false] Snap to the grid: the edges and middles of what is moved, resized or drawn come to its lines within 6 pixels of the screen. Set in Editor Options. Apart from `showGrid` since V2.
+      * @property {string} [gridColor=""] A colour, e.g. '#000', for the lines of the grid; empty, those of the theme (since V2). Set in Editor Options.
       * @property {string} [baseUnit="px"] Set in Editor Options.
-      * @property {Float} [snappingStep=10] Set the default grid snapping value. Set in Editor Options.
-      * @property {boolean} [showRulers=true] Initial state of ruler display (v2.6). Set in Editor Options.
+      * @property {Float} [snappingStep=10] The step of the grid: where its lines are and where the drawing snaps. Set in Editor Options.
+      * @property {Integer} [gridSubdivisions=10] A major line of the grid every so many steps (lot V2). Set in Editor Options.
+      * @property {boolean} [objectSnapping=true] Snap to the edges and middles of the visible objects and of the page, to equal spacings and to equal sizes, with guides (lot V2). Holding Ctrl suspends every snapping. Set in Editor Options.
+      * @property {boolean} [showRulers] Initial state of ruler display (v2.6). Set in Editor Options. Without a value: shown in the classic layout, hidden in the canvas layout, as in the mockups (Shift+R or the zoom menu shows them).
       * @property {string} [initTool="select"] The initially selected tool. Must be either the ID of the button for the tool, or the ID without `tool_` prefix (e.g., "select").
       * @property {boolean} [wireframe=false] Start in wireframe mode
       * @property {boolean} [showlayers=false] Open the layers side-panel by default.
       * @property {"new"|"same"} [exportWindowType="new"] Can be "new" or "same" to indicate whether new windows will be generated for each export;
       *   the `window.name` of the export window is namespaced based on the `canvasName` (and incremented if "new" is selected as the type). Introduced 2.8.
-      * @property {boolean} [showGrid=false] Set by `ext-grid.js`; determines whether or not to show the grid by default
+      * @property {boolean} [showGrid=false] Whether the grid is shown; the button of `ext-grid.js` and Editor Options set it. Drawn over the whole view by the interaction layer since V2 (see grid.js).
       * @property {boolean} [show_outside_canvas=true] Defines whether or not elements outside the canvas should be visible. Set and used in `svgcanvas.js`.
       * @property {boolean} [selectNew=true] If true, will replace the selection with the current element and automatically select element objects (when not in "path" mode) after they are created, showing their grips (v2.6).
       * @property {boolean} [layerView=false] Set for 'ext-layer_view.js'; determines whether or not only current layer is shown by default
@@ -144,6 +162,10 @@ export default class ConfigObj {
     this.defaultConfig = {
       canvasName: 'default',
       canvas_expansion: 3,
+      view: 'borderless',
+      layout: 'canvas',
+      homeUrl: '',
+      breadcrumb: [],
       initFill: {
         color: 'FF0000', // solid red
         opacity: 1
@@ -175,10 +197,14 @@ export default class ConfigObj {
       // EDITOR OPTIONS
       // Change the following to preferences (already in the Editor Options dialog)?
       gridSnapping: false,
-      gridColor: '#000',
+      gridColor: '',
       baseUnit: 'px',
       snappingStep: 10,
-      showRulers: true,
+      gridSubdivisions: 10,
+      objectSnapping: true,
+      // Shown in the classic layout, hidden in the canvas layout (see
+      // EditorStartup) unless the host or the URL sets it.
+      showRulers: undefined,
       // The editor zooms with Ctrl/Cmd + wheel and pinch; Shift + wheel scrolls
       // horizontally instead of zooming (canvas default: true).
       shiftWheelZoom: false,

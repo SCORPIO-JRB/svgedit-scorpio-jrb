@@ -1,7 +1,8 @@
 /* globals svgEditor */
 import editorPreferencesDialog from './editorPreferencesDialog.html'
+import { dialogStyles } from './dialogStyles.js'
 const template = document.createElement('template')
-template.innerHTML = editorPreferencesDialog
+template.innerHTML = dialogStyles + editorPreferencesDialog
 /**
  * @class SeEditPrefsDialog
  */
@@ -19,11 +20,15 @@ export class SeEditPrefsDialog extends HTMLElement {
     this.$saveBtn = this._shadowRoot.querySelector('#tool_prefs_save')
     this.$cancelBtn = this._shadowRoot.querySelector('#tool_prefs_cancel')
     this.$langSelect = this._shadowRoot.querySelector('#lang_select')
+    this.$themeSelect = this._shadowRoot.querySelector('#theme_select')
     this.$bgBlocks = this._shadowRoot.querySelector('#bg_blocks')
     this.$bgURL = this._shadowRoot.querySelector('#canvas_bg_url')
     this.$gridSnappingOn = this._shadowRoot.querySelector('#grid_snapping_on')
     this.$gridSnappingStep = this._shadowRoot.querySelector('#grid_snapping_step')
     this.$gridColor = this._shadowRoot.querySelector('#grid_color')
+    this.$showGrid = this._shadowRoot.querySelector('#show_grid')
+    this.$gridSubdivisions = this._shadowRoot.querySelector('#grid_subdivisions')
+    this.$objectSnapping = this._shadowRoot.querySelector('#object_snapping')
     this.$showRulers = this._shadowRoot.querySelector('#show_rulers')
     this.$baseUnit = this._shadowRoot.querySelector('#base_unit')
   }
@@ -48,6 +53,17 @@ export class SeEditPrefsDialog extends HTMLElement {
     this.setAttribute('config-units_and_rulers', i18next.t('config.units_and_rulers'))
     this.setAttribute('config-show_rulers', i18next.t('config.show_rulers'))
     this.setAttribute('config-base_unit', i18next.t('config.base_unit'))
+    this._shadowRoot.querySelector('#svginfo_theme').textContent = i18next.t('config.theme')
+    this._shadowRoot.querySelector('#svginfo_show_grid').textContent = i18next.t('config.show_grid')
+    this._shadowRoot.querySelector('#svginfo_grid_subdivisions').textContent = i18next.t('config.grid_subdivisions')
+    this._shadowRoot.querySelector('#svginfo_object_snapping').textContent = i18next.t('config.object_snapping')
+    for (const option of this.$themeSelect.options) {
+      option.textContent = i18next.t(`config.theme_${option.value}`)
+    }
+    for (const option of this.$baseUnit.options) {
+      option.textContent = i18next.t(`config.unit_${option.value}`)
+    }
+    this.$dialog.setAttribute('aria-label', i18next.t('config.editor_prefs'))
   }
 
   /**
@@ -56,7 +72,7 @@ export class SeEditPrefsDialog extends HTMLElement {
    */
   static get observedAttributes () {
     // eslint-disable-next-line max-len
-    return ['dialog', 'lang', 'canvasbg', 'bgurl', 'gridsnappingon', 'gridsnappingstep', 'gridcolor', 'showrulers', 'baseunit', 'common-ok', 'common-cancel', 'config-editor_prefs', 'config-language', 'config-background', 'common-url', 'config-editor_bg_note', 'config-grid', 'config-snapping_onoff', 'config-snapping_stepsize', 'config-grid_color', 'config-units_and_rulers', 'config-show_rulers', 'config-base_unit']
+    return ['dialog', 'lang', 'theme', 'canvasbg', 'bgurl', 'showgrid', 'gridsnappingon', 'gridsnappingstep', 'gridsubdivisions', 'gridcolor', 'objectsnapping', 'showrulers', 'baseunit', 'common-ok', 'common-cancel', 'config-editor_prefs', 'config-language', 'config-background', 'common-url', 'config-editor_bg_note', 'config-grid', 'config-snapping_onoff', 'config-snapping_stepsize', 'config-grid_color', 'config-units_and_rulers', 'config-show_rulers', 'config-base_unit']
   }
 
   /**
@@ -78,6 +94,9 @@ export class SeEditPrefsDialog extends HTMLElement {
         } else {
           this.$dialog.close()
         }
+        break
+      case 'theme':
+        this.$themeSelect.value = newValue || 'system'
         break
       case 'lang':
         this.$langSelect.value = newValue
@@ -111,8 +130,17 @@ export class SeEditPrefsDialog extends HTMLElement {
       case 'gridsnappingstep':
         this.$gridSnappingStep.value = newValue
         break
+      case 'gridsubdivisions':
+        this.$gridSubdivisions.value = newValue
+        break
       case 'gridcolor':
-        this.$gridColor.value = newValue
+        this.$gridColor.value = newValue ?? ''
+        break
+      case 'showgrid':
+        this.$showGrid.checked = newValue === 'true'
+        break
+      case 'objectsnapping':
+        this.$objectSnapping.checked = newValue !== 'false'
         break
       case 'showrulers':
         if (newValue === 'true') {
@@ -346,11 +374,18 @@ export class SeEditPrefsDialog extends HTMLElement {
       const closeEvent = new CustomEvent('change', {
         detail: {
           lang: this.$langSelect.value,
+          theme: this.$themeSelect.value,
           dialog: 'close',
           bgcolor: color,
           bgurl: this.$bgURL.value,
           gridsnappingon: this.$gridSnappingOn.checked,
           gridsnappingstep: this.$gridSnappingStep.value,
+          // Lot V2: the grid shown apart from the snapping, its subdivisions
+          // and its colour (which was never sent), the snapping to objects.
+          showgrid: this.$showGrid.checked,
+          gridsubdivisions: this.$gridSubdivisions.value,
+          gridcolor: this.$gridColor.value.trim(),
+          objectsnapping: this.$objectSnapping.checked,
           showrulers: this.$showRulers.checked,
           baseunit: this.$baseUnit.value
         }

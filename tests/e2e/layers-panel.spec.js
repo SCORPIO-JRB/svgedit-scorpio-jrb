@@ -7,6 +7,14 @@ const layerNames = async (page) => {
   )
 }
 
+// The name is asked in place since V3, no longer by prompt().
+const answer = async (page, text) => {
+  const field = page.locator('se-popover.se-ask input')
+  await expect(field).toBeFocused()
+  await field.fill(text)
+  await field.press('Enter')
+}
+
 const toggleVisibilityFor = async (page, name) => {
   const row = page.locator('#layerlist tbody tr.layer', {
     has: page.locator('td.layername', { hasText: name })
@@ -14,9 +22,11 @@ const toggleVisibilityFor = async (page, name) => {
   await row.locator('td.layervis').click()
 }
 
+// The table of layers of the classic layout; the Layers tab of the canvas
+// layout has its own tests (layout-v3.spec.js).
 test.describe('Layers panel', () => {
   test.beforeEach(async ({ page }) => {
-    await visitAndApproveStorage(page)
+    await visitAndApproveStorage(page, { query: '?layout=classic' })
     const panelHandle = page.locator('div#sidepanel_handle').first()
     await panelHandle.waitFor({ state: 'visible' })
     await panelHandle.click()
@@ -27,13 +37,13 @@ test.describe('Layers panel', () => {
     const initialNames = await layerNames(page)
     expect(initialNames.length).toBeGreaterThan(0)
 
-    page.once('dialog', (dialog) => dialog.accept('Layer 2'))
     await page.click('#layer_new')
+    await answer(page, 'Layer 2')
     await expect.poll(() => layerNames(page)).toContain('Layer 2')
 
     await page.locator('#layerlist td.layername', { hasText: 'Layer 2' }).click()
-    page.once('dialog', (dialog) => dialog.accept('Renamed Layer'))
     await page.click('#layer_rename')
+    await answer(page, 'Renamed Layer')
     await expect.poll(() => layerNames(page)).toContain('Renamed Layer')
 
     await toggleVisibilityFor(page, 'Renamed Layer')

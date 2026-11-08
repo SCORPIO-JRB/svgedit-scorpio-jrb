@@ -295,6 +295,55 @@ const selectSimilar = (criterion) => {
 }
 
 /**
+ * Selects objects named outside the canvas, such as a row of the Layers tab
+ * (lot V3), wherever they are: their layer becomes the current layer and the
+ * group that holds them opens, as for a Ctrl+click. The objects must share
+ * that group; the others are left out.
+ * @function module:selection-nav.SvgCanvas#selectElements
+ * @param {Element[]} elems
+ * @param {object} [options]
+ * @param {boolean} [options.add=false] Add to the selection instead of replacing it
+ * @returns {Element[]} The objects selected
+ */
+const selectElements = (elems, { add = false } = {}) => {
+  const list = (elems ?? []).filter((elem) => isSelectable(elem) && elem.isConnected)
+  if (!list.length) { return [] }
+  const drawing = svgCanvas.getCurrentDrawing()
+  const content = svgCanvas.getSvgContent()
+  // The layer of the first object.
+  let layerGroup = list[0]
+  while (layerGroup && layerGroup.parentNode !== content) { layerGroup = layerGroup.parentNode }
+  if (!layerGroup) { return [] }
+  if (layerGroup !== currentLayer()) {
+    const layer = drawing.all_layers.find((candidate) => candidate.getGroup() === layerGroup)
+    if (!layer) { return [] }
+    if (svgCanvas.getCurrentGroup()) { draw.leaveContext() }
+    svgCanvas.setCurrentLayer(layer.getName())
+    add = false
+  }
+  // A link around a single object stands for that object.
+  const contextOf = (elem) => {
+    let context = elem.parentNode
+    if (context !== layerGroup && context.tagName === 'a' && context.childNodes.length === 1) {
+      context = context.parentNode
+    }
+    return context
+  }
+  const context = contextOf(list[0])
+  const same = list.filter((elem) => contextOf(elem) === context)
+  if (context !== svgCanvas.getCurrentGroup() && !(context === layerGroup && !svgCanvas.getCurrentGroup())) {
+    add = false
+  }
+  openContext(context)
+  if (add) {
+    svgCanvas.addToSelection(same, same.length === 1)
+  } else {
+    svgCanvas.selectOnly(same, same.length === 1)
+  }
+  return same
+}
+
+/**
  * @function module:selection-nav.init
  * @param {module:svgcanvas.SvgCanvas} canvas
  * @returns {void}
@@ -307,4 +356,5 @@ export const init = (canvas) => {
   canvas.selectParent = selectParent
   canvas.canSelectSimilar = canSelectSimilar
   canvas.selectSimilar = selectSimilar
+  canvas.selectElements = selectElements
 }

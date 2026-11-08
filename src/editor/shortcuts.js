@@ -83,6 +83,11 @@ export const eventShortcut = (event, mac = isMac()) => {
     const letter = /^Key([A-Z])$/.exec(event.code || '')
     if (letter) key = letter[1].toLowerCase()
   }
+  if ((event.ctrlKey || event.metaKey) && event.code === 'Backslash') {
+    // Mod+\ (the right panel, lot V3) by physical key: on AZERTY, "\" needs
+    // AltGr; the key at its place, next to Enter, gives the shortcut.
+    key = '\\'
+  }
   if (event.shiftKey) {
     // Shift changes the character of digit and bracket keys ("!" on QWERTY,
     // "1" on AZERTY): read them by physical key. Without Shift the typed
@@ -95,4 +100,29 @@ export const eventShortcut = (event, mac = isMac()) => {
     }
   }
   return canonical(modifiers, key)
+}
+
+/**
+ * Keys that keep their meaning on a focused control (next control, press,
+ * move in a group of buttons): no shortcut takes them there.
+ * @type {Set<string>}
+ */
+export const NAVIGATION_KEYS = new Set(['Tab', 'Enter', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'])
+
+/**
+ * Elements that read the keys typed in them: fields, menus and dialogs. A
+ * keyboard shortcut is not run there. On the other controls (buttons, the
+ * tree of the Layers tab, the tabs) only the navigation keys are theirs.
+ * @param {EventTarget} node
+ * @returns {boolean}
+ */
+export const readsOwnKeys = (node) => {
+  if (node?.nodeType !== 1) return false
+  if (node.isContentEditable) return true
+  const tag = node.localName
+  if (tag === 'textarea' || tag === 'select' || tag === 'dialog' || tag === 'se-popover') return true
+  if (tag === 'input') {
+    return !['button', 'checkbox', 'radio', 'submit', 'reset', 'image', 'range', 'color', 'file'].includes(node.type)
+  }
+  return node.matches?.('[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="combobox"], [role="textbox"], [role="spinbutton"]') ?? false
 }

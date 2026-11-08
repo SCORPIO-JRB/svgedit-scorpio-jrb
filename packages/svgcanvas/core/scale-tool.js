@@ -17,7 +17,7 @@
  */
 
 import { BatchCommand, ChangeElementCommand } from './history.js'
-import { getTransformList, transformListToTransform } from './math.js'
+import { getTransformList, transformListToTransform, MATRIX_TOLERANCE } from './math.js'
 
 let svgCanvas = null
 let scaleToolOn = false
@@ -308,6 +308,9 @@ export const scaleStrokeLengths = (records, k) => {
   records.forEach((record) => {
     const { elem } = record
     const grown = record.s0 > EPSILON ? s1.get(record) / record.s0 : 1
+    // The scales are read from SVG matrices: in Firefox, an element whose
+    // matrix did not change can read a growth of 1.00000002 (see
+    // MATRIX_TOLERANCE), and would get a stroke of 1.99999997 instead of 2.
     const g = k / grown
     record.passed = {}
     STROKE_LENGTHS.forEach((prop) => {
@@ -315,7 +318,7 @@ export const scaleStrokeLengths = (records, k) => {
       const own = record.own[prop]
       if (own) {
         record.passed[prop] = g
-        if (Math.abs(g - 1) < EPSILON) { return }
+        if (Math.abs(g - 1) < MATRIX_TOLERANCE) { return }
         const scaled = scaleNumbers(own.value, g)
         if (scaled === own.value) { return }
         if (own.inStyle) {
@@ -330,7 +333,7 @@ export const scaleStrokeLengths = (records, k) => {
       }
       record.passed[prop] = above
       if (CONTAINERS.has(elem.tagName) || NO_STROKE.has(elem.tagName)) { return }
-      if (Math.abs(g - above) < EPSILON || record.eff.stroke === 'none') { return }
+      if (Math.abs(g - above) < MATRIX_TOLERANCE * Math.abs(above) || record.eff.stroke === 'none') { return }
       // The inherited value no longer fits this element: it gets its own.
       const value = record.eff[prop]
       const scaled = scaleNumbers(value, g)
@@ -338,7 +341,7 @@ export const scaleStrokeLengths = (records, k) => {
       change(elem, prop, elem.getAttribute(prop), scaled)
       record.passed[prop] = g
     })
-    if (record.blur && Math.abs(g - 1) > EPSILON) {
+    if (record.blur && Math.abs(g - 1) > MATRIX_TOLERANCE) {
       const { filter, blur } = record.blur
       const old = blur.getAttribute('stdDeviation')
       if (old !== null) {

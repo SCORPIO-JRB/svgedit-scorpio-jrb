@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, revealControl } from './helpers.js'
 
 // Decisions of 8 November: clip paths follow their object, X and Y of a path
 // alone without the stroke, one alignment menu, objects that look the same
@@ -36,10 +36,24 @@ const layers = (page) => page.evaluate(() =>
 
 const undoSize = (page) => page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.getUndoStackSize())
 
-const screenBoxes = (page, ids) => page.evaluate((ids) => ids.map((id) => {
-  const { x, y, width, height } = document.getElementById(id).getBoundingClientRect()
-  return { x, y, width, height }
-}), ids)
+// Screen box of an element's shape: its box through its screen matrix.
+// getBoundingClientRect cannot be used in Firefox: it gives a <use> the box
+// of its viewport, and widens a clipped shape by half a pixel on each side.
+// The function is passed to the page as text, so that it is written once.
+const SCREEN_BOX = `(el) => {
+  const b = el.getBBox()
+  const m = el.getScreenCTM()
+  const corners = [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]
+    .map(([x, y]) => ({ x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f }))
+  const xs = corners.map((p) => p.x)
+  const ys = corners.map((p) => p.y)
+  return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }
+}`
+
+const screenBoxes = (page, ids) => page.evaluate(({ ids, source }) => {
+  const box = new Function(`return ${source}`)() // eslint-disable-line no-new-func
+  return ids.map((id) => box(document.getElementById(id)))
+}, { ids, source: SCREEN_BOX })
 
 const close = (a, b) => Math.abs(a - b) < 0.5
 
@@ -201,13 +215,20 @@ test.describe('One alignment menu (decision 4)', () => {
   test('the bar fits one line at 1366 pixels, the menu opens and closes', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 })
     await settle(page)
-    const rows = await page.evaluate(() => new Set([...document.getElementById('tools_top').children]
-      .filter((el) => getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0 &&
-        getComputedStyle(el).position !== 'absolute')
-      .map((el) => Math.round(el.getBoundingClientRect().top))).size)
+    // The classic top bar holds the fields of the object: one line of them.
+    // The canvas layout (V3) has a bar of 40 px without them, and the menu
+    // in the inspector.
+    const rows = await page.evaluate(() => window.svgEditor.layout.canvas
+      ? (document.getElementById('se-topbar').getBoundingClientRect().height === 40 ? 1 : 0)
+      : new Set([...document.getElementById('tools_top').children]
+        .filter((el) => getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0 &&
+          getComputedStyle(el).position !== 'absolute')
+        .map((el) => Math.round(el.getBoundingClientRect().top))).size)
     expect(rows).toBe(1)
     const popup = page.locator('#tool_align_popup')
     await expect(popup).toBeHidden()
+    // Canvas layout: the menu is among the verbs of the "…" menu.
+    await revealControl(page, 'tool_align_menu')
     await page.locator('#tool_align_menu').click()
     await expect(popup).toBeVisible()
     await expect(page.locator('#tool_align_menu')).toHaveAttribute('aria-expanded', 'true')
@@ -226,6 +247,7 @@ test.describe('One alignment menu (decision 4)', () => {
   })
 
   test('the keyboard opens the menu, presses its buttons and closes it', async ({ page }) => {
+    await revealControl(page, 'tool_align_menu')
     await page.locator('#tool_align_menu').focus()
     await page.keyboard.press('Enter')
     await expect(page.locator('#tool_align_popup')).toBeVisible()
@@ -241,6 +263,7 @@ test.describe('One alignment menu (decision 4)', () => {
   })
 
   test('the reference of the menu is used', async ({ page }) => {
+    await revealControl(page, 'tool_align_menu')
     await page.locator('#tool_align_menu').click()
     await page.locator('#tool_align_relative').evaluate((el) => {
       el.value = 'page'
@@ -284,11 +307,14 @@ test.describe('Objects that look the same, in the whole page (decision 5)', () =
   test('takes the objects inside groups and in every visible layer', async ({ page }) => {
     expect(await selectPumps(page)).toEqual(PUMPS)
     // Each selection box surrounds its object, whatever its group does.
-    const offsets = await page.evaluate(() => window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => {
-      const r = el.getBoundingClientRect()
-      const box = window.svgEditor.svgCanvas.selectorManager.requestSelector(el).selectorRect.getBoundingClientRect()
-      return [Math.round(r.x - box.x), Math.round(r.width - box.width)]
-    }))
+    const offsets = await page.evaluate((source) => {
+      const screenBox = new Function(`return ${source}`)() // eslint-disable-line no-new-func
+      return window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => {
+        const r = screenBox(el)
+        const box = screenBox(window.svgEditor.svgCanvas.selectorManager.requestSelector(el).selectorRect)
+        return [Math.round(r.x - box.x), Math.round(r.width - box.width)]
+      })
+    }, SCREEN_BOX)
     offsets.forEach(([dx, dw]) => {
       expect(Math.abs(dx)).toBeLessThanOrEqual(2)
       expect(Math.abs(dw)).toBeLessThanOrEqual(4)
@@ -347,10 +373,13 @@ test.describe('Objects that look the same, in the whole page (decision 5)', () =
     await selectPumps(page)
     const start = await screenBoxes(page, PUMPS)
     await page.evaluate(() => window.svgEditor.svgCanvas.cloneSelectedElements(0, 50))
-    const copies = await page.evaluate(() => window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => {
-      const { x, y, width } = el.getBoundingClientRect()
-      return { parent: el.parentNode.id || el.parentNode.querySelector('title')?.textContent, x, y, width }
-    }))
+    const copies = await page.evaluate((source) => {
+      const screenBox = new Function(`return ${source}`)() // eslint-disable-line no-new-func
+      return window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => {
+        const { x, y, width } = screenBox(el)
+        return { parent: el.parentNode.id || el.parentNode.querySelector('title')?.textContent, x, y, width }
+      })
+    }, SCREEN_BOX)
     expect(copies.map((c) => c.parent).sort()).toEqual(['G', 'Layer 1', 'Layer 2', 'R'])
     // Each copy is its original moved 50 down, at the same size.
     copies.forEach((copy) => {

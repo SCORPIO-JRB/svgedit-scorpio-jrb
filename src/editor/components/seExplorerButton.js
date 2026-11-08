@@ -1,4 +1,6 @@
 /* globals svgEditor */
+import './seIcon.js'
+import { setControlName } from '../commands.js'
 
 /**
  * @class ExplorerButton
@@ -18,7 +20,7 @@ export class ExplorerButton extends HTMLElement {
     // locate the component
     this.$button = this._shadowRoot.querySelector('.menu-button')
     this.$overall = this._shadowRoot.querySelector('.overall')
-    this.$img = this._shadowRoot.querySelector('.menu-button img')
+    this.$img = this._shadowRoot.querySelector('.menu-button se-icon')
     this.$menu = this._shadowRoot.querySelector('.menu')
     this.$handle = this._shadowRoot.querySelector('.handle')
     this.$lib = this._shadowRoot.querySelector('.image-lib')
@@ -45,75 +47,93 @@ export class ExplorerButton extends HTMLElement {
     template.innerHTML = `
     <style>
     :host {
-      position:relative;
-    }
-    .menu-button:hover, se-button:hover, .menu-item:hover
-    {
-      background-color: var(--icon-bg-color-hover);
-    }
-    img {
-      border: none;
-      width: 24px;
-      height: 24px;
-    }
-    .overall.pressed .button-icon,
-    .overall.pressed,
-    .menu-item.pressed {
-      background-color: var(--icon-bg-color-hover) !important;
-    }
-    .overall.pressed .menu-button {
-      background-color: var(--icon-bg-color-hover) !important;
-    }
-    .disabled {
-      opacity: 0.3;
-      cursor: default;
+      position: relative;
+      display: inline-block;
     }
     .menu-button {
-      height: 24px;
-      width: 24px;
-      margin: 2px 1px 4px;
-      padding: 3px;
-      background-color: var(--icon-bg-color);
-      cursor: pointer;
+      box-sizing: border-box;
+      width: var(--se-control-size);
+      height: var(--se-control-size);
+      margin: 2px 1px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       position: relative;
-      border-radius: 3px;
-      overflow: hidden;
+      border-radius: var(--se-radius-control);
+      color: var(--se-icon);
+      cursor: pointer;
+      transition: background-color var(--se-duration-state) var(--se-ease-out),
+        color var(--se-duration-state) var(--se-ease-out);
     }
+    .overall:not(.pressed) .menu-button:hover {
+      background-color: var(--se-control-hover);
+      color: var(--se-text);
+    }
+    .overall.pressed .menu-button {
+      background-color: var(--se-accent-bg);
+      color: var(--se-accent);
+    }
+    .disabled {
+      opacity: 0.38;
+      cursor: default;
+    }
+    /* The corner that opens the library. */
     .handle {
-      height: 8px;
-      width: 8px;
-      background-image: url(${imgPath}/handle.svg);
-      position:absolute;
-      bottom: 0px;
-      right: 0px;
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 10px;
+      height: 10px;
     }
-    .button-icon {
+    .handle::after {
+      content: '';
+      position: absolute;
+      right: 2px;
+      bottom: 2px;
+      border-style: solid;
+      border-width: 0 0 4px 4px;
+      border-color: transparent transparent currentColor transparent;
+      pointer-events: none;
     }
     .menu {
       position: fixed;
-      margin-left: 34px;
-      background: none !important;
-      display:none;
       top: 30%;
-      left: 171px;
+      left: 216px;
+      display: none;
+      padding: 4px;
+      border: 1px solid var(--se-border);
+      border-radius: 0 var(--se-radius-float) var(--se-radius-float) 0;
+      background-color: var(--se-surface-raised);
+      box-shadow: var(--se-shadow-menu);
     }
     .image-lib {
       position: fixed;
-      left: 34px;
+      left: 40px;
       top: 30%;
-      background: #E8E8E8;
+      box-sizing: border-box;
+      width: 176px;
       display: none;
       flex-wrap: wrap;
       flex-direction: row;
-      width: 170px;
+      padding: 4px;
+      border: 1px solid var(--se-border);
+      border-radius: var(--se-radius-float) 0 0 var(--se-radius-float);
+      background-color: var(--se-surface-raised);
+      box-shadow: var(--se-shadow-menu);
     }
     .menu-item {
-      line-height: 1em;
-      padding: 0.5em;
-      border: 1px solid #5a6162;
-      background: #E8E8E8;
-      margin-bottom: -1px;
+      padding: 4px 8px;
+      border-radius: var(--se-radius-field);
+      color: var(--se-text);
       white-space: nowrap;
+      cursor: pointer;
+    }
+    .menu-item:hover {
+      background-color: var(--se-control-hover);
+    }
+    .menu-item.pressed {
+      background-color: var(--se-accent-bg);
+      color: var(--se-accent);
     }
     .open-lib {
       display: inline-flex;
@@ -121,22 +141,19 @@ export class ExplorerButton extends HTMLElement {
     .open {
       display: block;
     }
-    .overall {
-      background: none !important;
-    }
     </style>
-  
+
     <div class="overall">
-      <div class="menu-button">
-        <img class="button-icon" src="explorer.svg" alt="icon">
+      <div class="menu-button" role="button" aria-haspopup="true">
+        <se-icon class="button-icon"></se-icon>
         <div class="handle"></div>
       </div>
-      <div class="image-lib"">
+      <div class="image-lib">
         <se-button></se-button>
-     </div>
+      </div>
       <div class="menu">
-        <div class="menu-item">menu</div>
-     </div>
+        <div class="menu-item"></div>
+      </div>
     </div>`
     return template
   }
@@ -160,10 +177,7 @@ export class ExplorerButton extends HTMLElement {
     if (oldValue === newValue) return
     switch (name) {
       case 'title':
-        {
-          const shortcut = this.getAttribute('shortcut')
-          this.$button.setAttribute('title', `${newValue} [${shortcut}]`)
-        }
+        setControlName(this, this.$button, newValue, this.getAttribute('shortcut'))
         break
       case 'pressed':
         if (newValue) {
@@ -318,14 +332,15 @@ export class ExplorerButton extends HTMLElement {
       const json = await response.json()
       this.data = json.data
       const size = json.size ?? 300
-      const fill = json.fill ? '#333' : 'none'
+      // Drawn as a mask by se-icon: only the shape counts, not the colour.
+      const fill = json.fill ? 'currentColor' : 'none'
       const off = size * 0.05
       const vb = [-off, -off, size + off * 2, size + off * 2].join(' ')
       const stroke = json.fill ? 0 : (size / 30)
       this.$lib.innerHTML = Object.entries(this.data).map(([key, path]) => {
         const encoded = btoa(`
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
-          <svg viewBox="${vb}"><path fill="${fill}" stroke="#f8bb00" stroke-width="${stroke}" d="${path}"></path></svg>
+          <svg viewBox="${vb}"><path fill="${fill}" stroke="currentColor" stroke-width="${stroke}" d="${path}"></path></svg>
         </svg>`)
         return `<se-button data-shape="${key}"src="data:image/svg+xml;base64,${encoded}"></se-button>`
       }).join('')

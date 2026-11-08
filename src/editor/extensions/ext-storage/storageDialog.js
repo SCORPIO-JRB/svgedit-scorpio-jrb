@@ -1,8 +1,9 @@
 /* globals svgEditor */
 import storageDialogHTML from './storageDialog.html'
+import { dialogStyles } from '../../dialogs/dialogStyles.js'
 
 const template = document.createElement('template')
-template.innerHTML = storageDialogHTML
+template.innerHTML = dialogStyles + storageDialogHTML
 /**
  * @class SeStorageDialog
  */
@@ -32,6 +33,7 @@ export class SeStorageDialog extends HTMLElement {
     this.setAttribute('common-ok', i18next.t('common.ok'))
     this.setAttribute('common-cancel', i18next.t('common.cancel'))
     this.setAttribute('notify-editor_pref_msg', i18next.t('notification.editorPreferencesMsg'))
+    this.$dialog.setAttribute('aria-label', i18next.t('ui.storage_prefs'))
     this.setAttribute('properties-prefs_and_content', i18next.t('properties.prefs_and_content'))
     this.setAttribute('properties-prefs_only', i18next.t('properties.prefs_only'))
     this.setAttribute('properties-no_prefs_or_content', i18next.t('properties.no_prefs_or_content'))

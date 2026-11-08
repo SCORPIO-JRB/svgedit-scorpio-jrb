@@ -1,11 +1,17 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, clickControl } from './helpers.js'
 
 // M7: the system clipboard (copy writes SVG text, paste reads SVG from
 // outside through the import filter), paste in place, copy and paste of
 // properties, Mod+D that repeats the offset of a moved copy.
 
-test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+// Chromium needs both permissions. Firefox has none to grant: its
+// configuration opens the clipboard through preferences instead.
+test.use({
+  permissions: async ({ browserName }, use) => {
+    await use(browserName === 'chromium' ? ['clipboard-read', 'clipboard-write'] : [])
+  }
+})
 
 const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
   <g class="layer"><title>Layer 1</title>
@@ -22,7 +28,9 @@ const EXTERNAL = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50
 
 async function loadDrawing (page, svg = DRAWING) {
   await page.evaluate((svg) => {
-    window.svgEditor.setConfig({ gridSnapping: false })
+    // These tests measure the gesture itself, to the unit: no snapping to
+    // the neighbours (lot V2), which has its own tests (snap-v2).
+    window.svgEditor.setConfig({ gridSnapping: false, objectSnapping: false })
     window.svgEditor.svgCanvas.setSvgString(svg)
     window.svgEditor.svgCanvas.setZoom(1)
     window.svgEditor.updateCanvas()
@@ -225,9 +233,9 @@ test.describe('Mod+D repeats the offset (M7)', () => {
 
   test('the D key and button follow the same rule', async ({ page }) => {
     await clickOn(page, 'r1')
-    await page.locator('#tool_clone').click()
+    await clickControl(page, 'tool_clone')
     await dragBy(page, 'svg_1', 0, 30)
-    await page.locator('#tool_clone').click()
+    await clickControl(page, 'tool_clone')
     expect(await rects(page)).toEqual([['r1', 50, 50], ['svg_1', 70, 100], ['svg_2', 90, 150]])
   })
 })

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, canonical } from './helpers.js'
 
 // M3: rotation of a multi-selection about the center of its common frame.
 
@@ -114,10 +114,11 @@ const setAngleField = (page, value) => page.locator('#angle').evaluate((el, valu
 // Visual center of an element in the drawing's coordinates. For a path, its
 // first point: Chromium measures the box of an arc only approximately (in
 // single precision, on an approximation by curves), up to 0.015 unit off.
+// The first layer gives the drawing's coordinates (see drawingToScreen).
 const visualCenter = (page, id) => page.evaluate((id) => {
   const el = document.getElementById(id)
-  const content = document.getElementById('svgcontent')
-  const m = content.getScreenCTM().inverse().multiply(el.getScreenCTM())
+  const layer = document.querySelector('#svgcontent > g.layer')
+  const m = layer.getScreenCTM().inverse().multiply(el.getScreenCTM())
   let x
   let y
   if (el.tagName === 'path') {
@@ -158,8 +159,8 @@ test.describe('Rotation handle of the common frame (M3)', () => {
     await select(page, ['r1', 'r2'])
     const before = await layerMarkup(page)
     await dragRotation(page, 90)
-    expect(await attr(page, 'r1', 'transform')).toBe('rotate(90 210 60)')
-    expect(await attr(page, 'r2', 'transform')).toBe('rotate(90 210 200)')
+    expect(canonical(await attr(page, 'r1', 'transform'))).toBe('rotate(90 210 60)')
+    expect(canonical(await attr(page, 'r2', 'transform'))).toBe('rotate(90 210 200)')
     expect(await attr(page, 'r1', 'x')).toBe('170')
     expect(await attr(page, 'r1', 'y')).toBe('30')
     // Business attributes stay.
@@ -226,7 +227,7 @@ test.describe('Rotation handle of the common frame (M3)', () => {
     await page.mouse.down()
     await page.mouse.move(c.x + 60, c.y, { steps: 6 })
     await page.mouse.up()
-    expect(await attr(page, 'r1', 'transform')).toBe('rotate(90 140 130)')
+    expect(canonical(await attr(page, 'r1', 'transform'))).toBe('rotate(90 140 130)')
   })
 })
 
@@ -357,8 +358,8 @@ test.describe('Angle field and shortcuts of a multi-selection (M3)', () => {
     await expect(page.locator('#angle')).toBeVisible()
     expect(await angleField(page)).toBe('0')
     await setAngleField(page, 90)
-    expect(await attr(page, 'r1', 'transform')).toBe('rotate(90 210 60)')
-    expect(await attr(page, 'r2', 'transform')).toBe('rotate(90 210 200)')
+    expect(canonical(await attr(page, 'r1', 'transform'))).toBe('rotate(90 210 60)')
+    expect(canonical(await attr(page, 'r2', 'transform'))).toBe('rotate(90 210 200)')
     expect(await angleField(page)).toBe('90')
     expect(await undoSize(page)).toBe(1)
     // The same value again changes nothing.
@@ -418,7 +419,7 @@ test.describe('Angle field and shortcuts of a multi-selection (M3)', () => {
   test('setRotationAngle turns a multi-selection, not only its first element', async ({ page }) => {
     await select(page, ['r1', 'r2'])
     await page.evaluate(() => window.svgEditor.svgCanvas.setRotationAngle(90))
-    expect(await attr(page, 'r1', 'transform')).toBe('rotate(90 210 60)')
-    expect(await attr(page, 'r2', 'transform')).toBe('rotate(90 210 200)')
+    expect(canonical(await attr(page, 'r1', 'transform'))).toBe('rotate(90 210 60)')
+    expect(canonical(await attr(page, 'r2', 'transform'))).toBe('rotate(90 210 200)')
   })
 })

@@ -2,8 +2,9 @@
 import './se-elix/define/NumberSpinBox.js'
 
 import exportDialogHTML from './exportDialog.html'
+import { dialogStyles } from './dialogStyles.js'
 const template = document.createElement('template')
-template.innerHTML = exportDialogHTML
+template.innerHTML = dialogStyles + exportDialogHTML
 /**
  * @class SeExportDialog
  */
@@ -34,6 +35,7 @@ export class SeExportDialog extends HTMLElement {
     this.setAttribute('common-ok', i18next.t('common.ok'))
     this.setAttribute('common-cancel', i18next.t('common.cancel'))
     this.setAttribute('ui-export_type_label', i18next.t('ui.export_type_label'))
+    this.$dialog.setAttribute('aria-label', i18next.t('tools.export_img'))
     this.value = 100
   }
 

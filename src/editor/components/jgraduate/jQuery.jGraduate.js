@@ -192,7 +192,7 @@ export function jGraduateMethod (elem, options, okCallback, cancelCallback, i18n
   const idref = '#' + $this.getAttribute('id') + ' '
 
   if (!idref) {
-    alert('Container element must have an id attribute to maintain unique id strings for sub-elements.')
+    console.error('Container element must have an id attribute to maintain unique id strings for sub-elements.')
     return
   }
 

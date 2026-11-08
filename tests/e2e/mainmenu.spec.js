@@ -49,6 +49,8 @@ test.describe('Main menu logic', () => {
         },
         setBackground: (color, url) => { window.__bg = { color, url } },
         rulers: { updateRulers: () => { window.__rulers = true }, display: () => {} },
+        // As Editor.setRulersShown (V3).
+        setRulersShown (on) { if (on) this.rulers.updateRulers() },
         svgCanvas,
         updateCanvas: () => { window.__updated = true },
         i18next: { t: (key) => key },

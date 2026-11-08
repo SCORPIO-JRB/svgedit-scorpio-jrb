@@ -1,14 +1,12 @@
+/*
+ * Stylesheet of the editor shell. Colours, fonts, sizes and motion come from
+ * the design tokens (tokens.css); this file writes no colour value of its own.
+ */
+@import url('./fonts/fonts.css');
+@import url('./tokens.css');
+@import url('./layout.css');
+
 :root {
-  --main-bg-color: #72797A;
-  --text-color: #000000;
-  --border-color: #808080;
-  --canvas-bg-color: #B2B2B2;
-  --link-color: #19c;
-  --ruler-color: #B2B2B2;
-  --icon-bg-color: #72797A;
-  --icon-bg-color-hover: #2B3C45;
-  --input-color: #B2B2B2;
-  --orange-color: #f9bc01;
   --global-se-spin-input-width: 82px;
   --top-toolbar-min-height: 80px;
 }
@@ -26,17 +24,20 @@
     "left corner rulerX rulerX side"
     "left rulerY workarea workarea side"
     "left bottom bottom bottom bottom";
-  font-size: 8pt;
-  background: var(--main-bg-color);
-  font-family: Verdana, Helvetica, Arial;
-  color: var(--text-color);
+  font-size: var(--se-font-size-control);
+  line-height: var(--se-line-height-control);
+  background: var(--se-surface);
+  font-family: var(--se-font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--se-text);
   user-select: text;
   width: 100%;
   height: 100%;
 }
 
 #title_panel>p {
-  color: white;
+  color: var(--se-text);
+  font-family: var(--se-font-display);
   padding-left: 5px;
   padding-right: 3px;
   font-weight: bold;
@@ -56,19 +57,41 @@
 
 #workarea {
   grid-area: workarea;
-  background-color: #A0A0A0;
-  border: 1px solid var(--border-color);
+  background-color: var(--se-canvas);
+  border: 1px solid var(--se-border);
   overflow: auto;
   text-align: center;
 }
 
 #svgcanvas {
+  /* The drawing keeps the typography and colour it had before V1, whatever
+     the interface and its theme (see tokens.css). */
+  color: var(--se-document-color);
+  font-family: var(--se-document-font);
+  font-size: var(--se-document-font-size);
+  font-variant-numeric: normal;
+  color-scheme: light;
   line-height: normal;
   display: inline-block;
-  background: var(--canvas-bg-color);
+  background: var(--se-canvas);
   text-align: center;
   vertical-align: middle;
   position: relative;
+}
+
+/* The borderless view (lot V2): no scroll bar, the view controller scrolls a
+   surface a little larger than the view and moves the drawing on it. */
+#workarea.se-view-borderless {
+  position: relative;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#workarea.se-view-borderless #svgcanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 #sidepanels {
@@ -78,7 +101,7 @@
 #sidepanel_handle {
   writing-mode: vertical-rl;
   text-orientation: upright;
-  color: white;
+  color: var(--se-text-secondary);
   position: absolute;
   cursor: pointer;
   top: 50%;
@@ -89,12 +112,12 @@
 }
 
 a {
-  color: var(--link-color);
+  color: var(--se-accent);
 }
 
 hr {
   border: none;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--se-border);
 }
 
 #linkLabel>svg {
@@ -103,7 +126,7 @@ hr {
 }
 
 #layersLabel {
-  color: white;
+  color: var(--se-text);
 }
 
 #layerpanel {
@@ -130,19 +153,19 @@ hr {
   padding: 0;
   width: 132px;
   border-collapse: collapse;
-  border: 1px solid var(--border-color);
-  background-color: #FFFFFF;
+  border: 1px solid var(--se-border);
+  background-color: var(--se-surface);
 }
 
 #layerlist tr.layer {
-  background-color: #FFFFFF;
+  background-color: var(--se-surface);
   margin: 0;
   padding: 0;
 }
 
 #layerlist tr.layersel {
-  border: 1px solid var(--border-color);
-  background-color: #CCCCCC;
+  border: 1px solid var(--se-border);
+  background-color: var(--se-accent-row);
 }
 
 #layerlist td.layervis {
@@ -168,15 +191,11 @@ hr {
 }
 
 #layerlist td.layername:hover {
-  color: blue;
+  color: var(--se-accent);
 }
 
 #layerlist tr.layersel td.layername {
   font-weight: bold;
-}
-
-#selLayerLabel {
-  white-space: nowrap;
 }
 
 #selLayerNames {
@@ -190,111 +209,11 @@ hr {
 
 #main_button {
   grid-area: main;
-  color: #fff;
+  color: var(--se-text);
   border-radius: 3px;
   padding-block: 2px;
   padding-left: 3px;
   height: 34px;
-}
-
-#main_icon {
-  position: relative;
-  top: -2px;
-  left: -2px;
-  width: 95px;
-  line-height: 26px;
-}
-
-#main_icon:hover {
-  background: #eee !important;
-}
-
-#main_icon.buttondown {
-  background: #eee !important;
-  -moz-box-shadow: none !important;
-  -webkit-box-shadow: none !important;
-  box-shadow: none !important;
-  border-radius: 3px 3px 0 0;
-}
-
-#logo {
-  margin-top: -2px;
-}
-
-#logo img {
-  border: 0;
-  width: 28px;
-  height: 28px;
-}
-
-#main_icon>div {
-  float: left;
-}
-
-#main_button .dropdown {
-  position: absolute;
-  right: 7px;
-  top: 4px;
-}
-
-#main_icon span {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  display: block;
-  z-index: 2;
-  font-weight: bold;
-  padding-left: 34px;
-  line-height: 32px;
-  font-family: sans-serif;
-}
-
-#main_menu {
-  z-index: 12;
-  background: #eee;
-  position: relative;
-  width: 230px;
-  padding: 5px;
-  -moz-box-shadow: #555 1px 1px 4px;
-  -webkit-box-shadow: #555 1px 1px 4px;
-  box-shadow: #555 1px 1px 4px;
-  font-size: 1.1em;
-  display: none;
-  overflow: hidden;
-  clear: both;
-  top: -9px;
-}
-
-#main_menu ul,
-#main_menu li {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-#main_menu li {
-  /*  height: 35px;*/
-  line-height: 22px;
-  padding-top: 7px;
-  padding-left: 7px;
-  margin: -5px;
-  overflow: auto;
-  cursor: pointer;
-}
-
-#main_menu li:hover {
-  background: #FFC;
-}
-
-#main_menu li>div {
-  float: left;
-  padding-right: 5px;
-}
-
-#main_menu p {
-  margin-top: 5px;
 }
 
 /*—————————————————————————————*/
@@ -306,7 +225,8 @@ hr {
   flex-wrap: wrap;
   align-items: flex-start;
   align-content: flex-start;
-  background-color: var(--main-bg-color);
+  background-color: var(--se-surface-top);
+  border-bottom: 1px solid var(--se-border-top);
   min-height: var(--top-toolbar-min-height);
 }
 
@@ -314,7 +234,7 @@ hr {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  background-color: var(--main-bg-color);
+  background-color: var(--se-surface-top);
 }
 
 /*—————————————————————————————*/
@@ -341,8 +261,8 @@ hr {
 }
 
 #zoom {
-  color: var(--text-color);
-  background-color: var(--main-bg-color);
+  color: var(--se-text);
+  background-color: var(--se-surface);
   border: none;
 }
 
@@ -371,7 +291,7 @@ hr {
 
 #tools_left::-webkit-scrollbar-thumb,
 #tools_bottom::-webkit-scrollbar-thumb {
-  background-color: rgb(70, 70, 70);
+  background-color: var(--se-border-control);
 }
 
 /* End scrollbar styling */
@@ -380,7 +300,7 @@ hr {
 
 #workarea.wireframe #svgcontent * {
   fill: none;
-  stroke: #000;
+  stroke: var(--se-wireframe-stroke);
   stroke-width: 1px;
   stroke-opacity: 1.0;
   stroke-dasharray: 0;
@@ -390,12 +310,12 @@ hr {
 }
 
 #workarea.wireframe #svgcontent text {
-  fill: #000;
+  fill: var(--se-wireframe-stroke);
   stroke: none;
 }
 
 #workarea.wireframe #canvasBackground>rect {
-  fill: #FFF !important;
+  fill: var(--se-wireframe-page) !important;
 }
 
 #cur_context_panel {
@@ -403,9 +323,9 @@ hr {
   line-height: 22px;
   overflow: auto;
   padding-left: 5px;
-  font-size: 12px;
-  background: rgba(0, 0, 0, 0.8);
-  color: #ccc;
+  font-size: var(--se-font-size-control);
+  background: var(--se-surface-raised);
+  color: var(--se-text-secondary);
 }
 
 #cur_context_panel a {
@@ -421,81 +341,9 @@ input[type=text] {
   padding: 2px;
 }
 
-.dropdown {
-  position: relative;
-}
-
-.dropdown button {
-  width: 15px;
-  height: 21px;
-  margin: 6px 0 0 1px;
-  padding: 0;
-  border-left: 1px solid #FFFFFF;
-  border-top: 1px solid #FFFFFF;
-  border-right: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
-  background-color: #E8E8E8;
-}
-
-.dropdown button.down {
-  border-left: 1px solid var(--border-color);
-  border-top: 1px solid var(--border-color);
-  border-right: 1px solid #FFFFFF;
-  border-bottom: 1px solid #FFFFFF;
-  background-color: #5a6162;
-}
-
-.dropdown ul {
-  list-style: none;
-  position: absolute;
-  margin: 0;
-  padding: 0;
-  left: -85px;
-  top: 26px;
-  z-index: 4;
-  display: none;
-}
-
-.dropup ul {
-  top: auto;
-  bottom: 24px;
-}
-
-.dropdown li {
-  display: block;
-  width: 120px;
-  padding: 4px;
-  background: #E8E8E8;
-  border: 1px solid #5a6162;
-  margin: 0 0 -1px 0;
-  line-height: 16px;
-}
-
-.dropdown li:hover {
-  background-color: #FFC;
-}
-
-.dropdown li.special {
-  padding: 10px 4px;
-}
-
-.dropdown li.special:hover {
-  background: #FFC;
-}
-
-#font_family_dropdown-list li {
-  font-size: 1.4em;
-}
-
 #font_family {
   margin-left: 5px;
   margin-right: 0;
-}
-
-#main_menu li#tool_open,
-#main_menu li#tool_import {
-  position: relative;
-  overflow: hidden;
 }
 
 #tool_image {
@@ -521,22 +369,14 @@ input[type=text] {
 }
 
 .tool_sep {
-  border-left: 1px outset #EEE;
+  border-left: 1px solid var(--se-border);
   margin: 5px 1px;
   height: 30px;
-}
-
-.width_label {
-  padding-right: 5px;
 }
 
 #text {
   position: absolute;
   left: -9999px;
-}
-
-.bottom-icon {
-  width: 22px;
 }
 
 #palette {
@@ -546,73 +386,14 @@ input[type=text] {
   align-items: center;
 }
 
-#stroke_expand {
-  width: 0;
-  overflow: hidden;
-}
-
-#toggle_stroke_tools {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 25px;
-  text-align: center;
-  border-radius: 0 3px 3px 0;
-  margin: 0;
-}
-
-#toggle_stroke_tools:before {
-  content: '>>';
-  letter-spacing: -3px;
-  font-weight: bold;
-  color: #666;
-}
-
-.expanded #toggle_stroke_tools:before {
-  content: '<<';
-}
-
-#toggle_stroke_tools:hover {
-  background: white;
-}
-
-#tool_opacity {
-  right: 0;
-}
-
-#tool_opacity {
-  overflow: visible;
-}
-
-ul li.current {
-  background-color: #F4E284;
-}
-
-#copyright {
-  text-align: right;
-  padding-right: .3em;
-}
-
 .overlay {
   position: absolute;
   top: 0;
   right: 0;
   left: 0;
   bottom: 0;
-  background-color: black;
-  opacity: 0.6;
+  background-color: var(--se-backdrop);
   z-index: 5;
-}
-
-#save_output_btns {
-  display: none;
-  text-align: left;
-}
-
-#save_output_btns p {
-  margin: .5em 1.5em;
-  display: inline-block;
 }
 
 #bg_blocks {
@@ -621,10 +402,6 @@ ul li.current {
 }
 
 /* ------------ */
-
-.dropdown li.tool_button {
-  width: 24px;
-}
 
 /* The nine-point anchor of the Scale tool (M9): the point of the selection
    that stays in place when a factor, a width or a height is typed. */
@@ -635,27 +412,27 @@ ul li.current {
   gap: 2px;
   margin: 7px 4px;
   padding: 2px;
-  border-radius: 3px;
-  background-color: var(--input-color);
+  border-radius: var(--se-radius-field);
+  background-color: var(--se-control);
 }
 
 #scale_anchor button {
   width: 10px;
   height: 10px;
   padding: 0;
-  border: 1px solid #fff;
+  border: 1px solid var(--se-border-control);
   border-radius: 2px;
-  background-color: var(--main-bg-color);
+  background-color: var(--se-surface);
   cursor: pointer;
 }
 
 #scale_anchor button[aria-checked="true"] {
-  background-color: var(--orange-color);
-  border-color: var(--orange-color);
+  background-color: var(--se-accent);
+  border-color: var(--se-accent);
 }
 
 #scale_anchor button:focus-visible {
-  outline: 2px solid var(--icon-bg-color-hover);
+  outline: 2px solid var(--se-focus-ring);
   outline-offset: 1px;
 }
 
@@ -674,10 +451,10 @@ ul li.current {
   display: flex;
   flex-direction: column;
   padding: 2px 6px;
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  background-color: var(--main-bg-color);
-  box-shadow: 0 2px 6px rgb(0 0 0 / 35%);
+  border: 1px solid var(--se-border);
+  border-radius: var(--se-radius-float);
+  background-color: var(--se-surface-raised);
+  box-shadow: var(--se-shadow-menu);
 }
 
 #tool_align_popup[hidden] {
@@ -692,7 +469,7 @@ ul li.current {
 }
 
 #align_menu se-button:focus-visible {
-  outline: 2px solid var(--orange-color);
+  outline: 2px solid var(--se-focus-ring);
   outline-offset: -2px;
   border-radius: 3px;
 }

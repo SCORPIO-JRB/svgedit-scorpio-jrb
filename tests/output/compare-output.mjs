@@ -147,7 +147,9 @@ const runScenario = (page, scenario) => page.evaluate(async ({ svg, scenario }) 
   const c = window.svgEditor.svgCanvas
   const frame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
   c.setSvgString(svg)
-  window.svgEditor.setConfig({ gridSnapping: false })
+  // The same gesture must give the same geometry on both sides: no
+  // snapping, to the grid nor, since V2, to the objects.
+  window.svgEditor.setConfig({ gridSnapping: false, objectSnapping: false })
   c.setZoom(1)
   window.svgEditor.updateCanvas()
   c.clearSelection()

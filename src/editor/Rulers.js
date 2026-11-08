@@ -23,11 +23,17 @@ class Rulers {
     // add rulers component to the DOM
     const template = document.createElement('template')
     template.innerHTML = rulersTemplate
-    this.editor.$svgEditor.append(template.content.cloneNode(true))
+    // Each control in its zone of the layout (lot V3).
+    if (this.editor.layout) this.editor.layout.attach(template.content.cloneNode(true), 'rulers')
+    else this.editor.$svgEditor.append(template.content.cloneNode(true))
     const { $id } = SvgCanvas
     this.rulerX = $id('ruler_x')
     this.rulerY = $id('ruler_y')
     this.rulerCorner = $id('ruler_corner')
+    // The rulers are drawn in a canvas: they are redrawn with the new theme.
+    editor.$container?.addEventListener('se-themechange', () => {
+      if (editor.configObj.curConfig.showRulers) this.updateRulers()
+    })
   }
 
   display (on) {
@@ -46,6 +52,9 @@ class Rulers {
    * @type {Module}
   */
   manageScroll () {
+    // The rulers of the borderless view are drawn for the view alone, and
+    // again at each move (see view.js).
+    if (this.editor.view?.borderless) return
     if (this.rulerX) this.rulerX.scrollLeft = this.editor.workarea.scrollLeft
     if (this.rulerY) this.rulerY.scrollTop = this.editor.workarea.scrollTop
   }
@@ -63,6 +72,9 @@ class Rulers {
     let d; let i
     const limit = 30000
     const contentElem = this.svgCanvas.getSvgContent()
+    // Borderless view: the rulers measure the view, from the origin of the
+    // drawing in it.
+    const view = this.editor.view?.borderless && this.editor.view.camera ? this.editor.view : null
     const units = getTypeMap()
     const unit = units[this.editor.configObj.curConfig.baseUnit] // 1 = 1px
 
@@ -71,7 +83,7 @@ class Rulers {
       const isX = (d === 0)
       const dim = isX ? 'x' : 'y'
       const lentype = isX ? 'width' : 'height'
-      const contentDim = Number(contentElem.getAttribute(dim))
+      const contentDim = view ? view.camera[dim] : Number(contentElem.getAttribute(dim))
       const $hcanvOrig = $id('ruler_' + dim).querySelector('canvas')
 
       // Bit of a hack to fully clear the canvas in Safari & IE9
@@ -82,7 +94,9 @@ class Rulers {
 
       // Set the canvas size to the width of the container
       let rulerLen
-      if (lentype === 'width') {
+      if (view) {
+        rulerLen = view.viewport[lentype]
+      } else if (lentype === 'width') {
         rulerLen = parseFloat(getComputedStyle(scanvas, null).width.replace('px', ''))
       } else if (lentype === 'height') {
         rulerLen = parseFloat(getComputedStyle(scanvas, null).height.replace('px', ''))
@@ -91,9 +105,6 @@ class Rulers {
       hcanv.parentNode.style[lentype] = totalLen + 'px'
       let ctx = hcanv.getContext('2d')
       let ctxArr; let num; let ctxArrNum
-
-      ctx.fillStyle = 'rgb(200,0,0)'
-      ctx.fillRect(0, 0, hcanv.width, hcanv.height)
 
       // Remove any existing canvasses
       const elements = Array.prototype.filter.call($hcanv.parentNode.children, function (child) {
@@ -123,6 +134,15 @@ class Rulers {
       }
 
       hcanv[lentype] = rulerLen
+      // Resizing a canvas resets its context: the colours of the theme are
+      // set afterwards, on every canvas of the ruler.
+      const style = getComputedStyle($id('ruler_' + dim))
+      const paint = (context) => {
+        context.font = `9px ${style.fontFamily}`
+        context.fillStyle = style.color
+        context.strokeStyle = style.getPropertyValue('--se-ruler-tick').trim() || style.color
+      }
+      ;(ctxArr ?? [ctx]).forEach(paint)
 
       const uMulti = unit * zoom
 
@@ -138,8 +158,6 @@ class Rulers {
       }
 
       const bigInt = multi * uMulti
-
-      ctx.font = '9px sans-serif'
 
       let rulerD = ((contentDim / uMulti) % multi) * uMulti
       let labelPos = rulerD - bigInt
@@ -211,7 +229,6 @@ class Rulers {
         }
         rulerD += bigInt
       }
-      ctx.strokeStyle = '#000'
       ctx.stroke()
     }
   }

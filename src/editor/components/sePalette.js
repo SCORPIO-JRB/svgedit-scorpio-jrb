@@ -1,4 +1,5 @@
 /* globals svgEditor */
+import { t } from '../locale.js'
 /* eslint-disable max-len */
 const palette = [
   // Todo: Make into configuration item?
@@ -49,6 +50,10 @@ const palette = [
 const template = document.createElement('template')
 template.innerHTML = `
   <style>
+  :host {
+    display: flex;
+    align-items: center;
+  }
   .square {
     height: 15px;
     width: 15px;
@@ -57,59 +62,76 @@ template.innerHTML = `
   #palette_holder {
     overflow: hidden;
     padding: 4px;
-    background: #f0f0f0;
-    border-radius: 3px;
+    background: var(--se-control);
+    border-radius: var(--se-radius-field);
     z-index: 2;
   }
-  
+
   #js-se-palette {
     float: left;
     min-width: 30px;
     height: 15px;
     overflow: hidden;
   }
-  
+
   div.palette_item {
     height: 15px;
     width: 15px;
     float: left;
   }
-  
+
+  /* The "no colour" swatch, drawn over the white of a page. */
   div.palette_item:first-child {
-    background: white;
+    background: var(--se-wireframe-page);
   }
 
   .palette_expand_btn {
-    background: none;
+    width: 20px;
+    height: 20px;
+    margin-left: 2px;
+    padding: 0;
     border: none;
-    width: 14px;
-    height: 14px;
-    font-size: 12px;
+    border-radius: var(--se-radius-field);
+    background: none;
+    color: var(--se-text-secondary);
+    font-size: 10px;
     cursor: pointer;
-    user-select:none;
+    user-select: none;
+  }
+
+  .palette_expand_btn:hover {
+    background: var(--se-control-hover);
+    color: var(--se-text);
+  }
+
+  .palette_expand_btn:focus-visible {
+    outline: 2px solid var(--se-focus-ring);
+    outline-offset: 1px;
   }
 
   #palette_popup {
     padding: 4px;
     margin-left: 24px;
-    background: white;
     min-width: 180px;
     max-width: 360px;
     min-height: 14px;
     flex-wrap: wrap;
-    border-radius: 4px;
+    border: 1px solid var(--se-border);
+    border-radius: var(--se-radius-float);
+    background: var(--se-surface-raised);
+    box-shadow: var(--se-shadow-menu);
 
     position: absolute;
     bottom: 36px;
     right: 30px;
   }
-  
+
   </style>
   <div id="palette_holder" title="">
     <div id="js-se-palette">
     </div>
   </div>
-  <button class="palette_expand_btn" title="Show whole palette">▼</button>
+  <button class="palette_expand_btn">▼</button>
   <!-- hidden div -->
   <div id="palette_popup" style="display:none"/>
 `
@@ -131,6 +153,7 @@ export class SEPalette extends HTMLElement {
       'button.palette_expand_btn'
     )
     this.popUp = this._shadowRoot.getElementById('palette_popup')
+    this.expand_btn.setAttribute('title', t('ui.palette_show'))
     svgEditor.$click(this.expand_btn, (e) => {
       e.stopPropagation()
       const { display } = this.popUp.style
@@ -233,13 +256,13 @@ export class SEPalette extends HTMLElement {
   showPopUp () {
     this.popUp.style.display = 'flex'
     this.expand_btn.textContent = '▲'
-    this.expand_btn.setAttribute('title', 'Hide palette window')
+    this.expand_btn.setAttribute('title', t('ui.palette_hide'))
   }
 
   hidePopUp () {
     this.popUp.style.display = 'none'
     this.expand_btn.textContent = '▼'
-    this.expand_btn.setAttribute('title', 'Show palette window')
+    this.expand_btn.setAttribute('title', t('ui.palette_show'))
   }
 }
 

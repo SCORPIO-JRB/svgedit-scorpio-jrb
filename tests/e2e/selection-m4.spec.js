@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, canonical, clickControl } from './helpers.js'
 
 // M4: panel of a multi-selection. X, Y, W and H of the whole selection,
 // "Mixed" values, expressions typed in the fields, commands of a single
@@ -20,7 +20,9 @@ const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480
 
 async function loadDrawing (page, svg = DRAWING) {
   await page.evaluate((svg) => {
-    window.svgEditor.setConfig({ gridSnapping: false })
+    // These tests measure the gesture itself, to the unit: no snapping to
+    // the neighbours (lot V2), which has its own tests (snap-v2).
+    window.svgEditor.setConfig({ gridSnapping: false, objectSnapping: false })
     window.svgEditor.svgCanvas.setSvgString(svg)
     window.svgEditor.svgCanvas.setZoom(1)
     window.svgEditor.updateCanvas()
@@ -66,9 +68,11 @@ const angleOf = (page, id) => page.evaluate((id) =>
 
 const undoSize = (page) => page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.getUndoStackSize())
 
+// Shown by TopPanel: in the canvas layout the verbs are in the "…" menu of the
+// inspector, which stays closed until it is opened.
 const shown = (page, id) => page.locator(`#${id}`).evaluate((el) => {
   let node = el
-  while (node && node.id !== 'tools_top') {
+  while (node && node.id !== 'tools_top' && node.id !== 'se-actions-menu') {
     if (getComputedStyle(node).display === 'none') { return false }
     node = node.parentElement
   }
@@ -277,13 +281,14 @@ test.describe('"Mixed" values and expressions (M4)', () => {
     expect(await angleOf(page, 'r1')).toBe(10)
     expect(await angleOf(page, 'rr')).toBe(40)
     // Each element stays in place: its center does not move.
-    expect(await attr(page, 'r1', 'transform')).toBe('rotate(10 140 130)')
+    expect(canonical(await attr(page, 'r1', 'transform'))).toBe('rotate(10 140 130)')
     expect(await undoSize(page)).toBe(1)
     expect(await field(page, 'angle')).toBe('Mixed')
     await typeField(page, 'angle', '0')
     expect(await angleOf(page, 'r1')).toBe(0)
     expect(await angleOf(page, 'rr')).toBe(0)
-    expect(await attr(page, 'rr', 'x')).toBe('400')
+    // Firefox computes the turn back in single precision: 399.99998.
+    expect(Number(await attr(page, 'rr', 'x'))).toBeCloseTo(400, 4)
     expect(await field(page, 'angle')).toBe('0')
     // Now shared, the angle turns the whole selection about its center (M3).
     await typeField(page, 'angle', '90')
@@ -316,18 +321,18 @@ test.describe('Commands of a multi-selection, W and H of an element alone (M4)',
   test('order buttons bring the selection to the front or the back', async ({ page }) => {
     await select(page, ['r1', 'e1'])
     expect(await shown(page, 'tool_move_top_multi')).toBe(true)
-    await page.locator('#tool_move_top_multi').click()
+    await clickControl(page, 'tool_move_top_multi')
     const order = () => page.evaluate(() => [...document.querySelector('#svgcontent g.layer').children]
       .filter((el) => el.id).map((el) => el.id))
     expect((await order()).slice(-2)).toEqual(['r1', 'e1'])
-    await page.locator('#tool_move_bottom_multi').click()
+    await clickControl(page, 'tool_move_bottom_multi')
     expect((await order()).slice(0, 2)).toEqual(['r1', 'e1'])
   })
 
   test('the shapes are converted to paths in one step, each with its own style', async ({ page }) => {
     await select(page, ['r1', 'e1', 't1'])
     expect(await shown(page, 'tool_topath_multi')).toBe(true)
-    await page.locator('#tool_topath_multi').click()
+    await clickControl(page, 'tool_topath_multi')
     await settle(page)
     const tags = await page.evaluate(() => ['r1', 'e1', 't1'].map((id) => document.getElementById(id).tagName))
     expect(tags).toEqual(['path', 'path', 'text'])
@@ -350,12 +355,12 @@ test.describe('Commands of a multi-selection, W and H of an element alone (M4)',
     // (decision of 8 November: they used to include the stroke, 298).
     expect(await field(page, 'selected_x')).toBe('300')
     await typeField(page, 'selected_w', '160')
-    expect(await attr(page, 'p1', 'd')).toBe('M300,300 L460,320 L380,400 L300,300 z')
+    expect(canonical(await attr(page, 'p1', 'd'))).toBe(canonical('M300,300 L460,320 L380,400 L300,300 z'))
     expect(await field(page, 'selected_x')).toBe('300')
     expect(await undoSize(page)).toBe(1)
     // Typing X moves the box without the stroke to that value.
     await typeField(page, 'selected_x', '320')
-    expect(await attr(page, 'p1', 'd')).toBe('M320,300 L480,320 L400,400 L320,300 z')
+    expect(canonical(await attr(page, 'p1', 'd'))).toBe(canonical('M320,300 L480,320 L400,400 L320,300 z'))
     expect(await field(page, 'selected_x')).toBe('320')
     expect(await undoSize(page)).toBe(2)
   })

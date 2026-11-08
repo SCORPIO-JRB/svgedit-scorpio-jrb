@@ -117,11 +117,12 @@ test.describe('Zoom gestures', () => {
     expect(await zoom(page)).toBe(1)
   })
 
-  test('zoom stays within 1 % and 1000 %', async ({ page }) => {
-    for (let i = 0; i < 6; i++) {
+  test('zoom stays within 1 % and 6 400 %', async ({ page }) => {
+    // 6 400 % since V2 (it was 1 000 %).
+    for (let i = 0; i < 9; i++) {
       await page.keyboard.press('Control+ArrowUp')
     }
-    expect(await zoom(page)).toBeLessThanOrEqual(10)
+    expect(await zoom(page)).toBe(64)
   })
 })
 

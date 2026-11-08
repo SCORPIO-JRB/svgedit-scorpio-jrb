@@ -17,5 +17,8 @@
     "scaleToolMove": 100,
     "scaleToolRelease": 300,
     "hover": 4
+  },
+  "10000": {
+    "snapSearch": 2
   }
 }

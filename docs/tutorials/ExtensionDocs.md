@@ -177,6 +177,39 @@ array "buttons" on the object returned by the extension's `init` method).
 Its properties are outlined at
 [`SVGEditor.Button`]{@link module:SVGEditor.Button}.
 
+### Place of a tool in the toolbar
+
+In the canvas layout (lot V3) the tools are grouped in a floating toolbar.
+A tool button declares its group and its rank instead of an index:
+
+```html
+<se-button id="tool_valve" data-group="shapes" data-rank="85"
+  title="valve:buttons.0.title" src="valve.svg"></se-button>
+```
+
+| `data-group` | Where |
+| --- | --- |
+| `select` | Select, Scale, Hand |
+| `create` | Text and the Shapes and Paths menus |
+| `shapes` | the Shapes ▾ menu (rectangle 10 … line 70, star 80, polygon 90) |
+| `paths` | the Paths ▾ menu (pen 10, pencil 20) |
+| `insert` | Image 10, Connector 20, Library 30 |
+| `more` | the More ▾ menu (zoom 10, eyedropper 20) |
+
+The button can still be inserted at an index into `#tools_left`, as before:
+the editor moves it to its place, so the order is the same at every load,
+whatever the order in which the extensions arrive. A tool that declares no
+group goes into More ▾, ordered by id. A group of tools brought as a
+`se-flyingbutton` is opened: its buttons go to their own places.
+
+The panels that extensions add to `#tools_top` go into the Properties tab:
+`#marker_panel` with the stroke, `#star_panel` and `#polygon_panel` with the
+geometry, any other in an Extensions section. A button added to
+`#editor_panel` keeps its id, its shortcut and its state, out of sight: the
+zoom menu shows an entry for it, with its title, its shortcut and a check
+when the button is pressed, and choosing the entry clicks the button. The
+entries added to `#main_button` go into the document menu.
+
 ## Creating SVG icons
 
 The SVG-Edit project uses icons created using basic SVG (generally
