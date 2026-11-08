@@ -24,6 +24,11 @@ import { warn } from '../common/logger.js'
 
 // Constants
 export const NEAR_ZERO = 1e-10
+// Relative tolerance of a value read from an SVG matrix. Firefox computes
+// SVG matrices in single precision: a factor that should be 1 reads
+// 0.99999998, a shear that should be 0 reads 2e-8. Below this, the
+// difference cannot be seen, even on a large drawing.
+export const MATRIX_TOLERANCE = 1e-6
 
 // Create a throwaway SVG element for matrix operations
 const svg = document.createElementNS(NS.SVG, 'svg')
