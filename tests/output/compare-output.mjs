@@ -59,6 +59,8 @@ const SCENARIOS = {
   'distribute h (multi)': `c.selectOnly(${byId(['r1', 'e1', 'p1'])}); c.alignSelectedElements('dh', 'selected')`,
   'top/bottom single': `c.selectOnly(${byId(['r1'])}); c.moveToTopSelectedElement(); c.selectOnly(${byId(['l1'])}); c.moveToBottomSelectedElement()`,
   'convert to path': `c.selectOnly(${byId(['e1'])}); c.convertToPath()`,
+  // Each shape keeps its own style, without "null" values (question 10).
+  'convert several to paths': `c.selectOnly(${byId(['r1', 'e1', 'l1'])}); c.convertSelectedToPaths()`,
   'flip (multi)': `c.selectOnly(${byId(['r1', 'e1'])}); c.flipSelectedElements(-1, 1)`,
   'align largest (multi)': `c.selectOnly(${byId(['r1', 'e1', 'p1'])}); c.alignSelectedElements('t', 'largest')`,
   'setRotationAngle (multi)': `c.selectOnly(${byId(['r1', 'e1', 'r2'])}); c.setRotationAngle(30)`,

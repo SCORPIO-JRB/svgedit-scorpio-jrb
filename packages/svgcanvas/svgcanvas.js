@@ -101,12 +101,10 @@ import dataStorage from './core/dataStorage.js'
 
 // Shapes that convertToPath turns into a path.
 const CONVERTIBLE_TO_PATH = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
-// Style of the current shape that a click on a single shape copies from it.
-const STYLE_COPIED_ON_CLICK = [
-  ['fill', 'fill'], ['fill_opacity', 'fill-opacity'], ['stroke', 'stroke'],
-  ['stroke_opacity', 'stroke-opacity'], ['stroke_width', 'stroke-width'],
-  ['stroke_dasharray', 'stroke-dasharray'], ['stroke_linejoin', 'stroke-linejoin'],
-  ['stroke_linecap', 'stroke-linecap']
+// Style attributes a shape passes on to the path it is converted to.
+const STYLE_KEPT_AS_PATH = [
+  'fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray',
+  'stroke-linejoin', 'stroke-linecap', 'stroke-opacity', 'opacity'
 ]
 const visElems =
   'a,circle,ellipse,foreignObject,g,image,line,path,polygon,polyline,rect,svg,text,tspan,use'
@@ -1327,28 +1325,24 @@ class SvgCanvas {
         this.pathActions
       )
     }
-    // TODO: Why is this applying attributes from this.curShape, then inside utilities.convertToPath it's pulling addition attributes from elem?
-    // TODO: If convertToPath is called with one elem, this.curShape and elem are probably the same; but calling with multiple is a bug or cool feature.
-    const attrs = {
-      fill: this.curShape.fill,
-      'fill-opacity': this.curShape.fill_opacity,
-      stroke: this.curShape.stroke,
-      'stroke-width': this.curShape.stroke_width,
-      'stroke-dasharray': this.curShape.stroke_dasharray,
-      'stroke-linejoin': this.curShape.stroke_linejoin,
-      'stroke-linecap': this.curShape.stroke_linecap,
-      'stroke-opacity': this.curShape.stroke_opacity,
-      opacity: this.curShape.opacity,
-      visibility: 'hidden'
-    }
+    // The path takes the shape's own style, however the shape was selected.
+    // It used to take the current style, which only a click on the shape
+    // alone sets, with "null" for the attributes the shape did not have.
+    // An attribute the shape does not have stays absent, so the path still
+    // inherits it from its groups.
+    const attrs = {}
+    STYLE_KEPT_AS_PATH.forEach((name) => {
+      const value = elem.getAttribute(name)
+      if (value !== null) { attrs[name] = value }
+    })
+    attrs.visibility = 'hidden'
     return convertToPath(elem, attrs, this) // call convertToPath from utilities.js
   }
 
   /**
-   * Converts the selected shapes to paths, as one undo step. Each shape is
-   * converted as when it is clicked alone and converted: the click gives the
-   * current style its stroke and fill, which the new path takes. The other
-   * elements are left as they are and stay selected with the new paths.
+   * Converts the selected shapes to paths, as one undo step. Each path takes
+   * the style of its shape (see convertToPath). The other elements are left
+   * as they are and stay selected with the new paths.
    * @function module:svgcanvas.SvgCanvas#convertSelectedToPaths
    * @fires module:svgcanvas.SvgCanvas#event:changed
    * @returns {SVGPathElement[]} The new paths
@@ -1361,19 +1355,15 @@ class SvgCanvas {
     const own = Object.prototype.hasOwnProperty.call(this, 'addCommandToHistory')
     const add = this.addCommandToHistory
     const paths = new Map()
-    const savedStyle = { ...this.curShape }
     // Each conversion records its own command: they are gathered into one.
     this.addCommandToHistory = (cmd) => batch.addSubCommand(cmd)
     try {
       shapes.forEach((elem) => {
-        // The style a click on the element alone copies (see mouseUp).
-        STYLE_COPIED_ON_CLICK.forEach(([key, attr]) => { this.curShape[key] = elem.getAttribute(attr) })
         const path = this.convertToPath(elem)
         if (path) { paths.set(elem, path) }
       })
     } finally {
       if (own) { this.addCommandToHistory = add } else { delete this.addCommandToHistory }
-      Object.assign(this.curShape, savedStyle)
     }
     if (!batch.isEmpty()) { this.addCommandToHistory(batch) }
     const kept = selected.map((elem) => paths.get(elem) || elem).filter((elem) => elem.parentNode)
