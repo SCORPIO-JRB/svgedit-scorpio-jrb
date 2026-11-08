@@ -286,10 +286,12 @@ test.describe('Saving leaves out a default value only where it changes nothing (
       canvas.setStrokeWidth(1)
     })
     await page.keyboard.press('r')
-    const box = await page.locator('#svgcontent').boundingBox()
-    await page.mouse.move(box.x + 450, box.y + 200)
+    // Drawn on an empty part of the page, from (450, 200) to (520, 250).
+    const from = await screenPoint(page, 450, 200)
+    const to = await screenPoint(page, 520, 250)
+    await page.mouse.move(from.x, from.y)
     await page.mouse.down()
-    await page.mouse.move(box.x + 520, box.y + 250, { steps: 5 })
+    await page.mouse.move(to.x, to.y, { steps: 5 })
     await page.mouse.up()
     await settle(page)
     const drawn = await page.evaluate(() => {
