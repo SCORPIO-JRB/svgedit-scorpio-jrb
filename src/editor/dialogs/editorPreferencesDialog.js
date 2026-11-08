@@ -1,7 +1,8 @@
 /* globals svgEditor */
 import editorPreferencesDialog from './editorPreferencesDialog.html'
+import { dialogStyles } from './dialogStyles.js'
 const template = document.createElement('template')
-template.innerHTML = editorPreferencesDialog
+template.innerHTML = dialogStyles + editorPreferencesDialog
 /**
  * @class SeEditPrefsDialog
  */
@@ -19,6 +20,7 @@ export class SeEditPrefsDialog extends HTMLElement {
     this.$saveBtn = this._shadowRoot.querySelector('#tool_prefs_save')
     this.$cancelBtn = this._shadowRoot.querySelector('#tool_prefs_cancel')
     this.$langSelect = this._shadowRoot.querySelector('#lang_select')
+    this.$themeSelect = this._shadowRoot.querySelector('#theme_select')
     this.$bgBlocks = this._shadowRoot.querySelector('#bg_blocks')
     this.$bgURL = this._shadowRoot.querySelector('#canvas_bg_url')
     this.$gridSnappingOn = this._shadowRoot.querySelector('#grid_snapping_on')
@@ -48,6 +50,14 @@ export class SeEditPrefsDialog extends HTMLElement {
     this.setAttribute('config-units_and_rulers', i18next.t('config.units_and_rulers'))
     this.setAttribute('config-show_rulers', i18next.t('config.show_rulers'))
     this.setAttribute('config-base_unit', i18next.t('config.base_unit'))
+    this._shadowRoot.querySelector('#svginfo_theme').textContent = i18next.t('config.theme')
+    for (const option of this.$themeSelect.options) {
+      option.textContent = i18next.t(`config.theme_${option.value}`)
+    }
+    for (const option of this.$baseUnit.options) {
+      option.textContent = i18next.t(`config.unit_${option.value}`)
+    }
+    this.$dialog.setAttribute('aria-label', i18next.t('config.editor_prefs'))
   }
 
   /**
@@ -56,7 +66,7 @@ export class SeEditPrefsDialog extends HTMLElement {
    */
   static get observedAttributes () {
     // eslint-disable-next-line max-len
-    return ['dialog', 'lang', 'canvasbg', 'bgurl', 'gridsnappingon', 'gridsnappingstep', 'gridcolor', 'showrulers', 'baseunit', 'common-ok', 'common-cancel', 'config-editor_prefs', 'config-language', 'config-background', 'common-url', 'config-editor_bg_note', 'config-grid', 'config-snapping_onoff', 'config-snapping_stepsize', 'config-grid_color', 'config-units_and_rulers', 'config-show_rulers', 'config-base_unit']
+    return ['dialog', 'lang', 'theme', 'canvasbg', 'bgurl', 'gridsnappingon', 'gridsnappingstep', 'gridcolor', 'showrulers', 'baseunit', 'common-ok', 'common-cancel', 'config-editor_prefs', 'config-language', 'config-background', 'common-url', 'config-editor_bg_note', 'config-grid', 'config-snapping_onoff', 'config-snapping_stepsize', 'config-grid_color', 'config-units_and_rulers', 'config-show_rulers', 'config-base_unit']
   }
 
   /**
@@ -78,6 +88,9 @@ export class SeEditPrefsDialog extends HTMLElement {
         } else {
           this.$dialog.close()
         }
+        break
+      case 'theme':
+        this.$themeSelect.value = newValue || 'system'
         break
       case 'lang':
         this.$langSelect.value = newValue
@@ -346,6 +359,7 @@ export class SeEditPrefsDialog extends HTMLElement {
       const closeEvent = new CustomEvent('change', {
         detail: {
           lang: this.$langSelect.value,
+          theme: this.$themeSelect.value,
           dialog: 'close',
           bgcolor: color,
           bgurl: this.$bgURL.value,

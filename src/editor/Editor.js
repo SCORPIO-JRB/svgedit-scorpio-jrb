@@ -17,7 +17,7 @@ import './components/index.js'
 import './dialogs/index.js'
 
 import { isMac } from '@svgedit/svgcanvas/common/browser'
-import { normalizeShortcut, eventShortcut } from './shortcuts.js'
+import { CommandRegistry } from './commands.js'
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import ConfigObj from './ConfigObj.js'
@@ -105,27 +105,43 @@ class Editor extends EditorStartup {
     ]
 
     const modKey = isMac() ? 'meta+' : 'ctrl+'
+    /**
+     * Every action with a shortcut, from the table below and from the buttons
+     * and menu entries (lot V1). Tooltips and menus show the shortcuts it
+     * holds, so that a shortcut shown is a shortcut that works.
+     * @type {CommandRegistry}
+     */
+    this.commands = new CommandRegistry({
+      translate: (key, fallback) => {
+        const text = this.i18next?.t(key)
+        return text && text !== key ? text : fallback
+      }
+    })
     this.shortcuts = [
       // Shortcuts not associated with buttons
       {
+        id: 'rotate_left',
         key: ['ctrl+arrowleft', true],
         fn: () => {
           this.rotateSelected(0, 1)
         }
       },
       {
+        id: 'rotate_right',
         key: 'ctrl+arrowright',
         fn: () => {
           this.rotateSelected(1, 1)
         }
       },
       {
+        id: 'rotate_left_15',
         key: ['ctrl+shift+arrowleft', true],
         fn: () => {
           this.rotateSelected(0, 15)
         }
       },
       {
+        id: 'rotate_right_15',
         key: ['ctrl+shift+arrowright', true],
         fn: () => {
           this.rotateSelected(1, 15)
@@ -133,18 +149,21 @@ class Editor extends EditorStartup {
       },
       {
         // Redo: Ctrl+Y (tool_redo button) or the standard Mod+Shift+Z
+        id: 'redo_shift',
         key: ['ctrl+shift+z', true],
         fn: () => {
           this.topPanel.clickRedo()
         }
       },
       {
+        id: 'select_next',
         key: 'shift+o',
         fn: () => {
           this.svgCanvas.cycleElement(0)
         }
       },
       {
+        id: 'select_previous',
         key: 'shift+p',
         fn: () => {
           this.svgCanvas.cycleElement(1)
@@ -154,24 +173,28 @@ class Editor extends EditorStartup {
         // Enter: the objects of the selected group (a path: its nodes, a
         // text: its characters); Shift+Enter: the group that holds the
         // selection.
+        id: 'select_children',
         key: ['enter', true],
         fn: () => {
           this.svgCanvas.selectChildren()
         }
       },
       {
+        id: 'select_parent',
         key: ['shift+enter', true],
         fn: () => {
           this.svgCanvas.selectParent()
         }
       },
       {
+        id: 'select_next_tab',
         key: 'tab',
         fn: () => {
           this.svgCanvas.cycleElement(0)
         }
       },
       {
+        id: 'select_previous_tab',
         key: 'shift+tab',
         fn: () => {
           this.svgCanvas.cycleElement(1)
@@ -180,18 +203,21 @@ class Editor extends EditorStartup {
       // View shortcuts: Shift+0 100 %, Shift+1 fit content, Shift+2 fit
       // selection, Shift+3 fit page; Mod+plus / Mod+minus step the zoom.
       {
+        id: 'zoom_100',
         key: ['shift+0', true],
         fn: () => {
           this.zoomAt(1)
         }
       },
       {
+        id: 'zoom_fit_content',
         key: ['shift+1', true],
         fn: () => {
           this.zoomChanged(window, 'content')
         }
       },
       {
+        id: 'zoom_fit_selection',
         key: ['shift+2', true],
         fn: () => {
           if (this.selectedElement || this.multiselected) {
@@ -200,42 +226,39 @@ class Editor extends EditorStartup {
         }
       },
       {
+        id: 'zoom_fit_canvas',
         key: ['shift+3', true],
         fn: () => {
           this.zoomChanged(window, 'canvas')
         }
       },
-      { key: ['ctrl+=', true], fn: () => { this.zoomStep(1) } },
-      { key: ['ctrl++', true], fn: () => { this.zoomStep(1) } },
-      { key: ['ctrl+shift++', true], fn: () => { this.zoomStep(1) } },
-      { key: ['ctrl+-', true], fn: () => { this.zoomStep(-1) } },
+      { id: 'zoom_in', label: 'tools.zoom_in', key: ['ctrl+=/ctrl++/ctrl+shift++', true], fn: () => { this.zoomStep(1) } },
+      { id: 'zoom_out', label: 'tools.zoom_out', key: ['ctrl+-', true], fn: () => { this.zoomStep(-1) } },
       {
+        id: 'zoom_double',
         key: [modKey + 'arrowup', true],
         fn: () => {
           this.zoomImage(2)
         }
       },
       {
+        id: 'zoom_half',
         key: [modKey + 'arrowdown', true],
         fn: () => {
           this.zoomImage(0.5)
         }
       },
-      {
-        key: [modKey + ']', true],
-        fn: () => {
-          this.moveUpDownSelected('Up')
-        }
-      },
-      // Keyboard-layout independent order shortcuts (brackets need AltGr on
-      // AZERTY): Mod+PageUp/PageDown one step, Mod+Home/End to the front/back.
-      { key: ['ctrl+pageup', true], fn: () => { this.moveUpDownSelected('Up') } },
-      { key: ['ctrl+pagedown', true], fn: () => { this.moveUpDownSelected('Down') } },
-      { key: ['ctrl+home', true], fn: () => { this.topPanel.moveToTopSelected() } },
-      { key: ['ctrl+end', true], fn: () => { this.topPanel.moveToBottomSelected() } },
+      // Order: Mod+] and Mod+[ one step, Mod+Shift+] and Mod+Shift+[ to the
+      // front and back; Mod+PageUp/PageDown and Mod+Home/End do the same
+      // whatever the keyboard layout (brackets need AltGr on AZERTY).
+      { id: 'move_up', label: 'tools.move_up', key: [modKey + ']/ctrl+pageup', true], fn: () => { this.moveUpDownSelected('Up') } },
+      { id: 'move_front', label: 'tools.move_front', key: ['ctrl+shift+]/ctrl+home', true], fn: () => { this.topPanel.moveToTopSelected() } },
+      { id: 'move_back', label: 'tools.move_back', key: ['ctrl+shift+[/ctrl+end', true], fn: () => { this.topPanel.moveToBottomSelected() } },
       {
         // Duplicate the selection (Mod+D), like the D / C buttons. After the
         // copy has been moved, Mod+D repeats that offset (M7).
+        id: 'duplicate',
+        label: 'tools.clone',
         key: ['ctrl+d', true],
         fn: () => {
           if (this.selectedElement || this.multiselected) {
@@ -244,6 +267,8 @@ class Editor extends EditorStartup {
         }
       },
       {
+        id: 'group',
+        label: 'tools.group',
         key: ['ctrl+g', true],
         fn: () => {
           if (this.multiselected) {
@@ -252,6 +277,8 @@ class Editor extends EditorStartup {
         }
       },
       {
+        id: 'ungroup',
+        label: 'tools.ungroup',
         key: ['ctrl+shift+g', true],
         fn: () => {
           const elem = this.selectedElement
@@ -261,108 +288,128 @@ class Editor extends EditorStartup {
         }
       },
       {
-        key: [modKey + '[', true],
+        id: 'move_down',
+        label: 'tools.move_down',
+        key: [modKey + '[/ctrl+pagedown', true],
         fn: () => {
           this.moveUpDownSelected('Down')
         }
       },
       {
+        id: 'nudge_up',
         key: ['arrowup', true],
         fn: () => {
           this.moveSelected(0, -1)
         }
       },
       {
+        id: 'nudge_down',
         key: ['arrowdown', true],
         fn: () => {
           this.moveSelected(0, 1)
         }
       },
       {
+        id: 'nudge_left',
         key: ['arrowleft', true],
         fn: () => {
           this.moveSelected(-1, 0)
         }
       },
       {
+        id: 'nudge_right',
         key: ['arrowright', true],
         fn: () => {
           this.moveSelected(1, 0)
         }
       },
       {
+        id: 'nudge_up_10',
         key: 'shift+arrowup',
         fn: () => {
           this.moveSelected(0, -10)
         }
       },
       {
+        id: 'nudge_down_10',
         key: 'shift+arrowdown',
         fn: () => {
           this.moveSelected(0, 10)
         }
       },
       {
+        id: 'nudge_left_10',
         key: 'shift+arrowleft',
         fn: () => {
           this.moveSelected(-10, 0)
         }
       },
       {
+        id: 'nudge_right_10',
         key: 'shift+arrowright',
         fn: () => {
           this.moveSelected(10, 0)
         }
       },
       {
+        id: 'duplicate_up',
         key: ['alt+arrowup', true],
         fn: () => {
           this.svgCanvas.duplicateSelectedElements({ x: 0, y: -1 })
         }
       },
       {
+        id: 'duplicate_down',
         key: ['alt+arrowdown', true],
         fn: () => {
           this.svgCanvas.duplicateSelectedElements({ x: 0, y: 1 })
         }
       },
       {
+        id: 'duplicate_left',
         key: ['alt+arrowleft', true],
         fn: () => {
           this.svgCanvas.duplicateSelectedElements({ x: -1, y: 0 })
         }
       },
       {
+        id: 'duplicate_right',
         key: ['alt+arrowright', true],
         fn: () => {
           this.svgCanvas.duplicateSelectedElements({ x: 1, y: 0 })
         }
       },
       {
+        id: 'duplicate_up_10',
         key: ['alt+shift+arrowup', true],
         fn: () => {
           this.svgCanvas.duplicateSelectedElements({ x: 0, y: -10 })
         }
       },
       {
+        id: 'duplicate_down_10',
         key: ['alt+shift+arrowdown', true],
         fn: () => {
           this.svgCanvas.duplicateSelectedElements({ x: 0, y: 10 })
         }
       },
       {
+        id: 'duplicate_left_10',
         key: ['alt+shift+arrowleft', true],
         fn: () => {
           this.svgCanvas.duplicateSelectedElements({ x: -10, y: 0 })
         }
       },
       {
+        id: 'duplicate_right_10',
         key: ['alt+shift+arrowright', true],
         fn: () => {
           this.svgCanvas.duplicateSelectedElements({ x: 10, y: 0 })
         }
       },
       {
+        id: 'delete',
+        label: 'tools.delete',
         key: ['delete/backspace', true],
         fn: () => {
           if (this.selectedElement || this.multiselected) {
@@ -371,12 +418,15 @@ class Editor extends EditorStartup {
         }
       },
       {
+        id: 'select_all_a',
         key: 'a',
         fn: () => {
           this.svgCanvas.selectAllInCurrentLayer()
         }
       },
       {
+        id: 'select_all',
+        label: 'tools.select_all',
         key: [modKey + 'a', true],
         fn: () => {
           this.svgCanvas.selectAllInCurrentLayer()
@@ -386,18 +436,24 @@ class Editor extends EditorStartup {
       // announces the action, the browser's clipboard event carries it out.
       // The key must not be prevented, or the event would not follow.
       {
+        id: 'cut',
+        label: 'tools.cut',
         key: modKey + 'x',
         fn: () => {
           this.systemClipboard.request('cut')
         }
       },
       {
+        id: 'copy',
+        label: 'tools.copy',
         key: modKey + 'c',
         fn: () => {
           this.systemClipboard.request('copy')
         }
       },
       {
+        id: 'paste',
+        label: 'tools.paste',
         key: modKey + 'v',
         fn: () => {
           this.systemClipboard.request('paste', { center: true })
@@ -405,6 +461,8 @@ class Editor extends EditorStartup {
       },
       {
         // Paste in place: the objects keep their coordinates.
+        id: 'paste_in_place',
+        label: 'tools.paste_in_place',
         key: modKey + 'shift+v',
         fn: () => {
           this.systemClipboard.request('paste', { type: 'in_place' })
@@ -412,12 +470,16 @@ class Editor extends EditorStartup {
       },
       {
         // Copy, paste the properties: fill, stroke, opacity, font (M7)
+        id: 'copy_properties',
+        label: 'tools.copy_properties',
         key: [modKey + 'alt+c', true],
         fn: () => {
           this.copyProperties()
         }
       },
       {
+        id: 'paste_properties',
+        label: 'tools.paste_properties',
         key: [modKey + 'alt+v', true],
         fn: () => {
           this.pasteProperties()
@@ -428,6 +490,7 @@ class Editor extends EditorStartup {
         // rotation, rubber band). Otherwise it goes up one level: drawing tool
         // -> selection tool, node editing -> selection, open group -> the
         // group selected, selection -> nothing selected.
+        id: 'escape',
         key: 'escape',
         fn: () => {
           // enableToolCancel is false while the mouse button is down: only
@@ -542,43 +605,31 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   setAll () {
-    const keyHandler = {} // will contain the action for each pressed key
-
-    this.shortcuts.forEach((shortcut) => {
-      // Bind function to shortcut key
-      if (shortcut.key) {
-        // Set shortcut based on options
-        let keyval = shortcut.key
-        let pd = false
-        if (Array.isArray(shortcut.key)) {
-          keyval = shortcut.key[0]
-          if (shortcut.key.length > 1) {
-            pd = shortcut.key[1]
-          }
-        }
-        keyval = String(keyval)
-        const { fn } = shortcut
-        keyval.split('/').forEach((key) => {
-          keyHandler[normalizeShortcut(key)] = { fn, pd }
-        })
-      }
-      return true
+    // The shortcuts of the table become commands of the registry (lot V1),
+    // ahead of those of the buttons, which were declared as the panels
+    // were built: the table wins when both bind the same key.
+    const buttonCommands = this.commands.list()
+    buttonCommands.forEach((command) => this.commands.unregister(command.id))
+    this.shortcuts.forEach((shortcut, index) => {
+      if (!shortcut.key) return
+      const [spec, pd = false] = Array.isArray(shortcut.key) ? shortcut.key : [shortcut.key]
+      this.commands.register({
+        id: shortcut.id ?? `shortcut-${index}`,
+        label: shortcut.label,
+        shortcuts: String(spec),
+        run: shortcut.fn,
+        preventDefault: Boolean(pd)
+      })
     })
+    buttonCommands.forEach((command) => this.commands.register(command))
     // Copy, cut and paste events of the system clipboard (M7)
     this.systemClipboard.init()
-    // register the keydown event
+    // One listener for every shortcut of the editor: the registry runs the
+    // first enabled command bound to the key.
     document.addEventListener('keydown', (e) => {
       // only track keyboard shortcuts for the body containing the SVG-Editor
       if (e.target.nodeName !== 'BODY') return
-      // normalize key
-      const key = eventShortcut(e)
-      // return if no shortcut defined for this key
-      if (!keyHandler[key]) return
-      // launch associated handler and preventDefault if necessary
-      keyHandler[key].fn()
-      if (keyHandler[key].pd) {
-        e.preventDefault()
-      }
+      this.commands.dispatch(e)
     })
 
     // Misc additional actions
@@ -677,6 +728,27 @@ class Editor extends EditorStartup {
 
     // This should be done in  this.svgCanvas.js for the borderRect fill
     this.svgCanvas.setBackground(color, url)
+  }
+
+  /**
+   * Shows a message that does not block (lot V1).
+   * @param {string} text
+   * @param {{type?: "info"|"warning"|"error", duration?: number}} [options]
+   * @returns {HTMLElement|null} The message
+   */
+  toast (text, options = {}) {
+    return this.$toasts?.show(text, { closeLabel: this.i18next?.t('ui.close'), ...options }) ?? null
+  }
+
+  /**
+   * Sets the theme of the interface and remembers it. The document is not
+   * touched.
+   * @param {"system"|"dark"|"light"} theme
+   * @returns {void}
+   */
+  setTheme (theme) {
+    this.theme?.set(theme)
+    this.configObj.pref('theme', this.theme?.preference ?? theme)
   }
 
   /**

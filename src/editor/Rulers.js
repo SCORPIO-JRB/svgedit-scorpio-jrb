@@ -28,6 +28,10 @@ class Rulers {
     this.rulerX = $id('ruler_x')
     this.rulerY = $id('ruler_y')
     this.rulerCorner = $id('ruler_corner')
+    // The rulers are drawn in a canvas: they are redrawn with the new theme.
+    editor.$container?.addEventListener('se-themechange', () => {
+      if (editor.configObj.curConfig.showRulers) this.updateRulers()
+    })
   }
 
   display (on) {
@@ -92,9 +96,6 @@ class Rulers {
       let ctx = hcanv.getContext('2d')
       let ctxArr; let num; let ctxArrNum
 
-      ctx.fillStyle = 'rgb(200,0,0)'
-      ctx.fillRect(0, 0, hcanv.width, hcanv.height)
-
       // Remove any existing canvasses
       const elements = Array.prototype.filter.call($hcanv.parentNode.children, function (child) {
         return child !== $hcanv
@@ -123,6 +124,15 @@ class Rulers {
       }
 
       hcanv[lentype] = rulerLen
+      // Resizing a canvas resets its context: the colours of the theme are
+      // set afterwards, on every canvas of the ruler.
+      const style = getComputedStyle($id('ruler_' + dim))
+      const paint = (context) => {
+        context.font = `9px ${style.fontFamily}`
+        context.fillStyle = style.color
+        context.strokeStyle = style.getPropertyValue('--se-ruler-tick').trim() || style.color
+      }
+      ;(ctxArr ?? [ctx]).forEach(paint)
 
       const uMulti = unit * zoom
 
@@ -138,8 +148,6 @@ class Rulers {
       }
 
       const bigInt = multi * uMulti
-
-      ctx.font = '9px sans-serif'
 
       let rulerD = ((contentDim / uMulti) % multi) * uMulti
       let labelPos = rulerD - bigInt
@@ -211,7 +219,6 @@ class Rulers {
         }
         rulerD += bigInt
       }
-      ctx.strokeStyle = '#000'
       ctx.stroke()
     }
   }

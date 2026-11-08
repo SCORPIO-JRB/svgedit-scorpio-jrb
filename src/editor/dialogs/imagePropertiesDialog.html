@@ -3,28 +3,14 @@
         display: none;
     }
 
-    /* Force the scroll bar to appear so we see it hide when overlay opens. */
-    body::-webkit-scrollbar {
-        background: lightgray;
-    }
-
-    body::-webkit-scrollbar-thumb {
-        background: darkgray;
-    }
 
     #svg_docprops #svg_docprops_container {
-        padding: 10px;
-        background-color: #5a6162;
-        color: #c5c5c5;
-        border: 1px outset #777;
-        opacity: 1.0;
-        font-family: Verdana, Helvetica, sans-serif;
-        font-size: .8em;
+        padding: 16px;
         z-index: 20001;
     }
 
     #svg_docprops .error {
-        border: 1px solid red;
+        border: 1px solid var(--se-danger);
         padding: 3px;
     }
 
@@ -54,9 +40,8 @@
     }
 
     #svg_docprops_container fieldset {
-        padding: 5px;
-        margin: 5px;
-        border: 1px solid #DDD;
+        padding: 8px;
+        margin: 4px;
     }
 
     #svg_docprops_container label {
@@ -64,7 +49,7 @@
         margin: .5em;
     }
 </style>
-<elix-dialog id="svg_docprops" aria-label="Sample dialog" closed>
+<elix-dialog id="svg_docprops" closed>
     <div id="svg_docprops_container">
         <div id="tool_docprops_back" class="toolbar_button">
             <button id="tool_docprops_save"></button>

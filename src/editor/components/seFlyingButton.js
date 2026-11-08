@@ -1,5 +1,7 @@
 /* globals svgEditor */
+import './seIcon.js'
 import { t } from '../locale.js'
+import { setControlName } from '../commands.js'
 
 /**
  * @class FlyingButton
@@ -19,7 +21,7 @@ export class FlyingButton extends HTMLElement {
     this.$button = this._shadowRoot.querySelector('.menu-button')
     this.$handle = this._shadowRoot.querySelector('.handle')
     this.$overall = this._shadowRoot.querySelector('.overall')
-    this.$img = this._shadowRoot.querySelector('img')
+    this.$img = this._shadowRoot.querySelector('se-icon')
     this.$menu = this._shadowRoot.querySelector('.menu')
     // the last element of the div is the slot
     // we retrieve all elements added in the slot (i.e. se-buttons)
@@ -44,75 +46,69 @@ export class FlyingButton extends HTMLElement {
     template.innerHTML = `
       <style>
         :host {
-          position:relative;
-        }
-        @keyframes btnHover {
-          from {
-            background-color: transparent;
-          }
-
-          to {
-            background-color: var(--icon-bg-color-hover);
-          }
-        }
-        .overall .menu-button:hover {
-          animation: btnHover 0.2s forwards;
-        }
-        img {
-          border: none;
-          width: 24px;
-          height: 24px;
-        }
-        .overall.pressed .button-icon,
-        .overall.pressed .handle {
-          background-color: var(--icon-bg-color-hover) !important;
-        }
-        .overall.pressed .menu-button {
-          background-color: var(--icon-bg-color-hover) !important;
-        }
-        .disabled {
-          opacity: 0.3;
-          cursor: default;
+          position: relative;
+          display: inline-block;
         }
         .menu-button {
-          height: 24px;
-          width: 24px;
-          margin: 2px 1px 4px;
-          padding: 3px;
-          background-color: var(--icon-bg-color);
-          cursor: pointer;
+          box-sizing: border-box;
+          width: var(--se-control-size);
+          height: var(--se-control-size);
+          margin: 2px 1px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           position: relative;
-          border-radius: 3px;
-          overflow: hidden;
+          border-radius: var(--se-radius-control);
+          color: var(--se-icon);
+          background-color: transparent;
+          cursor: pointer;
+          transition: background-color var(--se-duration-state) var(--se-ease-out),
+            color var(--se-duration-state) var(--se-ease-out);
         }
+        .overall:not(.disabled):not(.pressed) .menu-button:hover {
+          background-color: var(--se-control-hover);
+          color: var(--se-text);
+        }
+        .overall.pressed .menu-button {
+          background-color: var(--se-accent-bg);
+          color: var(--se-accent);
+        }
+        .disabled {
+          opacity: 0.38;
+          cursor: default;
+        }
+        /* The corner that opens the menu of the group. */
         .handle {
-          height: 8px;
-          width: 8px;
-          background-image: url(${imgPath}/handle.svg);
-          position:absolute;
-          bottom: 0px;
-          right: 0px;
+          position: absolute;
+          right: 0;
+          bottom: 0;
+          width: 10px;
+          height: 10px;
         }
-        .button-icon {
+        .handle::after {
+          content: '';
+          position: absolute;
+          right: 2px;
+          bottom: 2px;
+          border-style: solid;
+          border-width: 0 0 4px 4px;
+          border-color: transparent transparent currentColor transparent;
+          pointer-events: none;
         }
         .menu {
           position: fixed;
-          background: none !important;
-          display:none;
+          display: none;
           margin-left: 34px;
+          padding: 2px;
+          gap: 2px;
+          border: 1px solid var(--se-border);
+          border-radius: var(--se-radius-float);
+          background-color: var(--se-surface-raised);
+          box-shadow: var(--se-shadow-menu);
+          z-index: 20;
         }
         .open {
           display: flex;
-        }
-        .menu-item {
-          align-content: flex-start;
-          height: 24px;
-          width: 24px;
-          top:0px;
-          left:0px;
-        }
-        .overall {
-          background: none !important;
         }
       </style>
 
@@ -120,8 +116,8 @@ export class FlyingButton extends HTMLElement {
         <div class="menu">
           <slot></slot>
         </div>
-        <div class="menu-button">
-          <img class="button-icon" src="logo.svg" alt="icon">
+        <div class="menu-button" role="button" aria-haspopup="true">
+          <se-icon class="button-icon"></se-icon>
           <div class="handle"></div>
         </div>
       </div>`
@@ -147,10 +143,7 @@ export class FlyingButton extends HTMLElement {
     if (oldValue === newValue) return
     switch (name) {
       case 'title':
-        {
-          const shortcut = this.getAttribute('shortcut')
-          this.$button.setAttribute('title', `${t(newValue)} ${shortcut ? `[${t(shortcut)}]` : ''}`)
-        }
+        setControlName(this, this.$button, t(newValue), this.getAttribute('shortcut'), t)
         break
       case 'pressed':
         if (newValue) {

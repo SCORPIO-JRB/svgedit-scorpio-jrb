@@ -3,14 +3,33 @@ const template = document.createElement('template')
 template.innerHTML = `
 <style>
 select {
-  margin-top: 8px;
-  background-color: var(--input-color);
+  margin-top: 4px;
+  height: var(--se-control-size);
+  padding: 0 24px 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background-color: var(--se-control);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 13px) 50%, calc(100% - 9px) 50%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+  color: var(--se-text);
+  font: inherit;
   appearance: none;
   outline: none;
-  padding: 3px;
+}
+select:hover {
+  border-color: var(--se-border-control);
+}
+select:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: 1px;
 }
 label {
   margin-left: 2px;
+  margin-right: 4px;
+  color: var(--se-text-label);
 }
 ::slotted(*) {
   padding:0;

@@ -79,6 +79,7 @@ class MainMenu {
   async savePreferences (e) {
     const {
       lang,
+      theme,
       bgcolor,
       bgurl,
       gridsnappingon,
@@ -89,11 +90,13 @@ class MainMenu {
     } = e.detail
     // Set background
     this.editor.setBackground(bgcolor, bgurl)
+    // Theme of the interface: applied at once, without reloading.
+    if (theme) this.editor.setTheme(theme)
 
     // set language
     if (lang && lang !== this.editor.configObj.pref('lang')) {
       this.editor.configObj.pref('lang', lang)
-      seAlert('Changing the language needs reload')
+      this.editor.toast(this.editor.i18next.t('notification.language_reload'))
     }
 
     // set grid setting
@@ -210,6 +213,7 @@ class MainMenu {
       this.editor.configObj.curConfig.gridColor
     )
     $editDialog.setAttribute('canvasbg', canvasBg)
+    $editDialog.setAttribute('theme', this.editor.configObj.pref('theme'))
     $editDialog.setAttribute('dialog', 'open')
   }
 
@@ -228,7 +232,7 @@ class MainMenu {
     // add Top panel
     const template = document.createElement('template')
     template.innerHTML = `
-    <se-menu id="main_button" label="SVG-Edit" src="logo.svg" alt="logo">
+    <se-menu id="main_button" label="SVG-Edit" src="logo.svg">
         <se-menu-item id="tool_export" label="tools.export_img" src="export.svg"></se-menu-item>
         <se-menu-item id="tool_docprops" label="tools.docprops" shortcut="shift+D" src="docprop.svg"></se-menu-item>
         <se-menu-item id="tool_editor_prefs" label="config.editor_prefs" src="editPref.svg"></se-menu-item>

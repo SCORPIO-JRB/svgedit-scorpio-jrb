@@ -1,6 +1,7 @@
 /* globals svgEditor */
 import { jGraduate, jGraduateMethod } from './jgraduate/jQuery.jGraduate.js'
 import PaintBox from './PaintBox.js'
+import './seIcon.js'
 import { t } from '../locale.js'
 
 const template = document.createElement('template')
@@ -40,9 +41,10 @@ template.innerHTML = `
 }
 
 table.jPicker {
-    background-color: #efefef;
-    border: 1px outset #666;
-    font-family: Arial, Helvetica, Sans-Serif;
+    background-color: var(--se-surface-overlay);
+    color: var(--se-text);
+    border: 1px solid var(--se-border);
+    font-family: var(--se-font-ui);
     font-size: 12px!important;
     margin: 0;
     padding: 5px;
@@ -51,8 +53,8 @@ table.jPicker {
 }
 
 .jPicker .Move {
-    background-color: #ddd;
-    border-color: #fff #666 #666 #fff;
+    background-color: var(--se-surface-raised);
+    border-color: var(--se-border);
     border-style: solid;
     border-width: 1px;
     cursor: move;
@@ -70,10 +72,10 @@ table.jPicker {
 }
 
 .jPicker div.Map {
-    border-bottom: 2px solid #fff;
-    border-left: 2px solid #9a9a9a;
-    border-right: 2px solid #fff;
-    border-top: 2px solid #9a9a9a;
+    border-bottom: 2px solid var(--se-border-control);
+    border-left: 2px solid var(--se-border-control);
+    border-right: 2px solid var(--se-border-control);
+    border-top: 2px solid var(--se-border-control);
     cursor: crosshair;
     height: 260px;
     margin: 0 5px 0 5px;
@@ -89,10 +91,10 @@ table.jPicker {
 }
 
 .jPicker div.Bar {
-    border-bottom: 2px solid #fff;
-    border-left: 2px solid #9a9a9a;
-    border-right: 2px solid #fff;
-    border-top: 2px solid #9a9a9a;
+    border-bottom: 2px solid var(--se-border-control);
+    border-left: 2px solid var(--se-border-control);
+    border-right: 2px solid var(--se-border-control);
+    border-top: 2px solid var(--se-border-control);
     cursor: n-resize;
     height: 260px;
     margin: 12px 10px 0 5px;
@@ -160,7 +162,7 @@ table.jPicker {
 }
 
 .jPicker .Preview div {
-    border: 2px inset #eee;
+    border: 2px solid var(--se-border);
     height: 62px;
     margin: 0 auto;
     padding: 0;
@@ -168,7 +170,7 @@ table.jPicker {
 }
 
 .jPicker .Preview div span {
-    border: 1px solid #000;
+    border: 1px solid var(--se-border-control);
     display: block;
     height: 30px;
     margin: 0 auto;
@@ -223,8 +225,9 @@ table.jPicker {
 }
 
 .jPicker td.Text input {
-    background-color: #fff;
-    border: 1px inset #aaa;
+    background-color: var(--se-control);
+    color: var(--se-text);
+    border: 1px solid var(--se-border-control);
     height: 19px;
     margin: 0 0 0 5px;
     text-align: left;
@@ -249,7 +252,7 @@ table.jPicker {
 }
 
 .jPicker .Grid span.QuickColor {
-    border: 1px inset #aaa;
+    border: 1px solid var(--se-border-control);
     cursor: pointer;
     display: inline-block;
     height: 15px;
@@ -275,7 +278,8 @@ table.jPicker {
  */
 
 h2.jGraduate_Title {
-  font-family: Arial, Helvetica, Sans-Serif;
+  font-family: var(--se-font-ui);
+  color: var(--se-text);
   font-size: 11px !important;
   font-weight: bold;
   margin: -13px 0px 0px 0px;
@@ -284,18 +288,19 @@ h2.jGraduate_Title {
 }
 
 .jGraduate_Picker {
-  font-family: Arial, Helvetica, Sans-Serif;
+  font-family: var(--se-font-ui);
+  color: var(--se-text);
   font-size: 12px;
   border-style: solid;
-  border-color: lightgrey black black lightgrey;
+  border-color: var(--se-border);
   border-width: 1px;
-  background-color: #EFEFEF;
+  background-color: var(--se-surface-overlay);
   position: absolute;
   padding: 10px;
 }
 
 .jGraduate_tabs li {
-  background-color: #ccc;
+  background-color: var(--se-control);
   display: inline;
   border: solid 1px grey;
   padding: 3px;
@@ -304,11 +309,11 @@ h2.jGraduate_Title {
 }
 
 li.jGraduate_tab_current {
-  background-color: #EFEFEF;
+  background-color: var(--se-surface-tab-active);
   display: inline;
   padding: 3px;
   margin: 2px;
-  border: solid 1px black;
+  border: solid 1px var(--se-border);
   cursor: pointer;
 }
 
@@ -318,14 +323,14 @@ li.jGraduate_tab_current {
 
 .jGraduate_gradPick {
   display: none;
-  border: outset 1px #666;
+  border: solid 1px var(--se-border);
   padding: 10px 7px 5px 5px;
   overflow: auto;
 }
 
 .jGraduate_gradPick {
   display: none;
-  border: outset 1px #666;
+  border: solid 1px var(--se-border);
   padding: 10px 7px 5px 5px;
   overflow: auto;
 /*  position: relative;*/
@@ -333,7 +338,7 @@ li.jGraduate_tab_current {
 
 .jGraduate_tabs {
   position: relative;
-  background-color: #EFEFEF;
+  background-color: var(--se-surface-overlay);
   padding: 0px;
   margin: 0px;
   margin-bottom: 5px;
@@ -344,7 +349,7 @@ div.jGraduate_Swatch {
   margin: 8px;
 }
 div.jGraduate_GradContainer {
-  border: 2px inset #EEE;
+  border: 2px solid var(--se-border);
   background-image: url(./components/jgraduate/images/map-opacity.png);
   background-position: 0px 0px;
   height: 256px;
@@ -353,8 +358,8 @@ div.jGraduate_GradContainer {
 }
 
 div.jGraduate_GradContainer div.grad_coord {
-  background: #000;
-  border: 1px solid #fff;
+  background: var(--se-marker-dark);
+  border: 1px solid var(--se-marker-light);
   border-radius: 5px;
   -moz-border-radius: 5px;
   width: 10px;
@@ -366,7 +371,7 @@ div.jGraduate_GradContainer div.grad_coord {
   text-align: center;
   font-size: xx-small;
   line-height: 10px;
-  color: #fff;
+  color: var(--se-marker-light);
   text-decoration: none;
   cursor: pointer;
   -moz-user-select: none;
@@ -380,9 +385,9 @@ div.jGraduate_GradContainer div.grad_coord {
 }
 
 div.jGraduate_Opacity {
-  border: 2px inset #eee;
+  border: 2px solid var(--se-border);
   margin-top: 14px;
-  background-color: black;
+  background-color: var(--se-marker-dark);
   background-image: url(../images/Maps.png);
   background-position: 0px -2816px;
   height: 20px;
@@ -394,7 +399,7 @@ div.jGraduate_StopSlider {
   margin: 0 0 0 -10px;
   width: 276px;
   overflow: visible;
-  background: #efefef;
+  background: var(--se-surface-overlay);
   height: 45px;
   cursor: pointer;
 }
@@ -431,7 +436,7 @@ input.jGraduate_Ok {
 label.jGraduate_Form_Heading {
   position: relative;
   top: 10px;
-  background-color: #EFEFEF;
+  background-color: var(--se-surface-overlay);
   padding: 2px;
   font-weight: bold;
   font-size: 13px;
@@ -440,7 +445,7 @@ label.jGraduate_Form_Heading {
 div.jGraduate_Form_Section {
   border-style: solid;
   border-width: 1px;
-  border-color: grey;
+  border-color: var(--se-border);
   -moz-border-radius: 5px;
   -webkit-border-radius: 5px;
   padding: 15px 5px 5px 5px;
@@ -465,7 +470,7 @@ div.jGraduate_LightBox {
   left: 0px;
   right: 0px;
   bottom: 0px;
-  background-color: #000;
+  background-color: var(--se-marker-dark);
   opacity: 0.5;
   display: none;
 }
@@ -473,7 +478,7 @@ div.jGraduate_LightBox {
 div.jGraduate_stopPicker {
   position: absolute;
   display: none;
-  background: #E8E8E8;
+  background: var(--se-surface-overlay);
 }
 
 
@@ -577,7 +582,7 @@ div.jGraduate_stopPicker {
   width: 140px;
   float: left;
   margin-right: 5px;
-  border:1px solid #BBB;
+  border:1px solid var(--se-border-control);
   height:20px;
   margin-top:14px;
   margin-left:5px;
@@ -615,22 +620,29 @@ div.jGraduate_Slider img {
     width: 18px;
   }
   #block {
-    height: 17px;
-    width: 14px;
+    height: 16px;
+    width: 16px;
     float: right;
-    background-color: darkgrey;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px var(--se-border-control);
   }
   #picker {
-    background: var(--input-color);
-    height: 23px;
-    line-height: 23px;
-    border-radius: 3px;
+    box-sizing: border-box;
+    background: var(--se-control);
+    color: var(--se-icon);
+    height: var(--se-control-size);
+    border: 1px solid transparent;
+    border-radius: var(--se-radius-field);
     width: 52px;
     display: flex;
     align-items: center;
     margin-right: 4px;
     margin-top: 1px;
     justify-content: space-evenly;
+    cursor: pointer;
+  }
+  #picker:hover {
+    border-color: var(--se-border-control);
   }
   #color_picker {
     z-index: 1000;
@@ -638,7 +650,7 @@ div.jGraduate_Slider img {
   }
   </style>
   <div id="picker">
-      <img src="logo.svg" alt="icon" id="logo">
+      <se-icon id="logo"></se-icon>
       <label for="color" title="" id="label"></label>
       <div id="block">
       </div>

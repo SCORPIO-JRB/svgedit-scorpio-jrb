@@ -3,9 +3,10 @@ const template = document.createElement('template')
 template.innerHTML = `
   <style>
   #layersLabel {
-    font-size: 13px;
-    line-height: normal;
-    font-weight: 700;
+    font-size: var(--se-font-size-title);
+    line-height: var(--se-line-height-title);
+    font-weight: 600;
+    color: var(--se-text);
   }
   </style>
   <div></div>

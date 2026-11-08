@@ -1,53 +1,53 @@
 /* globals svgEditor */
+import './seIcon.js'
 import { t } from '../locale.js'
-import { normalizeShortcut, eventShortcut } from '../shortcuts.js'
+import { setControlName, bindElementCommand, unbindElementCommand } from '../commands.js'
 const template = document.createElement('template')
 template.innerHTML = `
   <style>
-  @keyframes btnHover {
-    from {
-      background-color: var(--main-bg-color);
-    }
-
-    to {
-      background-color: var(--icon-bg-color-hover);
-    }
+  :host {
+    display: inline-block;
   }
-  :host(:hover) :not(.disabled)
-  {
-    animation: btnHover 0.2s forwards;
-  }
-  div
-  {
-    height: 24px;
-    width: 24px;
-    margin: 4px 1px 4px;
-    padding: 3px;
-    background-color: var(--icon-bg-color);
+  div {
+    box-sizing: border-box;
+    width: var(--se-control-size);
+    height: var(--se-control-size);
+    margin: 2px 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--se-radius-control);
+    color: var(--se-icon);
+    background-color: transparent;
     cursor: pointer;
-    border-radius: 3px;
+    transition: background-color var(--se-duration-state) var(--se-ease-out),
+      color var(--se-duration-state) var(--se-ease-out);
+  }
+  :host(:hover) div:not(.disabled):not(.pressed) {
+    background-color: var(--se-control-hover);
+    color: var(--se-text);
   }
   .small {
-    width: 14px;
-    height: 14px;
-    padding: 1px;
-    border-radius: 1px;
-  }
-  img {
-    border: none;
-    width: 100%;
-    height: 100%;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--se-radius-field);
+    --se-icon-size: 14px;
   }
   .pressed {
-    background-color: var(--icon-bg-color-hover);
+    background-color: var(--se-accent-bg);
+    color: var(--se-accent);
+  }
+  :host(:active) div:not(.disabled) {
+    background-color: var(--se-accent-pressed-bg);
+    transition-duration: var(--se-duration-press);
   }
   .disabled {
-    opacity: 0.3;
+    opacity: 0.38;
     cursor: default;
   }
   </style>
-  <div title="title">
-    <img alt="icon">
+  <div role="button">
+    <se-icon></se-icon>
   </div>
 `
 /**
@@ -64,7 +64,7 @@ export class ToolButton extends HTMLElement {
     this._shadowRoot.append(template.content.cloneNode(true))
     // locate the component
     this.$div = this._shadowRoot.querySelector('div')
-    this.$img = this._shadowRoot.querySelector('img')
+    this.$img = this._shadowRoot.querySelector('se-icon')
     this.imgPath = svgEditor.configObj.curConfig.imgPath
   }
 
@@ -87,10 +87,7 @@ export class ToolButton extends HTMLElement {
     if (oldValue === newValue) return
     switch (name) {
       case 'title':
-        {
-          const shortcut = this.getAttribute('shortcut')
-          this.$div.setAttribute('title', `${t(newValue)} ${shortcut ? `[${t(shortcut)}]` : ''}`)
-        }
+        setControlName(this, this.$div, t(newValue), this.getAttribute('shortcut'), t)
         break
       case 'style':
         this.$div.style = newValue
@@ -108,6 +105,7 @@ export class ToolButton extends HTMLElement {
         } else {
           this.$div.classList.add('pressed')
         }
+        this.$div.setAttribute('aria-pressed', String(newValue !== null))
         break
       case 'size':
         if (newValue === 'small') {
@@ -122,6 +120,7 @@ export class ToolButton extends HTMLElement {
         } else {
           this.$div.classList.remove('disabled')
         }
+        this.$div.setAttribute('aria-disabled', String(Boolean(newValue)))
         break
       default:
         console.error(`unknown attribute: ${name}`)
@@ -224,22 +223,18 @@ export class ToolButton extends HTMLElement {
    * @returns {void}
    */
   connectedCallback () {
-    // capture shortcuts; with shortcut-hint-only the shortcut is only shown in
-    // the tooltip, because another button already binds it
-    const shortcut = this.hasAttribute('shortcut-hint-only')
-      ? ''
-      : normalizeShortcut(this.getAttribute('shortcut'))
-    if (shortcut) {
-      // register the keydown event
-      document.addEventListener('keydown', (e) => {
-        // only track keyboard shortcuts for the body containing the SVG-Editor
-        if (e.target.nodeName !== 'BODY') return
-        if (eventShortcut(e) !== shortcut) return
-        // launch the click event
-        this.click()
-        e.preventDefault()
-      })
-    }
+    // The shortcut becomes a command of the editor, which clicks the button
+    // unless it is disabled; with shortcut-hint-only it is only shown in the
+    // tooltip, because another button already binds it.
+    bindElementCommand(this, t)
+  }
+
+  /**
+   * @function disconnectedCallback
+   * @returns {void}
+   */
+  disconnectedCallback () {
+    unbindElementCommand(this)
   }
 }
 

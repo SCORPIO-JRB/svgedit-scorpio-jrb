@@ -28,7 +28,13 @@ export default {
     pick_fill_paint_opacity: 'Pick a Fill Paint and Opacity',
     group_identify_label: 'Group identification label',
     export_type_label: 'Select an image type for export:',
-    panel: 'Panneau'
+    panel: 'Panneau',
+    main_menu: 'Menu principal',
+    palette_show: 'Afficher toute la palette',
+    palette_hide: 'Masquer la palette',
+    close: 'Fermer',
+    dynamic_size: 'Taille dynamique',
+    storage_prefs: 'Stockage des préférences'
   },
   properties: {
     mixed: 'Mixte',
@@ -263,6 +269,10 @@ export default {
     snapping_onoff: 'Ancrer oui/non',
     snapping_stepsize: "Pas d'ancrage :",
     grid_color: 'Couleur de la grille',
+    theme: 'Thème :',
+    theme_system: 'Comme le système',
+    theme_dark: 'Sombre',
+    theme_light: 'Clair',
     done: 'Done',
     change_xxx_color: 'Change xxx color',
     pick_paint_opavity: 'Pick a {{newValue}} Paint and Opacity',
@@ -315,7 +325,30 @@ export default {
     jgraduate_set_angle: "Cliquez pour définir l'angle",
     jgraduate_deg: 'deg:',
     jgraduate_opac: 'Opac:',
-    jgraduate_set_opac: 'Click to set Opac'
+    jgraduate_set_opac: 'Click to set Opac',
+    unit_px: 'Pixels',
+    unit_cm: 'Centimètres',
+    unit_mm: 'Millimètres',
+    unit_in: 'Pouces',
+    unit_pt: 'Points',
+    unit_pc: 'Picas',
+    unit_em: 'Em',
+    unit_ex: 'Ex'
+  },
+  shortcuts: {
+    ctrl: 'Ctrl',
+    shift: 'Maj',
+    alt: 'Alt',
+    delete: 'Suppr',
+    backspace: 'Retour arrière',
+    escape: 'Échap',
+    enter: 'Entrée',
+    tab: 'Tab',
+    space: 'Espace',
+    pageup: 'Pg préc',
+    pagedown: 'Pg suiv',
+    home: 'Origine',
+    end: 'Fin'
   },
   notification: {
     invalidAttrValGiven: 'Valeur fournie invalide',
@@ -349,6 +382,7 @@ export default {
     exportNoDashArray: 'Strokes will appear filled',
     exportNoText: 'Text may not appear as expected',
     editorPreferencesMsg: 'By default and where supported, SVG-Edit can store your editor preferences and SVG content locally on your machine so you do not need to add these back each time you load SVG-Edit. If, for privacy reasons, you do not wish to store this information on your machine, you can change away from the default option below.',
-    source_dialog_note: 'Copy the contents of this box into a text editor, then save the file with a .svg extension.'
+    source_dialog_note: 'Copy the contents of this box into a text editor, then save the file with a .svg extension.',
+    language_reload: "La nouvelle langue s'applique au prochain chargement de l'éditeur."
   }
 }

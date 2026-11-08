@@ -68,6 +68,11 @@ export default class ConfigObj {
         * height and 'm' otherwise.
         */
       bkgd_color: '#FFF',
+      /**
+        * Theme of the interface: "system" follows the system, otherwise
+        * "dark" or "light". It never changes the document.
+        */
+      theme: 'system',
       bkgd_url: '',
       // DOCUMENT PROPERTIES (DIALOG)
       img_save: 'embed',

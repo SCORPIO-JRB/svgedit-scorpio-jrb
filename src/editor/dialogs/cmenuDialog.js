@@ -1,5 +1,7 @@
 /* globals svgEditor */
 import cMenuDialogHTML from './cmenuDialog.html'
+import { t } from '../locale.js'
+import { shortcutHint } from '../commands.js'
 const template = document.createElement('template')
 template.innerHTML = cMenuDialogHTML
 /**
@@ -240,9 +242,11 @@ export class SeCMenuDialog extends HTMLElement {
     link.href = `#${id}`
     link.textContent = label
     if (shortcut) {
+      // Shown in the notation of the platform; refreshShortcuts keeps it.
+      link.dataset.shortcut = shortcut
       const hint = document.createElement('span')
       hint.className = 'shortcut'
-      hint.textContent = shortcut
+      hint.textContent = shortcutHint(shortcut, t)
       link.append(hint)
     }
     item.append(link)
@@ -251,6 +255,34 @@ export class SeCMenuDialog extends HTMLElement {
       evt.preventDefault()
       this.$dialog.style.display = 'none'
       this.dispatchEvent(new CustomEvent('change', { detail: { trigger: id } }))
+    })
+  }
+
+  /**
+   * Shows beside each entry the shortcut that runs the same command, read
+   * from the registry of the editor (lot V1): the hint cannot differ from
+   * the key that works. An entry without a shortcut shows none.
+   * @returns {void}
+   */
+  refreshShortcuts () {
+    const commands = svgEditor.commands
+    if (!commands) return
+    this.$dialog.querySelectorAll('a[href^="#"]').forEach((link) => {
+      const action = link.getAttribute('href').slice(1)
+      let hint = link.querySelector('.shortcut')
+      const text = link.dataset.shortcut
+        ? shortcutHint(link.dataset.shortcut, t)
+        : commands.hint(action)
+      if (!text) {
+        hint?.remove()
+        return
+      }
+      if (!hint) {
+        hint = document.createElement('span')
+        hint.className = 'shortcut'
+        link.append(hint)
+      }
+      hint.textContent = text
     })
   }
 
@@ -277,6 +309,7 @@ export class SeCMenuDialog extends HTMLElement {
       }
       current.$dialog.style.top = y + 'px'
       current.$dialog.style.left = x + 'px'
+      current.refreshShortcuts()
       current.$dialog.style.display = 'block'
     }
     const onMenuCloseHandler = (e) => {

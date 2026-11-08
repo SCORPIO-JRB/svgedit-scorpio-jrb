@@ -17,7 +17,9 @@
     "packages/react-test"
   ],
   "scripts": {
-    "lint": "standard .",
+    "lint": "standard . && npm run lint:colors && npm run lint:labels",
+    "lint:colors": "node scripts/check-colors.mjs",
+    "lint:labels": "node scripts/check-labels.mjs",
     "pretest": "npm run lint",
     "test": "vitest run --coverage && node scripts/run-e2e.mjs",
     "build": "vite build packages/svgcanvas && vite build packages/react-test && vite build",

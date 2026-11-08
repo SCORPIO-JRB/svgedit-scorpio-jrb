@@ -1,25 +1,30 @@
 /* globals svgEditor */
+import './seIcon.js'
 import { t } from '../locale.js'
 
 const template = document.createElement('template')
 template.innerHTML = `
 <style>
 #select-container {
-  margin-top: 10px;
-  display: inline-block;
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--se-radius-control);
+  color: var(--se-icon);
+  cursor: pointer;
 }
 
 #select-container:hover {
-  background-color: var(--icon-bg-color-hover);
+  background-color: var(--se-control-hover);
+  color: var(--se-text);
 }
 
-#select-container::part(value) {
-  background-color: var(--main-bg-color);
+#select-container:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: 2px;
 }
 
-#select-container::part(popup-toggle) {
-  display: none;
-}
 ::slotted(*) {
   padding:0;
   width:100%;
@@ -31,10 +36,19 @@ template.innerHTML = `
 
 #options-container {
   position: fixed;
+  padding: 4px;
+  border: 1px solid var(--se-border);
+  border-radius: var(--se-radius-float);
+  background-color: var(--se-surface-raised);
+  box-shadow: var(--se-shadow-menu);
+  z-index: 20;
 }
 
+label {
+  color: var(--se-text-label);
+}
 </style>
-  <label>Label</label>
+  <label></label>
   <div id="select-container" tabindex="0">
     <div id="selected-value"></div>
     <div id="options-container">
@@ -84,9 +98,9 @@ export class SeList extends HTMLElement {
         // empty current selection children
           while (this.$selection.firstChild) { this.$selection.removeChild(this.$selection.firstChild) }
           // replace selection child with image of new value
-          const img = document.createElement('img')
-          img.src = this.imgPath + '/' + element.getAttribute('src')
-          img.style.height = element.getAttribute('img-height')
+          const img = document.createElement('se-icon')
+          img.setAttribute('src', this.imgPath + '/' + element.getAttribute('src'))
+          img.setAttribute('size', Number.parseFloat(element.getAttribute('img-height')) * 0.8 || 16)
           img.setAttribute('title', t(element.getAttribute('title')))
           this.$selection.append(img)
         } else {

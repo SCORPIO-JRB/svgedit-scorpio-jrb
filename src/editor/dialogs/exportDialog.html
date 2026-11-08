@@ -1,37 +1,28 @@
 <style>
     #dialog_content {
-        margin: 10px 10px 5px 10px;
-        background: #5a6162;
+        margin: 0 0 12px;
         overflow: auto;
-        border: 1px solid #c8c8c8;
     }
 
     #dialog_content p,
     #dialog_content select,
     #dialog_content label {
         margin: 10px;
-        line-height: 0.3em;
-        color: #fff
+        line-height: 1.3em;
     }
 
     #dialog_container {
-        font-family: Verdana;
+        padding: 16px;
         text-align: center;
         left: 50%;
         top: 50%;
         max-width: 400px;
         z-index: 50001;
-        background: #5a6162;
-        border: 1px outset #777;
-        font-family: Verdana, Helvetica, sans-serif;
-        font-size: 0.8em;
     }
 
     #dialog_container,
     #dialog_content {
-        border-radius: 5px;
-        -moz-border-radius: 5px;
-        -webkit-border-radius: 5px;
+        border-radius: var(--se-radius-float);
     }
 
     #dialog_buttons input[type=text] {
@@ -52,7 +43,7 @@
         margin-left: 15px;
     }
 </style>
-<elix-dialog id="export_box" aria-label="export svg" closed>
+<elix-dialog id="export_box" closed>
     <div class="overlay"></div>
     <div id="dialog_container">
         <div id="dialog_content">

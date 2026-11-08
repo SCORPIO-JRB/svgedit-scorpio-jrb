@@ -1,0 +1,193 @@
+/*
+ * Design tokens of the editor (plan v2, section 6, lot V1).
+ *
+ * This is the only stylesheet of the editor shell that writes colour values:
+ * every other stylesheet and every component reads these custom properties.
+ * `npm run lint:colors` fails when a colour is written anywhere else.
+ *
+ * The tokens are carried by the root of the editor, the element given to
+ * `new Editor(container)`, which receives the class `se-editor`. They are never
+ * set on :root, so that they do not leak into the application that hosts the
+ * editor. Custom properties inherit through the shadow roots of the se-*
+ * components.
+ *
+ * The interface is neutral grey with a single blue accent, as in Claude Design:
+ * colour belongs to the drawing. The dark values are measured on the Claude
+ * Design captures of 8 November; the light theme mirrors them.
+ *
+ * Theme: dark by default. The editor writes the resolved theme into
+ * `data-se-theme` ("dark" or "light"); with the "system" preference it follows
+ * prefers-color-scheme and updates live.
+ */
+
+/* Dark theme, the default. */
+.se-editor {
+  color-scheme: dark;
+
+  /* Surfaces, from the canvas up to the menus. */
+  --se-canvas: #171717;
+  --se-surface-top: #1a1a19;
+  --se-surface: #1f1f1f;
+  --se-surface-raised: #303030;
+  --se-surface-overlay: #3b3b3b;
+  --se-surface-tab-active: #404040;
+  --se-control: #2a2a2a;
+  --se-control-hover: #2a2a2a;
+  --se-backdrop: rgb(0 0 0 / 55%);
+
+  /* Separators and borders. */
+  --se-border-top: #363635;
+  --se-border: #383838;
+  --se-border-float: #2c2c2c;
+  --se-border-control: #5c5c5c;
+
+  /* Text and icons. Secondary text and labels reach 4.5:1 on --se-surface-raised. */
+  --se-text: #e6e6e6;
+  --se-text-secondary: #a3a3a3;
+  --se-text-label: #999;
+  --se-text-on-accent: #fff;
+  --se-icon: #b3b3b3;
+
+  /* Interaction accent: active tool, pressed button, selection, focus. */
+  --se-accent: #6aabf1;
+  --se-accent-bg: #1f2a36;
+  --se-accent-pressed-bg: #2e3945;
+  --se-accent-row: rgb(106 171 241 / 12%);
+  --se-selection: #1e66b6;
+  --se-focus-ring: #6aabf1;
+
+  /* Main action (Save), to be settled in the mock-up: accent blue or Scorp-io green. */
+  --se-action: #2f6fd0;
+  --se-action-text: #fff;
+
+  /* States. */
+  --se-danger: #f87171;
+  --se-warning: #e8b95c;
+
+  /* Rulers. */
+  --se-ruler-bg: #1f1f1f;
+  --se-ruler-text: #a3a3a3;
+  --se-ruler-tick: #8c8c8c;
+
+  /*
+   * Markers drawn over a colour being picked (gradient stops, opacity bar):
+   * black and white whatever the theme, to stay visible over any colour.
+   */
+  --se-marker-dark: #000;
+  --se-marker-light: #fff;
+
+  /* Wireframe view: drawn over the white page of the document in both themes. */
+  --se-wireframe-stroke: #000;
+  --se-wireframe-page: #fff;
+
+  /* Elevation: depth comes from the grey steps, shadows stay light. */
+  --se-shadow-float: 0 6px 20px rgb(0 0 0 / 35%);
+  --se-shadow-menu: 0 10px 28px rgb(0 0 0 / 45%);
+
+  /* Typography: Roboto Flex for the interface, Space Grotesk for the document name. */
+  --se-font-ui: 'Roboto Flex', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --se-font-display: 'Space Grotesk', 'Roboto Flex', system-ui, sans-serif;
+  --se-font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  --se-font-size-control: 12px;
+  --se-line-height-control: 16px;
+  --se-font-size-label: 11px;
+  --se-line-height-label: 14px;
+  --se-font-size-title: 13px;
+  --se-line-height-title: 18px;
+
+  /* Spacing, on a 4 px base. */
+  --se-space-1: 4px;
+  --se-space-2: 8px;
+  --se-space-3: 12px;
+  --se-space-4: 16px;
+  --se-space-6: 24px;
+
+  /* Sizes. */
+  --se-control-size: 28px;
+  --se-bar-height: 40px;
+  --se-icon-size: 16px;
+  --se-icon-size-large: 20px;
+  --se-hit-min: 24px;
+
+  /* Radii. */
+  --se-radius-field: 4px;
+  --se-radius-control: 6px;
+  --se-radius-float: 10px;
+
+  /* Motion. */
+  --se-duration-press: 100ms;
+  --se-duration-state: 200ms;
+  --se-duration-panel: 240ms;
+  --se-ease-out: ease-out;
+  --se-ease-panel: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /*
+   * Names used before V1, kept for the extensions and host pages that read
+   * them. New code reads the --se-* tokens.
+   */
+  --main-bg-color: var(--se-surface);
+  --text-color: var(--se-text);
+  --border-color: var(--se-border);
+  --canvas-bg-color: var(--se-canvas);
+  --link-color: var(--se-accent);
+  --ruler-color: var(--se-ruler-bg);
+  --icon-bg-color: transparent;
+  --icon-bg-color-hover: var(--se-control-hover);
+  --input-color: var(--se-control);
+  --orange-color: var(--se-accent);
+}
+
+/* Light theme. */
+.se-editor[data-se-theme="light"] {
+  color-scheme: light;
+
+  --se-canvas: #e8e8e8;
+  --se-surface-top: #fff;
+  --se-surface: #fff;
+  --se-surface-raised: #fff;
+  --se-surface-overlay: #fff;
+  --se-surface-tab-active: #ebebeb;
+  --se-control: #f2f2f2;
+  --se-control-hover: #ebebeb;
+  --se-backdrop: rgb(0 0 0 / 30%);
+
+  --se-border-top: #e3e3e3;
+  --se-border: #dedede;
+  --se-border-float: #e0e0e0;
+  --se-border-control: #8c8c8c;
+
+  --se-text: #1f1f1f;
+  --se-text-secondary: #5e5e5e;
+  --se-text-label: #6b6b6b;
+  --se-text-on-accent: #fff;
+  --se-icon: #4d4d4d;
+
+  --se-accent: #1e66b6;
+  --se-accent-bg: #e5effa;
+  --se-accent-pressed-bg: #d3e3f6;
+  --se-accent-row: rgb(30 102 182 / 12%);
+  --se-selection: #1e66b6;
+  --se-focus-ring: #1e66b6;
+
+  --se-action: #1e66b6;
+  --se-action-text: #fff;
+
+  --se-danger: #c62828;
+  --se-warning: #8a5a00;
+
+  --se-ruler-bg: #fff;
+  --se-ruler-text: #5e5e5e;
+  --se-ruler-tick: #8c8c8c;
+
+  --se-shadow-float: 0 4px 16px rgb(0 0 0 / 12%);
+  --se-shadow-menu: 0 8px 24px rgb(0 0 0 / 16%);
+}
+
+/* No motion when the system asks for less. */
+@media (prefers-reduced-motion: reduce) {
+  .se-editor {
+    --se-duration-press: 0ms;
+    --se-duration-state: 0ms;
+    --se-duration-panel: 0ms;
+  }
+}

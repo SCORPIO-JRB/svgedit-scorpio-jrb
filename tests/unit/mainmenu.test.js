@@ -61,6 +61,7 @@ describe('MainMenu', () => {
       configObj,
       svgCanvas,
       i18next: { t: (key) => key },
+      toast: vi.fn(),
       $svgEditor: document.getElementById('app'),
       docprops: false,
       rulers: { updateRulers: vi.fn(), display: vi.fn() },
@@ -97,7 +98,7 @@ describe('MainMenu', () => {
     expect(document.getElementById('se-img-prop').getAttribute('dialog')).toBe('close')
   })
 
-  it('saves preferences, updates config and alerts when language changes', async () => {
+  it('saves preferences, updates config and tells, without blocking, when language changes', async () => {
     editor.configObj.preferences = true
     const detail = {
       lang: 'fr',
@@ -123,7 +124,9 @@ describe('MainMenu', () => {
     expect(editor.rulers.display).toHaveBeenCalledWith(true)
     expect(editor.svgCanvas.setConfig).toHaveBeenCalled()
     expect(editor.updateCanvas).toHaveBeenCalled()
-    expect(globalThis.seAlert).toHaveBeenCalled()
+    // V1: a message that does not block, rather than an alert.
+    expect(editor.toast).toHaveBeenCalledWith('notification.language_reload')
+    expect(globalThis.seAlert).not.toHaveBeenCalled()
     expect(editor.configObj.preferences).toBe(false)
   })
 

@@ -8,6 +8,7 @@ import {
 import editorTemplate from './templates/editorTemplate.html'
 import SvgCanvas from '@svgedit/svgcanvas'
 import Rulers from './Rulers.js'
+import { ThemeController } from './theme.js'
 
 /**
    * @fires module:svgcanvas.SvgCanvas#event:svgEditorReady
@@ -52,6 +53,8 @@ class EditorStartup {
     this.extensionsAdded = false
     this.messageQueue = []
     this.$container = div ?? $id('svg_editor')
+    // The tokens and the theme apply from the first paint (lot V1).
+    this.theme = this.$container ? new ThemeController(this.$container) : null
   }
 
   /**
@@ -64,10 +67,18 @@ class EditorStartup {
       this.storage = window.localStorage
     }
     this.configObj.load()
+    this.theme?.set(this.configObj.pref('theme'))
     const { i18next } = await putLocale(this.configObj.pref('lang'), this.goodLangs)
     this.i18next = i18next
     await import('./components/index.js')
     await import('./dialogs/index.js')
+    // One tooltip for the whole editor: name and shortcut of each control.
+    const { TooltipController } = await import('./components/seTooltip.js')
+    this.tooltips = new TooltipController(this.$container)
+    // Messages that do not block (se-toast).
+    await import('./components/seToast.js')
+    this.$toasts = document.createElement('se-toast')
+    this.$container.append(this.$toasts)
     try {
       // add editor components to the DOM
       const template = document.createElement('template')

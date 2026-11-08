@@ -18,8 +18,21 @@ class SePlainBorderButton extends PlainButton {
       fragmentFrom.html`
         <style>
           [part~="button"] {
-            background: var(--main-bg-color);
-            border: 1px solid #ccc;
+            min-height: var(--se-control-size);
+            border: 1px solid transparent;
+            border-radius: var(--se-radius-control);
+            background: transparent;
+            color: var(--se-text);
+            font-family: var(--se-font-display);
+            font-size: var(--se-font-size-control);
+            font-weight: 600;
+          }
+          [part~="button"]:hover {
+            background: var(--se-control-hover);
+          }
+          [part~="button"]:focus-visible {
+            outline: 2px solid var(--se-focus-ring);
+            outline-offset: 2px;
           }
         </style>
       `
