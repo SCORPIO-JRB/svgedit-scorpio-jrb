@@ -36,6 +36,28 @@ const snapshot = (page, ids) => page.evaluate((ids) => ids.map((id) => {
   }
 }), ids)
 
+/**
+ * Defines window.drawnBox(elem): the box of an object on the screen, from its
+ * own geometry. Firefox counts in getBoundingClientRect() of a <use> the
+ * viewport of its symbol, scaled a second time by the view box: a symbol of
+ * 200 mm with a view box 200 wide measured 2 857 px instead of 756, while the
+ * drawing was right.
+ */
+const installDrawnBox = (page) => page.evaluate(() => {
+  window.drawnBox = (elem) => {
+    if (elem.tagName !== 'use') return elem.getBoundingClientRect()
+    const box = elem.getBBox()
+    const matrix = elem.getScreenCTM()
+    const points = [[box.x, box.y], [box.x + box.width, box.y], [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]
+      .map(([x, y]) => new DOMPoint(x, y).matrixTransform(matrix))
+    const xs = points.map((point) => point.x)
+    const ys = points.map((point) => point.y)
+    const left = Math.min(...xs)
+    const top = Math.min(...ys)
+    return { left, top, right: Math.max(...xs), bottom: Math.max(...ys), width: Math.max(...xs) - left, height: Math.max(...ys) - top }
+  }
+})
+
 /** Drops a file on the work area, as the user does from the file explorer. */
 const dropFile = (page, name, text) => page.evaluate(({ name, text }) => {
   const data = new DataTransfer()
@@ -223,11 +245,12 @@ test.describe('SVG import: integrity of the drawing', () => {
 
   test('an imported file takes the size it declares, before and after ungrouping', async ({ page }) => {
     const useId = await importFile(page, 'mm.svg', `<svg xmlns="${NS}" width="200mm" height="100mm" viewBox="0 0 200 100"><rect width="200" height="100" fill="orange"/></svg>`)
+    await installDrawnBox(page)
     const result = await page.evaluate((useId) => {
       const canvas = window.svgEditor.svgCanvas
       const zoom = canvas.getZoom()
       const use = document.getElementById(useId)
-      const shown = use.getBoundingClientRect().width / zoom
+      const shown = window.drawnBox(use).width / zoom
       canvas.selectOnly([use])
       canvas.ungroupSelectedElement()
       const ungrouped = document.querySelector('#svgcontent g.layer rect[fill="orange"]').getBoundingClientRect().width / zoom
@@ -310,7 +333,7 @@ test.describe('SVG import: integrity of the drawing', () => {
     ]
     const box = (selector) => page.evaluate((selector) => {
       const zoom = window.svgEditor.svgCanvas.getZoom()
-      const rects = [...document.querySelectorAll(selector)].map((elem) => elem.getBoundingClientRect())
+      const rects = [...document.querySelectorAll(selector)].map((elem) => window.drawnBox(elem))
       const left = Math.min(...rects.map((r) => r.left))
       const top = Math.min(...rects.map((r) => r.top))
       return [left, top, Math.max(...rects.map((r) => r.right)) - left, Math.max(...rects.map((r) => r.bottom)) - top]
@@ -318,6 +341,7 @@ test.describe('SVG import: integrity of the drawing', () => {
     }, selector)
     for (const drawing of drawings) {
       await openDrawing(page, drawing)
+      await installDrawnBox(page)
       const before = await box('#svgcontent g.layer use')
       await page.evaluate(() => {
         const canvas = window.svgEditor.svgCanvas
