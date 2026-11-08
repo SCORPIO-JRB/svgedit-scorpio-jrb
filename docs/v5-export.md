@@ -78,7 +78,7 @@ Corrigés au passage :
 - **Tests unitaires** : 921 sur 921, dont 11 pour l'historique (`history-v5.test.js`) et 9 pour les cadres et l'origine (`frames-v5.test.js`).
 - **E2E Chromium** : 466 sur 466 en disposition canevas, dont 9 pour l'historique (`historique-v5.spec.js`) et 11 pour les cadres (`cadres-v5.spec.js`, axe compris dans les deux thèmes) ; 364 sur 364 en disposition classique.
 - **Corpus, comparé à `v4-couleurs`** : 73 scénarios sur 73 identiques ; 20 allers-retours sur 21 identiques. Le seul écart est voulu : `section-7.svg` garde maintenant `viewBox="-20 -10 400 300"`. Aucun fichier ne change tant qu'on ne pose pas de cadre.
-- **Banc** : glisser 5 000 objets, 2,6 ms de calcul par mouvement en local et 6,3 ms sur la CI (budget : 16). Le banc de la CI, informatif, ne dépasse plus qu'un budget, déjà dépassé avant ce lot : `selectAll` à 2 000 objets (177 ms pour 150). Sur `v4-couleurs`, il en dépassait trois (`selectAll` 220 ms, `undo` 55 ms, `marquee` 112 ms).
+- **Banc** : glisser 5 000 objets, 2,6 ms de calcul par mouvement en local et de 6,3 à 7,4 ms sur la CI (budget : 16). Le banc de la CI, informatif, dépasse encore d'un passage à l'autre les budgets à 2 000 objets qu'il dépassait déjà sur `v4-couleurs` : `selectAll` (de 177 à 222 ms pour 150), parfois `undo` (59 ms pour 50). Sur `v4-couleurs` : `selectAll` 220 ms, `undo` 55 ms, `marquee` 112 ms.
 - **Alt+glisser** : une étape, test E2E en place depuis M1.
 
 ## 7. Hors de ce lot
