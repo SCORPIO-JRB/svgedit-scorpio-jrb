@@ -206,10 +206,11 @@ test.describe('Zoom menu (V3)', () => {
     expect(await rulers()).toBe('none')
   })
 
-  test('the view group holds the panel and the zoom; the view buttons are entries of the menu, those of the extensions too', async ({ page }) => {
+  test('the view group holds the preview, the panel and the zoom; the view buttons are entries of the menu, those of the extensions too', async ({ page }) => {
     const shown = await page.evaluate(() => [...document.querySelectorAll('#se-viewgroup button, #se-viewgroup se-button')]
       .filter((el) => el.getBoundingClientRect().width > 0).map((el) => el.id))
-    expect(shown).toEqual(['se-panel-toggle', 'se-zoom-button'])
+    // Preview ▷ joins them in V6 (plan v2, 4.1 and 4.6)
+    expect(shown).toEqual(['se-preview-button', 'se-panel-toggle', 'se-zoom-button'])
     await page.locator('#se-zoom-button').click()
     // The layer view of ext-layer_view: its button, pressed by its entry.
     const entry = page.locator('#se-zoom-menu [data-mirror="tool_layerView"]')

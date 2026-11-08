@@ -61,7 +61,9 @@ export const STEP_TEXTS = {
   'move elements to layer': 'move_to_layer',
   'add frame': 'frame_add',
   'change frame': 'frame_change',
-  'delete frame': 'frame_delete'
+  'delete frame': 'frame_delete',
+  'change id': 'change_id',
+  'change data': 'change_data'
 }
 
 /** Names that give the number of objects. */

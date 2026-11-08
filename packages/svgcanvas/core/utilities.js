@@ -305,6 +305,88 @@ export const bboxToObj = ({ x, y, width, height }) => {
 }
 
 /**
+ * The declarations of a `style` attribute, as written.
+ * @function module:utilities.styleDeclarations
+ * @param {string|null} style
+ * @returns {Array<{name: string, text: string, start: number, end: number}>}
+ *   `name` in lower case, `text` the declaration as written, `start` and
+ *   `end` the place of its segment in `style` (between two semicolons)
+ */
+export const styleDeclarations = (style) => {
+  const declarations = []
+  // A semicolon inside quotes or parentheses (url(a;b)) does not end a declaration
+  let depth = 0
+  let quote = null
+  let start = 0
+  const text = style ?? ''
+  const push = (end) => {
+    const declaration = text.slice(start, end).trim()
+    const colon = declaration.indexOf(':')
+    if (colon > 0) declarations.push({ name: declaration.slice(0, colon).trim().toLowerCase(), text: declaration, start, end })
+  }
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (quote) {
+      if (char === '\\') i++
+      else if (char === quote) quote = null
+    } else if (char === '"' || char === "'") quote = char
+    else if (char === '(') depth++
+    else if (char === ')') depth = Math.max(0, depth - 1)
+    else if (char === ';' && !depth) { push(i); start = i + 1 }
+  }
+  push(text.length)
+  return declarations
+}
+
+/**
+ * A `style` attribute without the declarations of one property: the rest is
+ * left as written, spaces and separators included.
+ * @function module:utilities.withoutStyleProperty
+ * @param {string|null} style
+ * @param {string} name - A property, in lower case
+ * @returns {string}
+ */
+export const withoutStyleProperty = (style, name) => {
+  let text = style ?? ''
+  for (const declaration of styleDeclarations(text).reverse()) {
+    if (declaration.name !== name) continue
+    const before = text.slice(0, declaration.start)
+    const after = text.slice(declaration.end)
+    text = after.startsWith(';') ? before + after.slice(1) : before.replace(/;\s*$/, '') + after
+  }
+  return text
+}
+
+/**
+ * Sets or removes one property of the `style` attribute of an element by
+ * rewriting its text: the other declarations stay as the file wrote them.
+ * Through `elem.style`, the browser writes the whole attribute again in its
+ * own way (`fill: #123` becomes `fill: rgb(17, 34, 51)`, an `animation`
+ * shorthand is spelled out). Removing what this added gives back the text.
+ * @function module:utilities.setStyleProperty
+ * @param {Element} elem
+ * @param {string} name - A property, in lower case (`pointer-events`)
+ * @param {string|null} value - Null removes it
+ * @returns {void}
+ */
+export const setStyleProperty = (elem, name, value) => {
+  let text = withoutStyleProperty(elem.getAttribute('style'), name)
+  if (value !== null && value !== undefined && value !== '') {
+    const declaration = `${name}:${value}`
+    if (!text.trim()) {
+      text = declaration
+    } else {
+      text = /;\s*$/.test(text) ? `${text}${declaration};` : `${text};${declaration}`
+    }
+  }
+  if (text.trim()) {
+    elem.setAttribute('style', text)
+  } else {
+    elem.removeAttribute('style')
+  }
+}
+
+/**
  * @callback module:utilities.TreeWalker
  * @param {Element} elem - DOM element being traversed
  * @returns {void}

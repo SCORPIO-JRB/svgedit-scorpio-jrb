@@ -12,6 +12,8 @@ import { ThemeController } from './theme.js'
 import { ViewController } from './view.js'
 import { GridLayer } from './grid.js'
 import { FrameLayer } from './frames.js'
+import { BindingPanel, ungroupSelected } from './binding.js'
+import { Preview } from './preview.js'
 import { EditorLayout } from './layout.js'
 
 /**
@@ -162,6 +164,9 @@ class EditorStartup {
     this.topPanel.init()
     this.layersPanel.init()
     this.mainMenu.init()
+    // The preview of the saved file (plan v2, 4.6; lot V6), in both layouts
+    this.preview = new Preview(this)
+    this.commands.register({ id: 'preview', label: 'preview.open', run: () => this.preview.open() })
     // Frames to export, in the canvas layout (lot V5): their tool after
     // Text, their sections in the inspector.
     if (this.layout?.canvas) {
@@ -169,6 +174,8 @@ class EditorStartup {
       this.frames.addTool(this.layout.toolbar.bar)
       this.frames.buildInspector((name) => this.layout.inspector.body(name))
       this.frames.refreshInspector()
+      // The binding and the data of the object, under its id and class (V6)
+      this.binding = new BindingPanel(this, this.layout.inspector.body('identity'))
     }
 
     const { undoMgr } = this.svgCanvas
@@ -655,7 +662,7 @@ class EditorStartup {
           this.svgCanvas.groupSelectedElements()
           break
         case 'ungroup':
-          this.svgCanvas.ungroupSelectedElement()
+          ungroupSelected(this)
           break
         case 'move_front':
           this.svgCanvas.moveToTopSelectedElement()

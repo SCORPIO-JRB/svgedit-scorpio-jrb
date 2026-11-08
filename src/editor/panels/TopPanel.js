@@ -6,6 +6,7 @@ import topPanelHTML from './TopPanel.html'
 import { commonValueOf, roundForField } from './panelValues.js'
 import { askText } from '../components/askText.js'
 import { stepTargets } from '../history-steps.js'
+import { renameId, ungroupSelected } from '../binding.js'
 
 const { $qa, $id, $click, isValidUnit, getTypeMap, convertUnit } = SvgCanvas
 
@@ -1152,7 +1153,8 @@ class TopPanel {
       this.editor.svgCanvas.groupSelectedElements()
       // ungroup
     } else if (this.editor.selectedElement) {
-      this.editor.svgCanvas.ungroupSelectedElement()
+      // A bound group: asked first (V6)
+      ungroupSelected(this.editor)
     }
   }
 
@@ -1198,6 +1200,15 @@ class TopPanel {
   attrChanger (e) {
     const attr = e.target.getAttribute('data-attr')
     let val = e.target.value
+    // The identifier: the references of the drawing follow it, a taken one
+    // is refused, a bound one asked first (V6)
+    if (attr === 'id' && this.selectedElement) {
+      const elem = this.selectedElement
+      renameId(this.editor, elem, val).then((renamed) => {
+        if (!renamed && e.target.isConnected) e.target.value = elem.id
+      })
+      return true
+    }
     const valid = isValidUnit(attr, val, this.selectedElement)
 
     if (!valid) {

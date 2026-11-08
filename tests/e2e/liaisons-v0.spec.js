@@ -3,9 +3,9 @@ import { visitAndApproveStorage } from './helpers.js'
 
 // V0: survival of the attributes SCorp-io may bind live data to (id, class,
 // data-*), through the editing operations. The first group guards what
-// already survives. The second one records what is lost today (section 7 of
-// the plan "Interface et expérience (v2)"): those tests describe the current
-// behaviour and change on purpose when V6 corrects it.
+// already survives. The second one recorded what was lost (section 7 of the
+// plan "Interface et expérience (v2)"); since V6 corrected it, it describes
+// the corrected behaviour.
 
 const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
   <g class="layer"><title>Layer 1</title>
@@ -120,35 +120,62 @@ test.describe('Bindings that survive (V0)', () => {
   })
 })
 
-test.describe('Bindings lost today (section 7, to correct in V6)', () => {
+test.describe('Bindings corrected in V6 (section 7)', () => {
   test.beforeEach(async ({ page }) => {
     await visitAndApproveStorage(page)
     await loadDrawing(page)
   })
 
-  test('numeric data-* values are rounded on export', async ({ page }) => {
+  test('numeric data-* values are written as they are', async ({ page }) => {
     const { open, exported } = await run(page, '')
     expect(open['P-101']).toMatchObject({ point: '007', scale: '0.125' })
-    // svg-exec.js writes every numeric value through shortFloat.
-    expect(exported['P-101']).toMatchObject({ point: '7', scale: '0.13' })
+    // They were written through shortFloat: "7" and "0.13" (V0).
+    expect(exported['P-101']).toMatchObject({ point: '007', scale: '0.125' })
   })
 
-  test('ungrouping a bound group drops its binding without warning', async ({ page }) => {
-    const { exported } = await run(page, `
-      c.selectOnly(byId('cta-1'), true)
-      c.ungroupSelectedElement()`)
+  test('ungrouping a bound group asks first', async ({ page }) => {
+    const dialog = page.locator('se-elix-alert-dialog')
+    await page.evaluate(() => window.svgEditor.svgCanvas.selectOnly([document.getElementById('cta-1')], true))
+    await page.keyboard.press('ControlOrMeta+Shift+g')
+    await expect(dialog).toHaveCount(1)
+    await expect(dialog).toContainText('data-tag')
+    // Cancelled: the group and its binding stay
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    let { exported } = await run(page, '')
+    expect(exported['CTA-01']).toMatchObject({ id: 'cta-1' })
+
+    // Confirmed: ungrouped, the objects keep theirs
+    await page.keyboard.press('ControlOrMeta+Shift+g')
+    await expect(dialog).toHaveCount(1)
+    await dialog.locator('[part~="choice-button"]').first().click()
+    await expect(dialog).toHaveCount(0)
+    ;({ exported } = await run(page, ''))
     expect(exported['CTA-01']).toBeUndefined()
     expect(exported['CTA-01-C']).toMatchObject({ id: 'cta-caisson' })
   })
 
-  test('a duplicate id in an opened file is renamed', async ({ page }) => {
+  test('a group without binding is ungrouped without a question', async ({ page }) => {
+    await page.evaluate(() => {
+      const c = window.svgEditor.svgCanvas
+      c.selectOnly([document.getElementById('pompe-1'), document.getElementById('vanne-1')], true)
+      c.groupSelectedElements()
+    })
+    await page.keyboard.press('ControlOrMeta+Shift+g')
+    await expect(page.locator('se-elix-alert-dialog')).toHaveCount(0)
+    expect(await page.evaluate(() => document.getElementById('pompe-1').parentNode.classList.contains('layer'))).toBe(true)
+  })
+
+  test('a duplicate id in an opened file is renamed, the conflict only', async ({ page }) => {
     await page.evaluate(() => window.svgEditor.svgCanvas.setSvgString(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
       <g class="layer"><title>L</title>
         <rect id="pompe" data-tag="A" width="10" height="10"/>
         <rect id="pompe" data-tag="B" x="20" width="10" height="10"/>
+        <rect id="vanne" data-tag="C" x="40" width="10" height="10"/>
       </g></svg>`))
     const { exported } = await run(page, '')
     expect(exported.A.id).toBe('pompe')
     expect(exported.B.id).not.toBe('pompe')
+    expect(exported.C.id).toBe('vanne')
   })
 })

@@ -390,6 +390,7 @@ export class EditorLayout {
     this.contextBar?.refresh()
     this.paintPicker?.selectionChanged()
     this.editor.frames?.selectionChanged()
+    this.editor.binding?.refresh()
   }
 
   /**
@@ -403,6 +404,7 @@ export class EditorLayout {
     // The frames to export follow the document, and its undo steps (lot V5).
     this.editor.frames?.update()
     this.editor.frames?.refreshInspector()
+    this.editor.binding?.refresh()
   }
 
   /**

@@ -129,6 +129,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `path.svg` | `stylus_fountain_pen` | Outil chemin (plume) |
 | `pen.svg` | `pen_size_2` | Outil ligne |
 | `pencil.svg` | `draw` | Outil crayon (main levée) |
+| `play_arrow.svg` | `play_arrow` | Prévisualiser le fichier exporté (V6) |
 | `plus.svg` | dessin propre | Ajouter (remplissage, contour, arrêt de dégradé) |
 | `polygon.svg` | `pentagon` | Outil polygone (ext-polystar) |
 | `ratio_lock.svg` | `link` | Conserver les proportions |

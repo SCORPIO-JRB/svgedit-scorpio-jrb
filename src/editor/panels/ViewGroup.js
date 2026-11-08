@@ -58,6 +58,8 @@ export class ViewGroup {
     template.innerHTML = `
       <div id="se-viewgroup" class="se-float" role="toolbar" aria-label="${t('layout.view')}">
         <span class="se-editor-panel-slot"></span>
+        <button type="button" id="se-preview-button" class="se-icon-button" aria-label="${t('preview.open')}"
+          title="${t('preview.open')}">${icon('play_arrow.svg')}</button>
         <button type="button" id="se-panel-toggle" class="se-icon-button" aria-pressed="true">${icon('panel_right.svg')}</button>
         <button type="button" id="se-zoom-button" class="se-text-button" aria-haspopup="menu" aria-expanded="false"
           aria-label="${t('layout.zoom')}"><span class="se-zoom-value">100 %</span>${icon('chevron_down.svg')}</button>
@@ -88,6 +90,8 @@ export class ViewGroup {
     this.$zoomButton = stage.querySelector('#se-zoom-button')
 
     this.$toggle.addEventListener('click', () => editor.commands.execute('toggle_panel'))
+    // Preview ▷ (plan v2, 4.6; lot V6)
+    stage.querySelector('#se-preview-button').addEventListener('click', () => editor.commands.execute('preview'))
     this.$zoomButton.addEventListener('click', () => {
       if (this.$menu.opened) {
         this.$menu.close()

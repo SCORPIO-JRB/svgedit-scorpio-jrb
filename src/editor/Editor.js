@@ -33,6 +33,7 @@ import { getParentsUntil } from '@svgedit/svgcanvas/common/util.js'
 // Zoom bounds and ladder shared by every zoom gesture (1 = 100 %), from 1 %
 // to 6 400 % (lot V2).
 import { clampZoom, nextZoomStep } from './view.js'
+import { ungroupSelected } from './binding.js'
 
 const { $id, $click, decode64 } = SvgCanvas
 
@@ -301,7 +302,8 @@ class Editor extends EditorStartup {
         fn: () => {
           const elem = this.selectedElement
           if (elem && !this.multiselected && ['g', 'a', 'use'].includes(elem.tagName)) {
-            this.svgCanvas.ungroupSelectedElement()
+            // A bound group: asked first (V6)
+            ungroupSelected(this)
           }
         }
       },

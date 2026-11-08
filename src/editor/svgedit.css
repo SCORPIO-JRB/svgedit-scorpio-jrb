@@ -298,6 +298,16 @@ hr {
 
 /*—————————————————————————————*/
 
+/* The CSS animations of the drawing do not play while it is edited, as its
+   SMIL animations (decision D3, lot V6): the drawing shows the values it
+   saves, the geometry does not move under the pointer. The file keeps them,
+   and the preview plays them. */
+#svgcontent,
+#svgcontent * {
+  animation: none !important;
+  transition: none !important;
+}
+
 #workarea.wireframe #svgcontent * {
   fill: none;
   stroke: var(--se-wireframe-stroke);

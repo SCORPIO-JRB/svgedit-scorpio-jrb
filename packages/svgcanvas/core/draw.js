@@ -9,10 +9,11 @@ import Layer from './layer.js'
 import HistoryRecordingService from './historyrecording.js'
 
 import { NS } from './namespaces.js'
-import { toXml, getElement, escapeCssIdent } from './utilities.js'
+import { toXml, getElement, escapeCssIdent, setStyleProperty } from './utilities.js'
 import { copyElem as utilCopyElem } from './copy-elem.js'
 import { getParentsUntil } from '../common/util.js'
 import { warn } from '../common/logger.js'
+import { isFidelityOn } from './fidelity.js'
 
 const visElems =
   'a,circle,ellipse,foreignObject,g,image,line,path,polygon,polyline,rect,svg,text,tspan,use'.split(
@@ -535,6 +536,33 @@ export class Drawing {
           orphans.push(child)
         }
       }
+    }
+
+    // Objects outside the layers go into a layer at their place: each run of
+    // them, between two layers, makes one. Gathered in a new layer at the
+    // end, they were drawn above the layers they came before (V6, section 7,
+    // option fidelity.layerOrder).
+    if (orphans.length > 0 && this.all_layers.length > 0 &&
+      isFidelityOn(svgCanvas?.getCurConfig?.(), 'layerOrder')) {
+      const runs = []
+      let run = null
+      for (const child of [...this.svgElem_.childNodes]) {
+        if (orphans.includes(child)) {
+          if (!run) { run = []; runs.push(run) }
+          run.push(child)
+        } else if (this.all_layers.some((existing) => existing.getGroup() === child)) {
+          run = null
+        }
+      }
+      for (const objects of runs) {
+        const name = getNewLayerName(layernames)
+        layernames.push(name)
+        const placed = new Layer(name, null, this.svgElem_)
+        objects[0].before(placed.getGroup())
+        placed.appendChildren(objects)
+      }
+      this.identifyLayers()
+      return
     }
 
     // If orphans or no layers found, create a new layer and add all the orphans to it
@@ -1104,7 +1132,7 @@ export const leaveContext = () => {
       }
       // Only pointer-events was changed: the rest of the style is kept (the
       // whole attribute used to be replaced, losing the element's style).
-      elem.style.pointerEvents = dataStorage.get(elem, 'orig_pe') || 'inherit'
+      setStyleProperty(elem, 'pointer-events', dataStorage.get(elem, 'orig_pe') || 'inherit')
       dataStorage.remove(elem, 'orig_opac')
       dataStorage.remove(elem, 'orig_pe')
     }
@@ -1176,7 +1204,7 @@ export const setContext = elem => {
     const opac = Number.isFinite(parsedOpacity) ? parsedOpacity : 1
     curthis.setAttribute('opacity', opac * 0.33)
     dataStorage.put(curthis, 'orig_pe', curthis.style.pointerEvents)
-    curthis.style.pointerEvents = 'none'
+    setStyleProperty(curthis, 'pointer-events', 'none')
     disabledElems.push(curthis)
   })
   svgCanvas.clearSelection()
@@ -1197,12 +1225,12 @@ export const elementFromPointInDrawing = (clientX, clientY) => {
   if (!disabledElems.length) { return doc.elementFromPoint(clientX, clientY) }
   const dataStorage = svgCanvas.getDataStorage()
   disabledElems.forEach((elem) => {
-    elem.style.pointerEvents = dataStorage.get(elem, 'orig_pe') || 'inherit'
+    setStyleProperty(elem, 'pointer-events', dataStorage.get(elem, 'orig_pe') || 'inherit')
   })
   try {
     return doc.elementFromPoint(clientX, clientY)
   } finally {
-    disabledElems.forEach((elem) => { elem.style.pointerEvents = 'none' })
+    disabledElems.forEach((elem) => { setStyleProperty(elem, 'pointer-events', 'none') })
   }
 }
 

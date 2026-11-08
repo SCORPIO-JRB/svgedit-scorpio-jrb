@@ -436,6 +436,9 @@ const groupSvgElem = (elem) => {
   elem.replaceWith(g)
   g.appendChild(elem)
   dataStorage.put(g, 'gsvg', elem)
+  // A group of the editor, not of the file: the save leaves it out while it
+  // carries nothing of its own (V6, section 7, option fidelity.nestedSvg)
+  dataStorage.put(g, 'gsvgWrapper', true)
   g.id = svgCanvas.getNextId()
 }
 

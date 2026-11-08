@@ -20,7 +20,8 @@ import {
   toXml,
   getStrokedBBoxDefaultVisible,
   getBBox as utilsGetBBox,
-  remapTimingIds
+  remapTimingIds,
+  withoutStyleProperty
 } from './utilities.js'
 import {
   transformPoint,
@@ -39,6 +40,7 @@ import { getClosest } from '../common/util.js'
 import { parseSvgText, getDeclaredSize, removeOutsideAnimations } from './svg-paste.js'
 import { scopeStyleSheet, keyframesNames } from './css-scope.js'
 import { ANIMATION_ELEMENTS, isPauseOfAnimation } from './sanitize.js'
+import { isFidelityOn, isRawAttribute } from './fidelity.js'
 
 const {
   InsertElementCommand,
@@ -60,6 +62,10 @@ export const init = canvas => {
   svgCanvas.importSvgString = importSvgString
   svgCanvas.replaceUseSymbol = replaceUseSymbol
   svgCanvas.uniquifyElems = uniquifyElemsMethod
+  svgCanvas.getReferencesTo = getReferencesTo
+  svgCanvas.getBinding = getBinding
+  svgCanvas.renameElementId = renameElementId
+  svgCanvas.setElementData = setElementData
   svgCanvas.setUseData = setUseDataMethod
   svgCanvas.convertGradients = convertGradientsMethod
   svgCanvas.removeUnusedDefElems = removeUnusedDefElemsMethod // remove DOM elements inside the `<defs>` if they are notreferred to,
@@ -95,33 +101,7 @@ const svgCanvasToString = () => {
     svgCanvas.selectOnly([svgCanvas.getCurrentGroup()])
   }
 
-  const nakedSvgs = []
-
-  // Unwrap gsvg if it has no special attributes (only id and style)
-  const gsvgElems = svgCanvas.getSvgContent().querySelectorAll('g[data-gsvg]')
-  Array.prototype.forEach.call(gsvgElems, element => {
-    const attrs = element.attributes
-    let len = attrs.length
-    for (let i = 0; i < len; i++) {
-      if (attrs[i].nodeName === 'id' || attrs[i].nodeName === 'style') {
-        len--
-      }
-    }
-    // No significant attributes, so ungroup
-    if (len <= 0) {
-      const svg = element.firstChild
-      nakedSvgs.push(svg)
-      element.replaceWith(svg)
-    }
-  })
   const output = svgCanvas.svgToString(svgCanvas.getSvgContent(), 0)
-
-  // Rewrap gsvg
-  if (nakedSvgs.length) {
-    Array.prototype.forEach.call(nakedSvgs, el => {
-      svgCanvas.groupSvgElem(el)
-    })
-  }
 
   return output
 }
@@ -164,6 +144,23 @@ const qualifiedName = (node, nsMap) => {
     return node.nodeType === 1 ? node.localName : node.nodeName
   }
   return `${namespacePrefix(nsMap, uri, node.prefix)}:${node.localName}`
+}
+
+/**
+ * Whether an element is a group the editor put around a nested `<svg>` (see
+ * groupSvgElem) that holds only it and carries no attribute of its own.
+ * @param {Element} elem
+ * @param {object} curConfig
+ * @returns {boolean}
+ */
+const isEditorSvgWrapper = (elem, curConfig) => {
+  if (elem.localName !== 'g' || !isFidelityOn(curConfig, 'nestedSvg')) return false
+  const dataStorage = svgCanvas.getDataStorage()
+  if (!dataStorage.get(elem, 'gsvgWrapper')) return false
+  const svg = elem.firstElementChild
+  if (!svg || svg !== dataStorage.get(elem, 'gsvg') || elem.children.length !== 1) return false
+  return [...elem.attributes].every((attr) => attr.name === 'id' ||
+    (attr.name === 'style' && withoutStyleProperty(attr.value, 'pointer-events').trim() === ''))
 }
 
 /**
@@ -290,7 +287,6 @@ const elementToString = (elem, indent) => {
         }
       })
 
-      let i = attrs.length
       const attrNames = [
         'width',
         'height',
@@ -301,8 +297,10 @@ const elementToString = (elem, indent) => {
         'id',
         'overflow'
       ]
-      while (i--) {
-        const attr = attrs[i]
+      // In the order of the file: written backwards, they were reversed at
+      // each save of a saved file (V6, option fidelity.stableSave)
+      const rootAttrs = isFidelityOn(curConfig, 'stableSave') ? attrs : [...attrs].reverse()
+      for (const attr of rootAttrs) {
         const attrVal = toXml(attr.value)
 
         // Namespaces have already been dealt with, so skip
@@ -328,15 +326,31 @@ const elementToString = (elem, indent) => {
       if (elem.nodeName === 'defs' && !elem.firstChild) {
         return ''
       }
+      // The group the editor put around a nested <svg> of a file is left out
+      // while it carries nothing of its own (only its id and the editor's
+      // style): the file gets its <svg> back as it was
+      if (isEditorSvgWrapper(elem, curConfig)) {
+        return elementToString(elem.firstElementChild, indent)
+      }
 
       const mozAttrs = ['-moz-math-font-style', '_moz-math-font-style']
       // The values of an animation, or of the data of another application,
       // are kept as written
       const round = elem.namespaceURI === NS.SVG && !ANIMATION_ELEMENTS.has(elem.localName)
+      // V6 (section 7): identifiers, classes and bound data are not numbers
+      const rawValues = isFidelityOn(curConfig, 'rawValues')
+      const styleProperties = isFidelityOn(curConfig, 'styleProperties')
+      const emptyValues = isFidelityOn(curConfig, 'emptyValues')
       // Do not iterate attributes in reverse order!
       for (let i = 0; i < attrs.length; i++) {
         const attr = attrs[i]
         let attrVal = toXml(attr.value)
+        // The pointer-events of the editor (layers, open groups) are not
+        // saved; the rest of the style is
+        if (styleProperties && attr.localName === 'style' && !attr.namespaceURI) {
+          attrVal = toXml(withoutStyleProperty(attr.value, 'pointer-events'))
+          if (attrVal.trim() === '') continue
+        }
         // remove bogus attributes added by Gecko, and the pause of the
         // animations in the editor
         if (mozAttrs.includes(attr.localName) || isPauseOfAnimation(elem, attr)) {
@@ -366,7 +380,9 @@ const elementToString = (elem, indent) => {
             attrVal = svgCanvas.pathActions.convertPath(elem, true)
           }
           // Properly parse attribute value if it is a number!
-          if (round && !isNaN(attrVal) && !isNaN(parseFloat(attrVal))) {
+          if (round && rawValues && isRawAttribute(attr)) {
+            // Written as it is
+          } else if (round && !isNaN(attrVal) && !isNaN(parseFloat(attrVal))) {
             attrVal = shortFloat(attrVal)
           } else if (round && unitRe.test(attrVal)) {
             attrVal = shortFloat(attrVal) + unit
@@ -399,8 +415,11 @@ const elementToString = (elem, indent) => {
             out.push('"')
           }
         } else {
-          // Do not skip data attribute even they are empty!
-          if ((/^data[-]/i).test(attr.localName)) {
+          // Do not skip data attribute even they are empty! Nor, in V6, an
+          // empty attribute of another application (rdf:about="")
+          if ((/^data[-]/i).test(attr.localName) ||
+            (emptyValues && attr.namespaceURI && nsMap[attr.namespaceURI] &&
+              ![NS.SVG, NS.XMLNS, NS.XLINK, NS.SE].includes(attr.namespaceURI))) {
             // map various namespaces to our fixed namespace prefixes
             // (the default xmlns attribute itself does not get a prefix)
             if (
@@ -427,10 +446,15 @@ const elementToString = (elem, indent) => {
       for (let i = 0; i < childs.length; i++) {
         const child = childs.item(i)
         switch (child.nodeType) {
-          case 1: // element node
+          case 1: { // element node
+            // An element written as nothing (an empty <defs>) leaves no
+            // blank line (V6, option fidelity.stableSave)
+            const text = svgCanvas.svgToString(child, indent)
+            if (text === '' && isFidelityOn(curConfig, 'stableSave')) break
             out.push('\n')
-            out.push(svgCanvas.svgToString(child, indent))
+            out.push(text)
             break
+          }
           case 3: {
             // text node
             let str = child.nodeValue
@@ -493,27 +517,167 @@ const SELECTOR_ID = /#([\w\u00A0-\uFFFF-]+)(?=[^{};]*\{)/g
  */
 const remapReferences = (root, ids) => {
   if (!ids.size) return
-  const remapUrl = (match, _quote, id) => ids.has(id) ? `url(#${ids.get(id)})` : match
   ;[root, ...root.querySelectorAll('*')].forEach((elem) => {
-    for (const attr of [...elem.attributes]) {
-      const value = attr.value
-      let next = value
-      if (attr.localName === 'href') {
-        if (value.startsWith('#') && ids.has(value.slice(1))) next = `#${ids.get(value.slice(1))}`
-      } else if (attr.localName === 'connector' && attr.namespaceURI === NS.SE) {
-        next = value.split(/\s+/).map((id) => ids.get(id) || id).join(' ')
-      } else if ((attr.localName === 'begin' || attr.localName === 'end') && !attr.namespaceURI) {
-        next = remapTimingIds(value, (id) => ids.get(id))
-      } else if (value.includes('url(')) {
-        next = value.replace(URL_REFERENCE, remapUrl)
-      }
-      if (next !== value) attr.value = next
-    }
-    if (elem.localName === 'style') {
-      const text = elem.textContent.replace(SELECTOR_ID, (match, id) => ids.has(id) ? `#${ids.get(id)}` : match)
-      if (text !== elem.textContent) elem.textContent = text
-    }
+    const { attributes, text } = referenceChanges(elem, ids)
+    attributes.forEach(({ attr, value }) => { attr.value = value })
+    if (text !== null) elem.textContent = text
   })
+}
+
+/**
+ * The references of one element that point to elements changing identifier,
+ * and what they become (see remapReferences); nothing is changed.
+ * @param {Element} elem
+ * @param {Map<string, string>} ids - New identifier of each old one
+ * @returns {{attributes: Array<{attr: Attr, value: string}>, text: string|null}}
+ *   The attributes to change, and the new text of a style sheet
+ */
+const referenceChanges = (elem, ids) => {
+  const remapUrl = (match, _quote, id) => ids.has(id) ? `url(#${ids.get(id)})` : match
+  const attributes = []
+  for (const attr of [...elem.attributes]) {
+    const value = attr.value
+    let next = value
+    if (attr.localName === 'href') {
+      if (value.startsWith('#') && ids.has(value.slice(1))) next = `#${ids.get(value.slice(1))}`
+    } else if (attr.localName === 'connector' && attr.namespaceURI === NS.SE) {
+      next = value.split(/\s+/).map((id) => ids.get(id) || id).join(' ')
+    } else if ((attr.localName === 'begin' || attr.localName === 'end') && !attr.namespaceURI) {
+      next = remapTimingIds(value, (id) => ids.get(id))
+    } else if (value.includes('url(')) {
+      next = value.replace(URL_REFERENCE, remapUrl)
+    }
+    if (next !== value) attributes.push({ attr, value: next })
+  }
+  let text = null
+  if (elem.localName === 'style') {
+    const next = elem.textContent.replace(SELECTOR_ID, (match, id) => ids.has(id) ? `#${ids.get(id)}` : match)
+    if (next !== elem.textContent) text = next
+  }
+  return { attributes, text }
+}
+
+/**
+ * The elements of the drawing that refer to an identifier: `href="#id"`,
+ * `url(#id)`, `begin="id.end"`, a connector, a `#id` selector of a style sheet.
+ * @function module:svgcanvas.SvgCanvas#getReferencesTo
+ * @param {string} id
+ * @returns {Element[]}
+ */
+const getReferencesTo = (id) => {
+  const content = svgCanvas.getSvgContent()
+  if (!id || !content) return []
+  const probe = new Map([[id, `${id}\u0001`]])
+  return [...content.querySelectorAll('*')].filter((elem) => {
+    const { attributes, text } = referenceChanges(elem, probe)
+    return attributes.length > 0 || text !== null
+  })
+}
+
+/**
+ * What binds an element to the data of SCorp-io, as far as the file tells:
+ * its attributes of the SCorp-io binding (`scorp_*`, `instanceId`,
+ * `representationId`) and `data-*`, and the elements of the drawing that refer
+ * to its identifier. The format of the binding is not fixed yet (decision D4
+ * of the plan): until then, an element that has any of them is bound.
+ * @function module:svgcanvas.SvgCanvas#getBinding
+ * @param {Element} elem
+ * @returns {{attributes: Array<{name: string, value: string}>, references: Element[], bound: boolean}}
+ */
+const getBinding = (elem) => {
+  const attributes = [...(elem?.attributes ?? [])]
+    .filter((attr) => !attr.namespaceURI && (attr.name.startsWith('data-') || attr.name.startsWith('scorp_') ||
+      attr.name === 'instanceId' || attr.name === 'representationId'))
+    .map(({ name, value }) => ({ name, value }))
+  const references = elem?.id ? getReferencesTo(elem.id).filter((other) => other !== elem) : []
+  return { attributes, references, bound: attributes.length > 0 || references.length > 0 }
+}
+
+/** A name of data the editor writes: `data-` and an XML name without a colon. */
+const VALID_DATA = /^data-[\p{L}\p{N}_.\-\u00B7]+$/u
+
+/**
+ * Sets, changes or removes an attribute of data (`data-*`) of an element, in
+ * one undo step.
+ * @function module:svgcanvas.SvgCanvas#setElementData
+ * @param {Element} elem
+ * @param {string} name - `data-tag`...
+ * @param {string|null} value - Null removes it; an empty value is kept
+ * @returns {boolean} False for a name that is not one of data
+ */
+const setElementData = (elem, name, value) => {
+  if (!VALID_DATA.test(name ?? '')) return false
+  const old = elem.getAttribute(name)
+  if (old === value) return true
+  if (value === null || value === undefined) {
+    elem.removeAttribute(name)
+  } else {
+    elem.setAttribute(name, String(value))
+  }
+  const batchCmd = new BatchCommand('Change data')
+  batchCmd.addSubCommand(new ChangeElementCommand(elem, { [name]: old }))
+  svgCanvas.addCommandToHistory(batchCmd)
+  svgCanvas.call('changed', [elem])
+  return true
+}
+
+/** An identifier the editor accepts: an XML name without a colon. */
+const VALID_ID = /^[\p{L}_][\p{L}\p{N}_.\-\u00B7]*$/u
+
+/**
+ * Gives an element a new identifier, and the references of the drawing to it
+ * follow, in one undo step. An identifier already taken, by an element of the
+ * drawing or of the editor, is refused: it used to be given anyway, and two
+ * elements then shared it.
+ * @function module:svgcanvas.SvgCanvas#renameElementId
+ * @param {Element} elem
+ * @param {string} newId
+ * @returns {{ok: boolean, reason?: 'invalid'|'taken', references?: number}}
+ */
+const renameElementId = (elem, newId) => {
+  const id = String(newId ?? '').trim()
+  const oldId = elem.id
+  if (id === oldId) return { ok: true, references: 0 }
+  if (!id) {
+    // No identifier: only for an element nothing refers to
+    if (getReferencesTo(oldId).some((other) => other !== elem)) return { ok: false, reason: 'invalid' }
+  } else if (!VALID_ID.test(id)) {
+    return { ok: false, reason: 'invalid' }
+  } else {
+    const other = svgCanvas.getDOMDocument().getElementById(id)
+    const rootId = svgCanvas.getDataStorage().get(svgCanvas.getSvgContent(), 'rootId')
+    if ((other && other !== elem) || id === rootId) return { ok: false, reason: 'taken' }
+  }
+  const batchCmd = new BatchCommand('Change id')
+  let references = 0
+  if (oldId && id) {
+    const ids = new Map([[oldId, id]])
+    ;[...svgCanvas.getSvgContent().querySelectorAll('*')].forEach((other) => {
+      if (other === elem) return
+      const { attributes, text } = referenceChanges(other, ids)
+      if (!attributes.length && text === null) return
+      const old = {}
+      attributes.forEach(({ attr, value }) => {
+        old[attr.localName === 'href' ? '#href' : attr.name] = attr.value
+        attr.value = value
+      })
+      if (text !== null) {
+        old['#text'] = other.textContent
+        other.textContent = text
+      }
+      batchCmd.addSubCommand(new ChangeElementCommand(other, old))
+      references++
+    })
+  }
+  if (id) {
+    elem.id = id
+  } else {
+    elem.removeAttribute('id')
+  }
+  batchCmd.addSubCommand(new ChangeElementCommand(elem, { id: oldId || null }))
+  svgCanvas.addCommandToHistory(batchCmd)
+  svgCanvas.call('changed', [elem])
+  return { ok: true, references }
 }
 
 /**
@@ -1480,6 +1644,13 @@ const convertGradientsMethod = elem => {
             return
           }
         }
+      }
+      // A gradient several objects use keeps its units: converted after the
+      // box of the first one, it would change the others (V6, section 7,
+      // option fidelity.gradientUnits). One object alone is converted, so
+      // that the gradient follows it when it moves.
+      if (fillStrokeElems.length > 1 && isFidelityOn(svgCanvas.getCurConfig(), 'gradientUnits')) {
+        return
       }
       // get object's bounding box
       const bb = utilsGetBBox(fillStrokeElems[0])

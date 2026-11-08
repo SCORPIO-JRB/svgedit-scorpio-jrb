@@ -42,6 +42,7 @@ export const copyElem = (el, getNextId) => {
     const firstChild = newEl.firstElementChild || newEl.firstChild
     if (firstChild) {
       dataStorage.put(newEl, 'gsvg', firstChild)
+      if (dataStorage.get(el, 'gsvgWrapper')) dataStorage.put(newEl, 'gsvgWrapper', true)
     }
   }
   if (dataStorage.has(el, 'symbol')) {

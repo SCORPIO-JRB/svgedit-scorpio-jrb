@@ -2256,3 +2256,153 @@
   margin: 0;
   color: var(--se-text-secondary);
 }
+
+/* Identity and binding: the binding and the data of the object (lot V6) */
+.se-layout-canvas .se-inspector .se-binding {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  flex-basis: 100%;
+  align-items: stretch;
+  gap: var(--se-space-1);
+}
+
+.se-layout-canvas .se-inspector .se-binding[hidden],
+.se-layout-canvas .se-binding [hidden] {
+  display: none;
+}
+
+.se-layout-canvas .se-binding-link {
+  display: flex;
+  align-items: baseline;
+  gap: var(--se-space-2);
+  padding: var(--se-space-1) var(--se-space-2);
+}
+
+.se-layout-canvas .se-binding-label,
+.se-layout-canvas .se-binding-none {
+  color: var(--se-text-secondary);
+}
+
+.se-layout-canvas .se-binding-label {
+  flex: none;
+}
+
+.se-layout-canvas .se-binding-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.se-layout-canvas .se-binding-data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--se-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.se-layout-canvas .se-binding-row {
+  display: flex;
+  align-items: center;
+  gap: var(--se-space-1);
+}
+
+.se-layout-canvas .se-binding-row .se-field {
+  flex: 1 1 auto;
+}
+
+.se-layout-canvas .se-binding-name {
+  max-width: 50%;
+  overflow: hidden;
+  font-family: var(--se-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.se-layout-canvas .se-binding-new {
+  display: flex;
+  flex-direction: column;
+  gap: var(--se-space-1);
+}
+
+/* Preview of the saved file, in both layouts (plan v2, 4.6; lot V6): no
+   editing interface, the file over the whole editor. */
+#se-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 100002;
+  display: flex;
+  flex-direction: column;
+  background: var(--se-canvas);
+  color: var(--se-text);
+  font-family: var(--se-font-ui, inherit);
+}
+
+#se-preview .se-preview-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--se-space-3);
+  height: 40px;
+  padding: 0 var(--se-space-3);
+  border-bottom: 1px solid var(--se-border-top);
+  background: var(--se-surface-top);
+}
+
+#se-preview .se-preview-title {
+  font-weight: 600;
+}
+
+#se-preview .se-preview-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--se-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#se-preview-close {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--se-space-2);
+  height: var(--se-control-size);
+  padding: 0 var(--se-space-3);
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: var(--se-control);
+  color: var(--se-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+#se-preview-close:hover {
+  background: var(--se-control-hover);
+}
+
+#se-preview-close:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: 2px;
+}
+
+#se-preview-close kbd {
+  color: var(--se-text-secondary);
+  font: inherit;
+  font-size: var(--se-font-size-label);
+}
+
+#se-preview .se-preview-stage {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: var(--se-space-6);
+}
+
+#se-preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  background: var(--se-preview-page);
+  box-shadow: 0 0 0 1px var(--se-border);
+}

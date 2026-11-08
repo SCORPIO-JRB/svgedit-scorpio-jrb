@@ -222,20 +222,80 @@ for (const [element, attrs] of Object.entries(svgWhiteList_)) {
   svgWhiteList_[element] = [...attrs, ...svgGenericWhiteList]
 }
 
-// Produce a Namespace-aware version of svgWhitelist
-const svgWhiteListNS_ = {}
-for (const [elt, atts] of Object.entries(svgWhiteList_)) {
-  const attNS = {}
-  for (const att of atts) {
-    if (att.includes(':')) {
-      const [prefix, localName] = att.split(':')
-      attNS[localName] = NS[prefix.toUpperCase()]
-    } else {
-      attNS[att] = att === 'xmlns' ? NS.XMLNS : null
-    }
-  }
-  svgWhiteListNS_[elt] = attNS
+/**
+ * Attributes the filter also keeps since V6 (section 7 of the plan, option
+ * `fidelity.attributes`): presentation attributes of SVG 2 on every element,
+ * `pathLength` on the shapes, `dx`, `dy` and `rotate` on a text, `target` on
+ * a link.
+ */
+const WIDER_GENERIC = ['paint-order', 'vector-effect', 'pointer-events', 'mix-blend-mode', 'isolation']
+const WIDER = {
+  path: ['pathLength'],
+  rect: ['pathLength'],
+  circle: ['pathLength'],
+  ellipse: ['pathLength'],
+  line: ['pathLength'],
+  polyline: ['pathLength'],
+  polygon: ['pathLength'],
+  text: ['dx', 'dy', 'rotate'],
+  a: ['target']
 }
+const svgWideWhiteList_ = {}
+for (const [element, attrs] of Object.entries(svgWhiteList_)) {
+  svgWideWhiteList_[element] = [...attrs, ...WIDER_GENERIC, ...(WIDER[element] ?? [])]
+}
+
+/**
+ * A namespace-aware version of a whitelist.
+ * @param {Object<string, string[]>} list
+ * @returns {Object<string, Object<string, string|null>>}
+ */
+const byNamespace = (list) => {
+  const result = {}
+  for (const [elt, atts] of Object.entries(list)) {
+    const attNS = {}
+    for (const att of atts) {
+      if (att.includes(':')) {
+        const [prefix, localName] = att.split(':')
+        attNS[localName] = NS[prefix.toUpperCase()]
+      } else {
+        attNS[att] = att === 'xmlns' ? NS.XMLNS : null
+      }
+    }
+    result[elt] = attNS
+  }
+  return result
+}
+const svgWhiteListNS_ = byNamespace(svgWhiteList_)
+const svgWideWhiteListNS_ = byNamespace(svgWideWhiteList_)
+
+/**
+ * The corrections of section 7 in force for the current run of the filter
+ * (option `fidelity` of the canvas; each is on unless set to false).
+ * @type {object}
+ */
+let fidelity = {}
+const isOn = (name) => fidelity?.[name] !== false
+
+/**
+ * Properties of a `style` attribute that have no attribute: they stay in it
+ * (V6, option `fidelity.styleProperties`). The geometry (`x`, `r`, `d`...)
+ * and `transform` are not among them: the editor writes those as attributes,
+ * which a style would override.
+ */
+const STYLE_ONLY = new Set([
+  'animation', 'transform-origin', 'transform-box', 'transition', 'mix-blend-mode', 'isolation',
+  'paint-order', 'vector-effect', 'white-space', 'font-variant', 'font-feature-settings',
+  'font-kerning', 'font-variation-settings', 'text-shadow', 'cursor', 'will-change',
+  'shape-rendering', 'text-rendering', 'image-rendering', 'color-rendering',
+  'color-interpolation', 'color-interpolation-filters', 'dominant-baseline', 'alignment-baseline',
+  'baseline-shift', 'direction', 'unicode-bidi', 'writing-mode', 'color', 'marker',
+  'marker-start', 'marker-mid', 'marker-end', 'overflow', 'clip', 'letter-spacing',
+  'word-spacing', 'text-decoration', 'text-anchor', 'font', 'font-family', 'font-size',
+  'font-size-adjust', 'font-stretch', 'font-style', 'font-weight', 'stop-color', 'stop-opacity',
+  'flood-color', 'flood-opacity', 'lighting-color'
+])
+const isStyleOnly = (name) => STYLE_ONLY.has(name) || /^(?:animation|transition)-[a-z-]+$/.test(name)
 
 /**
  * Properties of a `style` attribute that must never be turned into attributes.
@@ -383,10 +443,19 @@ const unsafeAnimation = (node) => {
  * @param {Text|Element} node - The DOM element to be checked (we'll also check its children) or text node to be cleaned up
  * @param {string[]} [removed] - What is removed is added to it: elements
  *   (`<script>`), attributes (`onclick`), unsafe values (`href="javascript:…"`)
+ * @param {object} [options] - The option `fidelity` of the canvas: the
+ *   corrections of section 7 (`attributes`, `styleProperties`) are on unless
+ *   set to false
  * @returns {string[]} `removed`
  */
-export const sanitizeSvg = (node, removed = []) => {
-  sanitizeNode(node, removed)
+export const sanitizeSvg = (node, removed = [], options = {}) => {
+  const previous = fidelity
+  fidelity = options ?? {}
+  try {
+    sanitizeNode(node, removed)
+  } finally {
+    fidelity = previous
+  }
   return removed
 }
 
@@ -431,8 +500,10 @@ const sanitizeNode = (node, removed) => {
   }
 
   // Own properties only: element names such as "constructor" must not match Object.prototype
-  const allowedAttrs = {}.hasOwnProperty.call(svgWhiteList_, node.nodeName) ? svgWhiteList_[node.nodeName] : undefined
-  const allowedAttrsNS = svgWhiteListNS_[node.nodeName]
+  const wide = isOn('attributes')
+  const list = wide ? svgWideWhiteList_ : svgWhiteList_
+  const allowedAttrs = {}.hasOwnProperty.call(list, node.nodeName) ? list[node.nodeName] : undefined
+  const allowedAttrsNS = (wide ? svgWideWhiteListNS_ : svgWhiteListNS_)[node.nodeName]
   // if this element is supported, sanitize it
   if (typeof allowedAttrs !== 'undefined') {
     const seAttrs = []
@@ -475,25 +546,44 @@ const sanitizeNode = (node, removed) => {
       if (attrName === 'style') {
         const ruled = getRuleProperties(doc)
         const kept = []
+        let declarations = 0
         attr.value.split(';').forEach((declaration) => {
+          if (!declaration.trim()) return
+          declarations++
           const colon = declaration.indexOf(':')
           const styleAttrName = declaration.slice(0, colon).trim()
           const styleAttrVal = declaration.slice(colon + 1).trim()
           // Now check that this attribute is supported
           if (colon === -1 || STYLE_FORBIDDEN_PROPS.includes(styleAttrName)) return
+          // The pointer-events the editor itself writes (a file saved by an
+          // older version may hold it): inherited anyway
+          if (styleAttrName === 'pointer-events' && styleAttrVal === 'inherit') return
+          if (!allowedAttrs.includes(styleAttrName) && isOn('styleProperties') &&
+            isStyleOnly(styleAttrName.toLowerCase())) {
+            // A property without an attribute stays in the style, if safe
+            if (hasUnsafeCss(decodeCssEscapes(`${styleAttrName}:${styleAttrVal}`))) {
+              report(removed, styleAttrName)
+            } else {
+              kept.push(declaration.trim())
+            }
+            return
+          }
           if (!allowedAttrs.includes(styleAttrName)) {
             // The properties of another application (-inkscape-...) do not show
             if (!styleAttrName.startsWith('-')) report(removed, styleAttrName)
             return
           }
           if (ruled.has(styleAttrName)) {
-            kept.push(`${styleAttrName}:${styleAttrVal}`)
+            // As written since V6 (option fidelity.styleProperties)
+            kept.push(isOn('styleProperties') ? declaration.trim() : `${styleAttrName}:${styleAttrVal}`)
           } else {
             node.setAttribute(styleAttrName, styleAttrVal)
           }
         })
-        if (kept.length) {
-          node.setAttribute('style', kept.join(';'))
+        if (kept.length && kept.length === declarations && isOn('styleProperties')) {
+          // Nothing left the style: it stays as the file wrote it
+        } else if (kept.length) {
+          node.setAttribute('style', kept.join(isOn('styleProperties') ? '; ' : ';'))
         } else {
           node.removeAttribute('style')
         }

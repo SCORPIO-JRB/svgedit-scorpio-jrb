@@ -45,6 +45,7 @@ import {
   parentDelta,
   parentToDrawing
 } from './multi-transform.js'
+import { isFidelityOn } from './fidelity.js'
 
 // The tools whose points snap while drawing (lot V2). The grid keeps its own
 // snapping there, as before.
@@ -1417,9 +1418,11 @@ const mouseUpEvent = (evt) => {
           }
         } // no change in mouse position
 
-        // Remove non-scaling stroke
+        // Remove non-scaling stroke. The editor no longer writes it in a
+        // style, and a style may hold an animation or a transform-origin:
+        // since V6 (section 7, option fidelity.styleProperties), it stays.
         const elem = selectedElements[0]
-        if (elem) {
+        if (elem && !isFidelityOn(svgCanvas.getCurConfig(), 'styleProperties')) {
           elem.removeAttribute('style')
 
           // we don't remove the style elements for contents of foreignObjects

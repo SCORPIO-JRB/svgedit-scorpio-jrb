@@ -1425,7 +1425,8 @@ class SvgCanvas {
     this.cleanupElement = cleanupElement
     this.remapElement = remapElement
     this.recalculateDimensions = recalculateDimensions
-    this.sanitizeSvg = sanitizeSvg
+    // The corrections of section 7 (V6) follow the option fidelity
+    this.sanitizeSvg = (node, removed) => sanitizeSvg(node, removed, this.curConfig.fidelity)
     this.pasteElements = pasteElementsMethod // Remembers the current selected elements on the clipboard.
     this.identifyLayers = draw.identifyLayers
     this.createLayer = draw.createLayer
