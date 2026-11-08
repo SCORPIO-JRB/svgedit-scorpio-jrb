@@ -1,5 +1,1 @@
-<svg viewBox="-60 -60 120 120" xmlns="http://www.w3.org/2000/svg">
-    <line y2="0" x2="40" y1="0" x1="-20" stroke-width="5" stroke="#f9bc01" fill="none"/>
-    <text text-anchor="middle" font-family="serif" font-size="80"  y="20" x="-40" stroke-width="0" stroke="#f9bc01" fill="#f9bc01">T</text>
-    <path stroke-width="5" stroke="#f9bc01" fill="#f9bc01" d="M50,0 L30,-15 L30,15 Z"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="24" height="24" fill="currentColor"><path d="M140-160q-24.75 0-42.37-17.63Q80-195.25 80-220v-520q0-24.75 17.63-42.38Q115.25-800 140-800h471q14.25 0 27 6.37 12.75 6.38 21 17.63l195 260q12 15.68 12 35.84Q866-460 854-444L660-184q-8.25 11.25-21 17.62-12.75 6.38-27 6.38H140Zm0-60h471l195-260-195-260H140v520Zm333-260Z"/></svg>
