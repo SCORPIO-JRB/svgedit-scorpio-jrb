@@ -243,4 +243,40 @@ describe('Opening, saving and importing (lot 5)', () => {
     assert.equal(document.querySelectorAll('#svgcontent set').length, 0)
     assert.equal(document.querySelectorAll('#svgcontent animate').length, 1)
   })
+
+  const pauses = () => [...document.querySelectorAll('#svgcontent animate, #svgcontent animateMotion, #svgcontent animateTransform, #svgcontent set')]
+    .map((animation) => animation.getAttribute('requiredExtensions'))
+
+  it('turns off the animations in the editor, and saves them without the pause', () => {
+    svgCanvas.setSvgString(`<svg xmlns="${NS.SVG}" width="100" height="50"><g class="layer"><title>L</title>` +
+      '<rect id="r" width="5" height="5"><set attributeName="width" to="9" begin="r.click"/>' +
+      '<animate attributeName="opacity" to="0" dur="1s" systemLanguage="fr"/>' +
+      '<animateTransform attributeName="transform" type="rotate" to="90" dur="1s"/>' +
+      '<animateMotion path="M0 0L9 9" dur="1s"/></rect></g></svg>')
+    assert.deepEqual(pauses(), Array(4).fill('urn:svgedit:paused'))
+
+    const text = svgCanvas.getSvgString()
+    assert.ok(!text.includes('requiredExtensions'), text)
+    assert.ok(text.includes('<set attributeName="width" to="9" begin="r.click"/>'), text)
+    assert.ok(text.includes('<animate attributeName="opacity" to="0" dur="1s" systemLanguage="fr"/>'), text)
+    // The saved drawing, opened again, is paused again
+    svgCanvas.setSvgString(text)
+    assert.deepEqual(pauses(), Array(4).fill('urn:svgedit:paused'))
+    assert.deepEqual(reports, [])
+  })
+
+  it('turns off the animations of an imported or a pasted file, and of a copy', async () => {
+    sessionStorage.clear()
+    svgCanvas.setSvgString(`<svg xmlns="${NS.SVG}" width="640" height="480"><g class="layer"><title>L</title></g></svg>`)
+    svgCanvas.importSvgString(`<svg xmlns="${NS.SVG}" width="10" height="10"><rect width="5" height="5"><animate attributeName="opacity" to="0" dur="1s"/></rect></svg>`)
+    svgCanvas.pasteSvgString(`<svg xmlns="${NS.SVG}"><rect width="5" height="5"><set attributeName="fill" to="red"/></rect></svg>`, 'in_place')
+    assert.deepEqual(pauses(), Array(2).fill('urn:svgedit:paused'))
+
+    svgCanvas.selectOnly([document.querySelector('#svgcontent set').parentNode])
+    svgCanvas.copySelectedElements()
+    await svgCanvas.pasteElements('in_place')
+    assert.deepEqual(pauses(), Array(3).fill('urn:svgedit:paused'))
+    // Another application gets the animation as it is saved
+    assert.ok(svgCanvas.getClipboardSvg().includes('<set attributeName="fill" to="red"/>'), svgCanvas.getClipboardSvg())
+  })
 })

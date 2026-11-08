@@ -37,7 +37,7 @@ import * as draw from './draw.js'
 import { getClosest } from '../common/util.js'
 import { parseSvgText, getDeclaredSize, removeOutsideAnimations } from './svg-paste.js'
 import { scopeStyleSheet, keyframesNames } from './css-scope.js'
-import { ANIMATION_ELEMENTS } from './sanitize.js'
+import { ANIMATION_ELEMENTS, isPauseOfAnimation } from './sanitize.js'
 
 const {
   InsertElementCommand,
@@ -311,8 +311,9 @@ const svgToString = (elem, indent) => {
       for (let i = 0; i < attrs.length; i++) {
         const attr = attrs[i]
         let attrVal = toXml(attr.value)
-        // remove bogus attributes added by Gecko
-        if (mozAttrs.includes(attr.localName)) {
+        // remove bogus attributes added by Gecko, and the pause of the
+        // animations in the editor
+        if (mozAttrs.includes(attr.localName) || isPauseOfAnimation(elem, attr)) {
           continue
         }
         if (attrVal === 'null') {

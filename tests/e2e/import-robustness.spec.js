@@ -13,6 +13,12 @@ const fixture = (name) => fs.readFileSync(path.join(process.cwd(), 'tests/fixtur
 const BASE = `<svg width="640" height="480" xmlns="${NS}"><g class="layer"><title>Layer 1</title>` +
   '<rect id="exist" class="cls-1" x="10" y="10" width="100" height="50" fill="blue"/></g></svg>'
 
+/** Lets the browser draw a few frames: time for an animation to apply. */
+const frames = (page) => page.evaluate(() => new Promise((resolve) => {
+  let count = 5
+  const next = () => (--count ? requestAnimationFrame(next) : setTimeout(resolve, 50))
+  requestAnimationFrame(next)
+}))
 const openDrawing = (page, markup) => page.evaluate((markup) => window.svgEditor.svgCanvas.setSvgString(markup), markup)
 
 /**
@@ -345,22 +351,49 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(root).toEqual(['synoptique-chaufferie', 'img', 'titre-synoptique desc-synoptique'])
   })
 
-  test('SVG animations are kept', async ({ page }) => {
-    const useId = await importFile(page, 'anim.svg', `<svg xmlns="${NS}" width="10" height="10"><rect width="5" height="5"><animate attributeName="opacity" from="1" to="0" dur="1s" repeatCount="indefinite"/></rect></svg>`)
-    const count = await page.evaluate((useId) => {
+  test('SVG animations are kept, and do not play in the editor', async ({ page }) => {
+    const useId = await importFile(page, 'anim.svg', `<svg xmlns="${NS}" width="10" height="10"><rect width="5" height="5">` +
+      '<animate attributeName="opacity" from="1" to="0" dur="1s" repeatCount="indefinite"/><set attributeName="width" to="10"/></rect></svg>')
+    await frames(page)
+    const imported = await page.evaluate((useId) => {
       const canvas = window.svgEditor.svgCanvas
-      const symbol = document.getElementById(canvas.getHref(document.getElementById(useId)).slice(1))
-      return symbol.querySelectorAll('animate').length
+      const use = document.getElementById(useId)
+      const symbol = document.getElementById(canvas.getHref(use).slice(1))
+      return [symbol.querySelectorAll('animate, set').length, use.getBBox().width]
     }, useId)
-    expect(count).toBe(1)
+    // The <set> would make the rect 10 wide
+    expect(imported).toEqual([2, 5])
   })
 
-  test('the animations of an opened drawing run in the editor, and are saved', async ({ page }) => {
+  test('the animations of an opened drawing do not play in the editor, and play in the saved file', async ({ page }) => {
     await openDrawing(page, `<svg xmlns="${NS}" width="640" height="480"><g class="layer"><title>L</title>` +
-      '<rect id="grows" width="10" height="10" fill="green"><set attributeName="width" to="50" fill="freeze"/></rect></g></svg>')
-    await page.waitForFunction(() => document.getElementById('grows').width.animVal.value === 50)
+      '<rect id="grows" width="10" height="10" fill="green"><set attributeName="width" to="50" fill="freeze"/></rect>' +
+      '<rect id="clicked" x="100" y="100" width="40" height="40" fill="blue"><set attributeName="width" to="80" begin="clicked.click"/></rect></g></svg>')
+    await page.evaluate(() => {
+      window.svgEditor.svgCanvas.setZoom(1)
+      window.svgEditor.updateCanvas()
+    })
+    // A click to select the rect does not start its animation
+    const box = await page.locator('#clicked').boundingBox()
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    await frames(page)
+    const widths = await page.evaluate(() => ['grows', 'clicked'].map((id) => {
+      const rect = document.getElementById(id)
+      return [rect.width.animVal.value, rect.getBBox().width]
+    }))
+    expect(widths).toEqual([[10, 10], [40, 40]])
+    expect(await page.evaluate(() => window.svgEditor.svgCanvas.getSelectedElements()[0]?.id)).toBe('clicked')
+
     const saved = await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())
     expect(saved).toContain('<set attributeName="width" to="50" fill="freeze"/>')
+    expect(saved).not.toContain('requiredExtensions')
+    await page.evaluate((saved) => {
+      const played = document.createElement('div')
+      played.id = 'played'
+      played.innerHTML = saved
+      document.body.append(played)
+    }, saved)
+    await page.waitForFunction(() => document.querySelector('#played [id="grows"]').width.animVal.value === 50)
   })
 
   test('an import says in one message all it removed, and keeps the rest', async ({ page }) => {

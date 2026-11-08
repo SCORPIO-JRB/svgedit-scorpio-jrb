@@ -63,6 +63,35 @@ const isInertAttribute = ({ namespaceURI, localName }) => {
 
 /** SVG animation elements (SMIL). */
 export const ANIMATION_ELEMENTS = new Set(['animate', 'animateMotion', 'animateTransform', 'set'])
+
+// The animations do not play in the editor: the drawing shows the values it
+// saves, and a click to select an object does not start one. A conditional
+// processing attribute that only the editor writes (a file cannot carry it,
+// it is not in the whitelist) turns them off; the save leaves it out.
+const PAUSED = 'urn:svgedit:paused'
+
+/**
+ * Turns off the animations of a document about to enter the editor.
+ * @function module:sanitize.pauseAnimations
+ * @param {Element} root
+ * @returns {void}
+ */
+export const pauseAnimations = (root) => {
+  root.querySelectorAll([...ANIMATION_ELEMENTS].join(',')).forEach((animation) => {
+    if (animation.namespaceURI === NS.SVG) animation.setAttribute('requiredExtensions', PAUSED)
+  })
+}
+
+/**
+ * @function module:sanitize.isPauseOfAnimation
+ * @param {Element} elem
+ * @param {Attr} attr - An attribute of `elem`
+ * @returns {boolean} Whether `attr` is the pause the editor put on an animation, not saved
+ */
+export const isPauseOfAnimation = (elem, attr) =>
+  attr.localName === 'requiredExtensions' && !attr.namespaceURI && attr.value === PAUSED &&
+  elem.namespaceURI === NS.SVG && ANIMATION_ELEMENTS.has(elem.localName)
+
 const ANIMATION_TIMING = ['begin', 'dur', 'end', 'min', 'max', 'restart', 'repeatCount', 'repeatDur', 'fill', 'href', 'xlink:href', 'requiredFeatures', 'systemLanguage']
 const ANIMATION_VALUES = ['from', 'to', 'by', 'values', 'calcMode', 'keyTimes', 'keySplines', 'additive', 'accumulate']
 const PRESENTATION = ['clip-path', 'clip-rule', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'mask', 'opacity', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width']

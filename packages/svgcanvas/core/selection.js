@@ -22,6 +22,7 @@ import {
   getRotationTransformSummary
 } from './math.js'
 import * as hstry from './history.js'
+import { pauseAnimations } from './sanitize.js'
 import { getClosest } from '../common/util.js'
 
 const { BatchCommand, ChangeElementCommand } = hstry
@@ -404,13 +405,15 @@ const groupSvgElem = (elem) => {
 }
 
 /**
- * Runs the SVG Document through the sanitizer and then updates its paths.
+ * Runs the SVG Document through the sanitizer, turns off its animations in
+ * the editor, and then updates its paths.
  * @function module:svgcanvas.SvgCanvas#prepareSvg
  * @param {XMLDocument} newDoc - The SVG DOM document
  * @returns {string[]} What the sanitizer removed
  */
 const prepareSvg = (newDoc) => {
   const removed = svgCanvas.sanitizeSvg(newDoc.documentElement)
+  pauseAnimations(newDoc.documentElement)
 
   // convert paths into absolute commands
   const paths = [...newDoc.getElementsByTagNameNS(NS.SVG, 'path')]
