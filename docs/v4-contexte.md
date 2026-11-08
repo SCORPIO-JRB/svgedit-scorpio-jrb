@@ -84,7 +84,15 @@ Relever pour chaque tâche le temps, les erreurs et les hésitations de plus de 
 
 ## 7. Vérifications
 
-Sous Chromium : lint, tests unitaires, E2E en disposition canevas et en disposition classique, sortie comparée à `master` (allers-retours des SVG du dépôt et scénarios), banc. Firefox tourne en CI.
+Sous Chromium :
+- lint vert, 882 tests unitaires réussis ;
+- E2E en disposition canevas : 427 réussis, dont les 33 de V4 (`tests/e2e/contexte-v4.spec.js`) ;
+- E2E en disposition classique, sans les tests propres à V3 et V4 : 364 réussis ;
+- sortie comparée à `master`, les deux éditeurs construits par `build-reference.mjs` : 21 allers-retours sur 21 et 73 scénarios sur 73 identiques.
+
+Banc à 2 000 objets : le survol et les deux rectangles de sélection tiennent leurs budgets. « Tout sélectionner » les dépasse d'un passage à l'autre, comme depuis V2 ; mesurée en alternance dans une même page, la barre y ajoute environ 11 ms (65 ms contre 54 ms en médiane), le temps de lire la mise en page pour la placer. Elle la lit à l'image suivante, une seule fois.
+
+Firefox tourne en CI. Sous Firefox, `getBoundingClientRect()` d'un `<use>` compte la zone de son symbole transformée une seconde fois par sa viewBox, arrondit les boîtes au pixel et élargit celle d'un chemin à arcs : les tests concernés mesurent par `getBBox()` et `getScreenCTM()`.
 
 ## 8. Hors V4
 
