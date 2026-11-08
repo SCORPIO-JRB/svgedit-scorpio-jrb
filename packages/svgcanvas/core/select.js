@@ -646,7 +646,9 @@ export class SelectorManager {
       if (sb.y + sb.height > maxY) { maxY = sb.y + sb.height }
     }
     if (minX === Infinity) { return null }
-    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    // During a drag, the frames have moved by the translation of their group.
+    const { dx = 0, dy = 0 } = this.dragOffset ?? {}
+    return { x: minX + dx, y: minY + dy, width: maxX - minX, height: maxY - minY }
   }
 
   /**
@@ -863,6 +865,7 @@ export class SelectorManager {
   * @returns {void}
   */
   setDragOffset (dx, dy) {
+    this.dragOffset = { dx, dy }
     this.selectionGroup?.setAttribute('transform', `translate(${dx},${dy})`)
   }
 
@@ -871,6 +874,7 @@ export class SelectorManager {
   * @returns {void}
   */
   clearDragOffset () {
+    this.dragOffset = null
     this.selectionGroup?.removeAttribute('transform')
   }
 
