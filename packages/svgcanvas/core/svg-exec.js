@@ -826,7 +826,10 @@ const importSvgString = (xmlString, preserveDimension, doNotUseExisting) => {
     //   ts = 'translate(' + (-vb[0]) + ',' + (-vb[1]) + ') ' + ts;
     // }
     svgCanvas.addCommandToHistory(batchCmd)
-    svgCanvas.call('changed', [svgCanvas.getSvgContent()])
+    // Only the new <use> changed: signalling the whole <svg> made the editor
+    // rebuild its layer list, which cleared the selection made just above, so
+    // the editor could not center the import on the page.
+    svgCanvas.call('changed', [useEl])
   } catch (e) {
     error('Error importing SVG string', e, 'svg-exec')
     return null

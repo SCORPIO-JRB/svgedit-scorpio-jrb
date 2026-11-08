@@ -93,8 +93,10 @@ export default {
             }))
             return
           }
-          this.svgCanvas.alignSelectedElements('m', 'page')
-          this.svgCanvas.alignSelectedElements('c', 'page')
+          // Centered on the page within the import's own undo step: the new
+          // element is put back as it is, so one undo removes the import.
+          this.svgCanvas.alignSelectedElements('m', 'page', { undoable: false })
+          this.svgCanvas.alignSelectedElements('c', 'page', { undoable: false })
           // highlight imported element, otherwise we get strange empty selectbox
           this.svgCanvas.selectOnly([newElement])
         }

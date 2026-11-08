@@ -508,9 +508,11 @@ const duplicateSelectedElements = (offset) => {
  * @param {number} [options.spacing] - Gap imposed by a distribution: the
  *   first object stays in place and each next one follows the previous one
  *   at this distance, whatever the reference (M9)
+ * @param {boolean} [options.undoable=true] - false leaves the move out of the
+ *   history, for an element whose own insertion is the undo step
  * @returns {void}
  */
-const alignSelectedElements = (type, relativeTo, { spacing } = {}) => {
+const alignSelectedElements = (type, relativeTo, { spacing, undoable = true } = {}) => {
   const selectedElements = svgCanvas.getSelectedElements()
   const bboxes = [] // angles = [];
   const len = selectedElements.length
@@ -601,7 +603,7 @@ const alignSelectedElements = (type, relativeTo, { spacing } = {}) => {
     [dx, dy] = _getNormalDistances(type, selectedElements, bboxes, minx, maxx, miny, maxy)
   }
 
-  moveSelectedElements(dx, dy)
+  moveSelectedElements(dx, dy, undoable)
 }
 
 /**

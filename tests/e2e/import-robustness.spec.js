@@ -104,6 +104,69 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(result.defsTransform).toBeNull()
   })
 
+  test('an imported file is centered on the page, and one undo removes it', async ({ page }) => {
+    const before = await snapshot(page, ['exist'])
+    const useId = await importFile(page, 'repr-temp.svg', fixture('repr-temp.svg'))
+    const center = () => page.evaluate((useId) => {
+      const box = window.svgEditor.svgCanvas.getStrokedBBox([document.getElementById(useId)])
+      return [box.x + box.width / 2, box.y + box.height / 2].map(Math.round)
+    }, useId)
+    const imported = () => page.evaluate(() => document.querySelectorAll('#svgcontent use, #svgcontent symbol').length)
+    expect(await center()).toEqual([320, 240])
+
+    await page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.undo())
+    expect(await imported()).toBe(0)
+    expect(await snapshot(page, ['exist'])).toEqual(before)
+
+    await page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.redo())
+    expect(await imported()).toBe(2)
+    expect(await center()).toEqual([320, 240])
+  })
+
+  test('a SCorp-io synoptic opens and saves without any visible change', async ({ page }) => {
+    const source = fixture('synoptique-chaufferie.svg')
+    await openDrawing(page, source)
+    const result = await page.evaluate(async (source) => {
+      const saved = window.svgEditor.svgCanvas.getSvgString()
+      const pixels = (text) => new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = 960
+          canvas.height = 540
+          const context = canvas.getContext('2d')
+          context.drawImage(img, 0, 0, 960, 540)
+          resolve(context.getImageData(0, 0, 960, 540).data)
+        }
+        img.onerror = reject
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(text)
+      })
+      // The saved root has width and height instead of the viewBox (see lot 5
+      // below), which alone moves a few pixels of antialiasing: the drawing
+      // is compared under the same root.
+      const sameRoot = (text) => {
+        const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
+        doc.documentElement.removeAttribute('width')
+        doc.documentElement.removeAttribute('height')
+        doc.documentElement.setAttribute('viewBox', '0 0 1920 1080')
+        return new XMLSerializer().serializeToString(doc)
+      }
+      const [a, b] = await Promise.all([pixels(source), pixels(sameRoot(saved))])
+      let differ = 0
+      for (let i = 0; i < a.length; i += 4) {
+        if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 30) differ++
+      }
+      const doc = new DOMParser().parseFromString(saved, 'image/svg+xml')
+      return {
+        differ,
+        // the texts the platform writes the live values into, by id
+        measures: doc.querySelectorAll('[id^="mesure-"], [id^="synthese-"], [id^="etat-"]').length,
+        rootClass: doc.documentElement.getAttribute('class')
+      }
+    }, source)
+    expect(result).toEqual({ differ: 0, measures: 30, rootClass: 'synoptique' })
+  })
+
   // Defects fixed by the next lots of the plan
 
   test('a stylesheet in the imported file does not repaint the drawing (lot 4)', async ({ page }) => {
@@ -150,6 +213,51 @@ test.describe('SVG import: integrity of the drawing', () => {
       return Boolean(symbol.querySelector('#pompe_1'))
     }, useId)
     expect(kept).toBe(true)
+  })
+
+  test('an imported synoptic keeps the identifiers of its live values, and its hidden measures (lot 3)', async ({ page }) => {
+    test.fail(true, 'Every identifier is renamed: the platform loses its texts, and the rule hiding #mesures-detail no longer applies')
+    const useId = await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
+    const result = await page.evaluate((useId) => {
+      const canvas = window.svgEditor.svgCanvas
+      const symbol = document.getElementById(canvas.getHref(document.getElementById(useId)).slice(1))
+      const detail = symbol.querySelector('#mesures-detail')
+      return {
+        measures: symbol.querySelectorAll('[id^="mesure-"], [id^="synthese-"], [id^="etat-"]').length,
+        detail: detail && getComputedStyle(detail).display
+      }
+    }, useId)
+    expect(result).toEqual({ measures: 30, detail: 'none' })
+  })
+
+  test('a file that declares only a viewBox is imported at that size (lot 4)', async ({ page }) => {
+    test.fail(true, 'The import is scaled for the canvas, then shrunk again: 53 px wide instead of 1920')
+    const useId = await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
+    const width = await page.evaluate((useId) => {
+      const canvas = window.svgEditor.svgCanvas
+      return Math.round(document.getElementById(useId).getBoundingClientRect().width / canvas.getZoom())
+    }, useId)
+    expect(width).toBe(1920)
+  })
+
+  test('the stylesheet of an imported synoptic does not repaint the drawing (lot 4)', async ({ page }) => {
+    test.fail(true, 'The .fond and .titre rules of the file repaint the objects of the drawing that have these classes')
+    await openDrawing(page, `<svg width="640" height="480" xmlns="${NS}"><g class="layer"><title>Layer 1</title>` +
+      '<rect id="exist" class="fond" x="10" y="10" width="100" height="50" fill="blue"/>' +
+      '<text id="exist_text" class="titre" x="10" y="100" font-size="20" fill="black">Existant</text></g></svg>')
+    const before = await snapshot(page, ['exist', 'exist_text'])
+    await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
+    expect(await snapshot(page, ['exist', 'exist_text'])).toEqual(before)
+  })
+
+  test('a synoptic keeps the attributes of its root: viewBox, id, role (lot 5)', async ({ page }) => {
+    test.fail(true, 'The root is saved with width and height only, without its id and its accessibility attributes')
+    await openDrawing(page, fixture('synoptique-chaufferie.svg'))
+    const root = await page.evaluate(() => {
+      const doc = new DOMParser().parseFromString(window.svgEditor.svgCanvas.getSvgString(), 'image/svg+xml')
+      return ['viewBox', 'id', 'role', 'aria-labelledby'].map((name) => doc.documentElement.getAttribute(name))
+    })
+    expect(root).toEqual(['0 0 1920 1080', 'synoptique-chaufferie', 'img', 'titre-synoptique desc-synoptique'])
   })
 
   test('SVG animations are kept (lot 5)', async ({ page }) => {
