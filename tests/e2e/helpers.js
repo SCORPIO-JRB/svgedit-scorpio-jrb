@@ -185,10 +185,11 @@ export async function clickControl (page, id) {
     await control.click()
     return
   }
-  const entry = page.locator(`#se-zoom-menu [data-command="${id}"], #se-zoom-menu [data-mirror="${id}"]`)
-  if (await entry.count()) {
+  // The view buttons and the history: entries of the zoom menu, which makes
+  // them when it opens.
+  if (await control.evaluate((el) => Boolean(el.closest('#editor_panel, #history_panel')))) {
     await page.locator('#se-zoom-button').click()
-    await entry.first().click()
+    await page.locator(`#se-zoom-menu [data-command="${id}"], #se-zoom-menu [data-mirror="${id}"]`).first().click()
     return
   }
   await control.click()

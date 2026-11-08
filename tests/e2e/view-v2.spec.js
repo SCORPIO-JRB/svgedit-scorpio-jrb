@@ -216,6 +216,8 @@ test('Space+drag and the middle button move the view by the dragged distance', a
 
 test('the rulers measure the view and follow it', async ({ page }) => {
   await load(page, DRAWING)
+  // Hidden at first in the canvas layout (V3), as in the mockups.
+  await page.evaluate(() => window.svgEditor.setRulersShown(true))
   const read = () => page.evaluate(() => {
     const area = document.getElementById('workarea')
     const canvas = document.querySelector('#ruler_x canvas')

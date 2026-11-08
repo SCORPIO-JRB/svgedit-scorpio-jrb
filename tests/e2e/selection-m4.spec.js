@@ -68,9 +68,11 @@ const angleOf = (page, id) => page.evaluate((id) =>
 
 const undoSize = (page) => page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.getUndoStackSize())
 
+// Shown by TopPanel: in the canvas layout the verbs are in the "…" menu of the
+// inspector, which stays closed until it is opened.
 const shown = (page, id) => page.locator(`#${id}`).evaluate((el) => {
   let node = el
-  while (node && node.id !== 'tools_top') {
+  while (node && node.id !== 'tools_top' && node.id !== 'se-actions-menu') {
     if (getComputedStyle(node).display === 'none') { return false }
     node = node.parentElement
   }
