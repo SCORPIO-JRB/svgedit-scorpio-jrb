@@ -61,7 +61,11 @@ test.describe('Command registry (V1)', () => {
     expect(bindings.length).toBeGreaterThan(60)
 
     // Each command in turn is the only one enabled, and only counts its runs.
+    // Tab must not take the focus out of the page (Firefox gives it to the
+    // browser), or the next shortcuts would not reach the editor; this
+    // listener runs after the editor's.
     await page.evaluate(() => {
+      document.addEventListener('keydown', (e) => { if (e.key === 'Tab') e.preventDefault() })
       window.__runs = {}
       window.__only = null
       for (const command of window.svgEditor.commands.list()) {
