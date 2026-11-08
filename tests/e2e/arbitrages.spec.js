@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, revealControl } from './helpers.js'
 
 // Decisions of 8 November: clip paths follow their object, X and Y of a path
 // alone without the stroke, one alignment menu, objects that look the same
@@ -227,6 +227,8 @@ test.describe('One alignment menu (decision 4)', () => {
     expect(rows).toBe(1)
     const popup = page.locator('#tool_align_popup')
     await expect(popup).toBeHidden()
+    // Canvas layout: the menu is among the verbs of the "…" menu.
+    await revealControl(page, 'tool_align_menu')
     await page.locator('#tool_align_menu').click()
     await expect(popup).toBeVisible()
     await expect(page.locator('#tool_align_menu')).toHaveAttribute('aria-expanded', 'true')
@@ -245,6 +247,7 @@ test.describe('One alignment menu (decision 4)', () => {
   })
 
   test('the keyboard opens the menu, presses its buttons and closes it', async ({ page }) => {
+    await revealControl(page, 'tool_align_menu')
     await page.locator('#tool_align_menu').focus()
     await page.keyboard.press('Enter')
     await expect(page.locator('#tool_align_popup')).toBeVisible()
@@ -260,6 +263,7 @@ test.describe('One alignment menu (decision 4)', () => {
   })
 
   test('the reference of the menu is used', async ({ page }) => {
+    await revealControl(page, 'tool_align_menu')
     await page.locator('#tool_align_menu').click()
     await page.locator('#tool_align_relative').evaluate((el) => {
       el.value = 'page'

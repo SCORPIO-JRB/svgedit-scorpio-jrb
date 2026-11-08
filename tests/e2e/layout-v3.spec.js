@@ -147,14 +147,19 @@ test.describe('Shell (V3)', () => {
     expect(await page.evaluate(() => document.getElementById('tool_image').parentElement.dataset.place)).toBe('insert')
   })
 
-  test('the document name, the save state and the history are in the bar', async ({ page }) => {
+  test('the document name and the save state are in the bar; undo and redo in the zoom menu', async ({ page }) => {
     await expect(page.locator('#main_button')).toHaveAttribute('label', /untitled|Untitled/)
     await expect(page.locator('#se-save-state')).toHaveText('')
     await load(page)
     await select(page, ['r1'])
     await page.keyboard.press('ArrowRight')
     await expect(page.locator('#se-save-state')).toHaveText('Unsaved changes')
-    await expect(page.locator('#se-topbar #tool_undo')).toBeVisible()
+    // As in the mockups: the buttons stay in the bar, out of sight, for
+    // their shortcuts.
+    await expect(page.locator('#se-topbar #tool_undo')).toBeHidden()
+    await page.locator('#se-zoom-button').click()
+    await expect(page.locator('#se-zoom-menu [data-command="tool_undo"]')).toHaveAttribute('aria-disabled', 'false')
+    await page.keyboard.press('Escape')
     await page.evaluate(() => { window.svgEditor.showSaveWarning = false })
     await expect(page.locator('#se-save-state')).toHaveText('Saved')
   })
@@ -192,11 +197,31 @@ test.describe('Zoom menu (V3)', () => {
     await page.keyboard.press('Shift+0')
     expect(await zoom()).toBe(1)
     await expect(page.locator('#se-zoom-button')).toContainText('100')
+    // Hidden at first, as in the mockups.
     const rulers = () => page.evaluate(() => getComputedStyle(document.getElementById('ruler_x')).display)
-    await page.keyboard.press('Shift+R')
     expect(await rulers()).toBe('none')
     await page.keyboard.press('Shift+R')
     expect(await rulers()).not.toBe('none')
+    await page.keyboard.press('Shift+R')
+    expect(await rulers()).toBe('none')
+  })
+
+  test('the view group holds the panel and the zoom; the view buttons are entries of the menu, those of the extensions too', async ({ page }) => {
+    const shown = await page.evaluate(() => [...document.querySelectorAll('#se-viewgroup button, #se-viewgroup se-button')]
+      .filter((el) => el.getBoundingClientRect().width > 0).map((el) => el.id))
+    expect(shown).toEqual(['se-panel-toggle', 'se-zoom-button'])
+    await page.locator('#se-zoom-button').click()
+    // The layer view of ext-layer_view: its button, pressed by its entry.
+    const entry = page.locator('#se-zoom-menu [data-mirror="tool_layerView"]')
+    await expect(entry).toBeVisible()
+    await expect(entry).toHaveAttribute('aria-checked', 'false')
+    await expect(entry.locator('kbd')).toHaveText('Ctrl+Shift+L')
+    await entry.click()
+    expect(await page.evaluate(() => document.getElementById('tool_layerView').pressed)).toBe(true)
+    await page.locator('#se-zoom-button').click()
+    await expect(entry).toHaveAttribute('aria-checked', 'true')
+    // The source gives way to the Code tab: no entry, its shortcut stays.
+    await expect(page.locator('#se-zoom-menu [data-mirror="tool_source"]')).toHaveCount(0)
   })
 
   test('the steps zoom, an entry that does not apply is greyed with its shortcut, undo and redo follow the history', async ({ page }) => {
@@ -298,17 +323,56 @@ test.describe('Inspector (V3)', () => {
     expect(await sections(page)).toEqual(['appearance', 'fill', 'stroke', 'document'])
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('Document')
     await select(page, ['r1'])
-    expect(await sections(page)).toEqual(['actions', 'geometry', 'appearance', 'fill', 'stroke', 'effects', 'identity'])
+    expect(await sections(page)).toEqual(['geometry', 'appearance', 'fill', 'stroke', 'effects', 'identity'])
+    await expect(page.locator('#se-actions-button')).toBeVisible()
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('Rectangle')
     await expect(page.locator('#se-tabpanel-properties .se-inspector-id')).toHaveText('#r1')
     await select(page, ['t1'])
-    expect(await sections(page)).toEqual(['actions', 'geometry', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity'])
+    expect(await sections(page)).toEqual(['geometry', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity'])
     await select(page, ['r1', 't1'])
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('2 objects')
     // The polystar panel shows with its tool.
     await page.evaluate(() => window.svgEditor.svgCanvas.clearSelection())
     await page.locator('#tool_star').dispatchEvent('click')
     expect(await sections(page)).toContain('geometry')
+  })
+
+  test('the verbs are in the "…" menu, with their name and shortcut; a verb closes it', async ({ page }) => {
+    await load(page)
+    await expect(page.locator('#se-actions-button')).toBeHidden()
+    await select(page, ['r1'])
+    await page.locator('#se-actions-button').click()
+    await expect(page.locator('#se-actions-button')).toHaveAttribute('aria-expanded', 'true')
+    const clone = page.locator('#tool_clone')
+    await expect(clone).toBeVisible()
+    expect(await clone.evaluate((el) => [el.hasAttribute('labelled'), el.shadowRoot.querySelector('.kbd').textContent])).toEqual([true, 'D'])
+    await clone.click()
+    await expect(page.locator('#se-actions-menu')).toBeHidden()
+    expect(await page.evaluate(() => document.querySelectorAll('#svgcontent rect').length)).toBe(3)
+  })
+
+  test('the fields are grey boxes with their label inside, two per row, without arrows', async ({ page }) => {
+    await load(page)
+    await select(page, ['r1'])
+    const box = (id) => page.locator(`#${id}`).evaluate((el) => {
+      const r = el.getBoundingClientRect()
+      const label = el.shadowRoot.querySelector('[part="label"]').getBoundingClientRect()
+      const up = el.shadowRoot.querySelector('elix-number-spin-box').shadowRoot.querySelector('#upButton')
+      return { top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height), inside: label.left >= r.left && label.right <= r.right, arrows: getComputedStyle(up).display }
+    })
+    const x = await box('selected_x')
+    const y = await box('selected_y')
+    expect(x.top).toBe(y.top)
+    expect(Math.abs(x.width - y.width)).toBeLessThanOrEqual(1)
+    expect(x.height).toBe(28)
+    expect(x.inside).toBe(true)
+    expect(x.arrows).toBe('none')
+    // Fill: the colour in hexadecimal and its opacity.
+    const paint = await page.locator('#fill_color').evaluate((el) => [
+      el.shadowRoot.querySelector('#value').textContent, el.shadowRoot.querySelector('#alpha').textContent.replace(/\s/g, ' ')
+    ])
+    expect(paint[0]).toMatch(/^(3A6|33AA66)$/)
+    expect(paint[1]).toBe('100 %')
   })
 
   test('typing 90 in the angle field makes one undo step', async ({ page }) => {
@@ -433,6 +497,36 @@ test.describe('Layers tab (V3)', () => {
   })
 })
 
+test.describe('Layer menu (V3)', () => {
+  test('a loaded document gives its layer to the menu, which holds the layer commands', async ({ page }) => {
+    // Loaded as a host does (loadFromString, ?url=): the menu follows.
+    await page.evaluate((svg) => window.svgEditor.loadSvgString(svg), DRAWING)
+    await expect(page.locator('#se-layer-button')).toContainText('Equipements')
+    await page.locator('#se-layer-button').click()
+    const action = (name) => page.locator(`#se-layer-menu [data-action="${name}"]`)
+    for (const name of ['new', 'dupe', 'rename', 'delete', 'up', 'down', 'show']) await expect(action(name)).toBeVisible()
+    // Equipements is on top: it cannot go up.
+    await expect(action('up')).toHaveAttribute('aria-disabled', 'true')
+    await action('down').click()
+    expect(await page.evaluate(() => window.svgEditor.svgCanvas.getCurrentDrawing().getLayerName(0))).toBe('Equipements')
+    await page.locator('#se-layer-button').click()
+    await action('dupe').click()
+    const field = page.locator('se-popover.se-ask input')
+    await expect(field).toBeFocused()
+    await field.press('Enter')
+    expect(await page.evaluate(() => window.svgEditor.svgCanvas.getCurrentDrawing().getNumLayers())).toBe(3)
+  })
+
+  test('the Layers tab shows the search and the tree, with its help, as in the mockups', async ({ page }) => {
+    await load(page)
+    await page.locator('#se-tab-layers').click()
+    await expect(page.locator('#layerbuttons')).toBeHidden()
+    await expect(page.locator('#selLayerNames')).toBeHidden()
+    await expect(page.locator('#se-tree-search')).toBeVisible()
+    await expect(page.locator('.se-tree-help')).toBeVisible()
+  })
+})
+
 test.describe('Code tab (V3)', () => {
   test.beforeEach(async ({ page }) => {
     await load(page)
@@ -440,12 +534,22 @@ test.describe('Code tab (V3)', () => {
   })
 
   const text = (page) => page.locator('#se-code-text')
+  // The tab puts one attribute per line: only the spaces differ from what the
+  // export writes.
+  const spaces = (value) => value.replace(/\s+/g, ' ')
+  const shows = async (page, source) => {
+    await expect.poll(async () => spaces(await text(page).inputValue())).toBe(spaces(source))
+  }
 
   test('the code of the selection is the one the export writes; of the document without selection', async ({ page }) => {
-    await expect(text(page)).toHaveValue(await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString()))
+    await shows(page, await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString()))
     await select(page, ['r1'])
-    await expect(text(page)).toHaveValue(await page.evaluate(() => window.svgEditor.svgCanvas.svgToString(document.getElementById('r1'), 0)))
+    await shows(page, await page.evaluate(() => window.svgEditor.svgCanvas.svgToString(document.getElementById('r1'), 0)))
     await expect(page.locator('#se-tabpanel-code .se-inspector-id')).toHaveText('#r1')
+    // One attribute per line, x and y on one, and in colour.
+    expect(await text(page).inputValue()).toContain('\n  x="100" y="100"\n  width="80"')
+    await expect(page.locator('.se-code-highlight .se-code-attr').first()).toHaveText('id')
+    await expect(page.locator('.se-code-highlight .se-code-value').first()).toHaveText('"r1"')
   })
 
   test('an edit applies with Ctrl+Enter through the import filter, in one undo step', async ({ page }) => {
@@ -472,7 +576,7 @@ test.describe('Code tab (V3)', () => {
     expect(await undoSize(page)).toBe(0)
     // Escape gives back the code of the drawing.
     await text(page).press('Escape')
-    await expect(text(page)).toHaveValue(await page.evaluate(() => window.svgEditor.svgCanvas.svgToString(document.getElementById('r1'), 0)))
+    await shows(page, await page.evaluate(() => window.svgEditor.svgCanvas.svgToString(document.getElementById('r1'), 0)))
   })
 })
 
@@ -480,14 +584,17 @@ test.describe('No window of the browser (V3)', () => {
   test('a new layer, a renamed layer and a link are asked in place', async ({ page }) => {
     await load(page)
     await page.locator('#se-tab-layers').click()
-    await page.locator('#layer_new').click()
+    // The layer commands are in the layer menu of the toolbar.
+    await page.locator('#se-layer-button').click()
+    await page.locator('#se-layer-menu [data-action="new"]').click()
     const field = page.locator('se-popover.se-ask input')
     await expect(field).toBeFocused()
     await field.fill('Mesures')
     await field.press('Enter')
     expect(await page.evaluate(() => window.svgEditor.svgCanvas.getCurrentDrawing().hasLayer('Mesures'))).toBe(true)
     // Renamed in its row of the tree.
-    await page.locator('#layer_rename').click()
+    await page.locator('#se-layer-button').click()
+    await page.locator('#se-layer-menu [data-action="rename"]').click()
     await expect(page.locator('#se-tree .se-tree-rename')).toBeFocused()
     await page.keyboard.press('Escape')
     // A link (its button shows for a linked object only, as before V3).

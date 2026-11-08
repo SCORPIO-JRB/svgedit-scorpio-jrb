@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage, canonical } from './helpers.js'
+import { visitAndApproveStorage, canonical, clickControl } from './helpers.js'
 
 // M4: panel of a multi-selection. X, Y, W and H of the whole selection,
 // "Mixed" values, expressions typed in the fields, commands of a single
@@ -319,18 +319,18 @@ test.describe('Commands of a multi-selection, W and H of an element alone (M4)',
   test('order buttons bring the selection to the front or the back', async ({ page }) => {
     await select(page, ['r1', 'e1'])
     expect(await shown(page, 'tool_move_top_multi')).toBe(true)
-    await page.locator('#tool_move_top_multi').click()
+    await clickControl(page, 'tool_move_top_multi')
     const order = () => page.evaluate(() => [...document.querySelector('#svgcontent g.layer').children]
       .filter((el) => el.id).map((el) => el.id))
     expect((await order()).slice(-2)).toEqual(['r1', 'e1'])
-    await page.locator('#tool_move_bottom_multi').click()
+    await clickControl(page, 'tool_move_bottom_multi')
     expect((await order()).slice(0, 2)).toEqual(['r1', 'e1'])
   })
 
   test('the shapes are converted to paths in one step, each with its own style', async ({ page }) => {
     await select(page, ['r1', 'e1', 't1'])
     expect(await shown(page, 'tool_topath_multi')).toBe(true)
-    await page.locator('#tool_topath_multi').click()
+    await clickControl(page, 'tool_topath_multi')
     await settle(page)
     const tags = await page.evaluate(() => ['r1', 'e1', 't1'].map((id) => document.getElementById(id).tagName))
     expect(tags).toEqual(['path', 'path', 'text'])

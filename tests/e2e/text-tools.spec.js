@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { setSvgSource, visitAndApproveStorage } from './helpers.js'
+import { setSvgSource, visitAndApproveStorage, clickControl } from './helpers.js'
 
 test.describe('Text tools', () => {
   test.beforeEach(async ({ page }) => {
@@ -18,7 +18,7 @@ test.describe('Text tools', () => {
     await expect(firstText).toBeVisible()
 
     await firstText.click()
-    await page.locator('#tool_clone').click()
+    await clickControl(page, 'tool_clone')
     await expect(page.locator('#svg_2')).toBeVisible()
 
     await firstText.click()

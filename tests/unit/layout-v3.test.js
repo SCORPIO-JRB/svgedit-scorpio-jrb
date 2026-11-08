@@ -3,7 +3,7 @@ import { placeOf, compareTools, insertByRank, rankOf } from '../../src/editor/pa
 import { safeHref, breadcrumbOf, escapeHtml } from '../../src/editor/panels/TopBar.js'
 import { sectionOfTopGroup, isShown } from '../../src/editor/panels/Inspector.js'
 import { flattenTree, nameOf } from '../../src/editor/panels/LayerTree.js'
-import { parseSvgSource } from '../../src/editor/panels/CodePanel.js'
+import { parseSvgSource, formatSvgSource, highlightSvg } from '../../src/editor/panels/CodePanel.js'
 import { formatZoom } from '../../src/editor/panels/ViewGroup.js'
 import { eventShortcut, readsOwnKeys } from '../../src/editor/shortcuts.js'
 
@@ -180,6 +180,42 @@ describe('code tab (V3)', () => {
     if (bad.error.line !== null) expect(bad.error.line).toBe(3)
     expect(parseSvgSource('<html xmlns="http://www.w3.org/1999/xhtml"/>').error).not.toBe(null)
     expect(parseSvgSource(`<svg xmlns="${SVG_NS}"><rect/></svg>`).nodes[0].localName).toBe('svg')
+  })
+})
+
+describe('code tab: one attribute per line, in colour (V3)', () => {
+  const source = `<g id="a">
+ <rect id="r" class="pompe" x="360" y="160" width="44" stroke-width="1.5"/>
+ <text x="1" y="2">a > b &amp; <tspan font-weight="bold" x="3" y="4">c</tspan></text>
+ <!-- <x a="1" b="2" c="3"> -->
+ <path d="M0 0" data-x='a>b' fill="none"/>
+</g>`
+
+  it('breaks the tags of three attributes or more, x and y on one line, and changes only spaces', () => {
+    const formatted = formatSvgSource(source)
+    expect(formatted).toContain('<rect\n   id="r"\n   class="pompe"\n   x="360" y="160"\n   width="44"\n   stroke-width="1.5"/>')
+    // A tag inside a line of text, a comment and a short tag stay as they are.
+    expect(formatted).toContain('<tspan font-weight="bold" x="3" y="4">c</tspan>')
+    expect(formatted).toContain('<!-- <x a="1" b="2" c="3"> -->')
+    expect(formatted).toContain('<g id="a">')
+    expect(formatted).toContain("   data-x='a>b'")
+    expect(formatted.replace(/\s+/g, ' ')).toBe(source.replace(/\s+/g, ' '))
+    // The same attributes once read.
+    const attrs = (text) => [...new DOMParser().parseFromString(text, 'image/svg+xml').querySelectorAll('*')]
+      .map((el) => [...el.attributes].map((a) => `${a.name}=${a.value}`).join(' '))
+    expect(attrs(formatSvgSource(source))).toEqual(attrs(source))
+  })
+
+  it('colours tags, attributes, values and comments, and escapes the rest', () => {
+    const html = highlightSvg('<rect id="r" x=\'1\'/><!-- c -->a &lt; b</rect>')
+    expect(html).toBe('<span class="se-code-tag">&lt;rect</span> <span class="se-code-attr">id</span>=' +
+      '<span class="se-code-value">&quot;r&quot;</span> <span class="se-code-attr">x</span>=' +
+      '<span class="se-code-value">&#39;1&#39;</span><span class="se-code-tag">/&gt;</span>' +
+      '<span class="se-code-comment">&lt;!-- c --&gt;</span>a &amp;lt; b<span class="se-code-tag">&lt;/rect&gt;</span>')
+    // The text of the field stays readable as it is: nothing but spans added.
+    const div = document.createElement('div')
+    div.innerHTML = highlightSvg(source)
+    expect(div.textContent).toBe(source)
   })
 })
 

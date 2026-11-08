@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage, screenPoint } from './helpers.js'
+import { visitAndApproveStorage, screenPoint, clickControl } from './helpers.js'
 
 // Corrections after the selection rework. Question 10: converting a shape to
 // a path wrote fill-opacity="null" and other "null" attributes, and took the
@@ -85,7 +85,7 @@ test.afterEach(() => {
 test.describe('Convert to path keeps the style of the shape (question 10)', () => {
   test('a clicked shape becomes a path with its style and no "null" attribute', async ({ page }) => {
     await clickCenter(page, 'e1')
-    await page.locator('#tool_topath').click()
+    await clickControl(page, 'tool_topath')
     await settle(page)
     expect(await tagOf(page, 'e1')).toBe('path')
     expect(await style(page, 'e1')).toEqual({ fill: '#a63', stroke: '#00f', 'stroke-width': '3' })
@@ -130,7 +130,7 @@ test.describe('Convert to path keeps the style of the shape (question 10)', () =
     await clickCenter(page, 'e1')
     await page.evaluate(() => window.svgEditor.svgCanvas.selectOnly(['e1', 'r1'].map((id) => document.getElementById(id)), true))
     await settle(page)
-    await page.locator('#tool_topath_multi').click()
+    await clickControl(page, 'tool_topath_multi')
     await settle(page)
     expect(await style(page, 'e1')).toEqual({ fill: '#a63', stroke: '#00f', 'stroke-width': '3' })
     expect(await style(page, 'r1')).toEqual({ fill: '#3a6', opacity: '0.5' })
@@ -206,7 +206,7 @@ test.describe('Convert to path keeps everything the shape has but its geometry (
     expect(before['fill-rule']).toBe('evenodd')
     await page.evaluate(() => window.svgEditor.svgCanvas.selectOnly([document.getElementById('star')], true))
     await settle(page)
-    await page.locator('#tool_topath').click()
+    await clickControl(page, 'tool_topath')
     await settle(page)
     expect(await tagOf(page, 'star')).toBe('path')
     expect(await style(page, 'star')).toEqual(before)

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage, screenPoint, chooseTool } from './helpers.js'
+import { visitAndApproveStorage, screenPoint, chooseTool, clickControl } from './helpers.js'
 
 // V0: the contract of the extensions the editor loads by default. Lots V1 to
 // V4 rebuild the shell around the canvas: each extension must still load,
@@ -186,10 +186,11 @@ test.describe('What each button does (V0)', () => {
     // Since V2 the interaction layer draws the grid (#se-grid, over the
     // whole view) and the button drives it; #canvasGrid is gone.
     const shown = () => page.evaluate(() => document.getElementById('se-grid').getAttribute('display'))
-    await page.locator('#view_grid').click()
+    // In the canvas layout, through its entry of the zoom menu.
+    await clickControl(page, 'view_grid')
     expect(await shown()).toBe('inline')
     expect(await page.locator('#view_grid').evaluate((button) => button.pressed)).toBe(true)
-    await page.locator('#view_grid').click()
+    await clickControl(page, 'view_grid')
     expect(await shown()).toBe('none')
   })
 
@@ -251,9 +252,9 @@ test.describe('What each button does (V0)', () => {
       return ['Layer 1', 'Layer 2'].map((name) => drawing.getLayerVisibility(name))
     })
     expect(await shown()).toEqual([true, true])
-    await page.locator('#tool_layerView').click()
+    await clickControl(page, 'tool_layerView')
     expect(await shown()).toEqual([true, false])
-    await page.locator('#tool_layerView').click()
+    await clickControl(page, 'tool_layerView')
     expect(await shown()).toEqual([true, true])
   })
 })

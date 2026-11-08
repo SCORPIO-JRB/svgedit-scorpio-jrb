@@ -37,7 +37,10 @@ export async function openMainMenu (page) {
 
 export async function setSvgSource (page, svgMarkup) {
   await dismissStorageDialog(page)
-  await page.locator('#tool_source').click()
+  // In the canvas layout the source button is out of sight (the Code tab
+  // takes its place; Ctrl+U still opens the source): a click on the button
+  // works in both layouts.
+  await page.evaluate(() => document.getElementById('tool_source').click())
   const textarea = page.locator('#svg_source_textarea')
   await expect(textarea).toBeVisible()
   await textarea.fill(svgMarkup)
@@ -161,4 +164,47 @@ export async function chooseTool (page, id) {
     }
   }
   await tool.click()
+}
+
+/**
+ * Clicks a control wherever the layout puts it: in sight, in the "…" menu of
+ * the inspector (verbs on the selection), or in the zoom menu (view options,
+ * undo and redo) of the canvas layout.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export async function clickControl (page, id) {
+  const control = page.locator(`#${id}`)
+  if (await control.isVisible()) {
+    await control.click()
+    return
+  }
+  if (await control.evaluate((el) => Boolean(el.closest('#se-actions-menu')))) {
+    await page.locator('#se-actions-button').click()
+    await control.click()
+    return
+  }
+  const entry = page.locator(`#se-zoom-menu [data-command="${id}"], #se-zoom-menu [data-mirror="${id}"]`)
+  if (await entry.count()) {
+    await page.locator('#se-zoom-button').click()
+    await entry.first().click()
+    return
+  }
+  await control.click()
+}
+
+/**
+ * Opens the "…" menu of the inspector when a control of the selection is in
+ * it (canvas layout).
+ * @param {import('@playwright/test').Page} page
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export async function revealControl (page, id) {
+  const control = page.locator(`#${id}`)
+  if (await control.isVisible()) return
+  if (await control.evaluate((el) => Boolean(el.closest('#se-actions-menu')))) {
+    await page.locator('#se-actions-button').click()
+  }
 }

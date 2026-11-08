@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, clickControl } from './helpers.js'
 
 // M7: the system clipboard (copy writes SVG text, paste reads SVG from
 // outside through the import filter), paste in place, copy and paste of
@@ -233,9 +233,9 @@ test.describe('Mod+D repeats the offset (M7)', () => {
 
   test('the D key and button follow the same rule', async ({ page }) => {
     await clickOn(page, 'r1')
-    await page.locator('#tool_clone').click()
+    await clickControl(page, 'tool_clone')
     await dragBy(page, 'svg_1', 0, 30)
-    await page.locator('#tool_clone').click()
+    await clickControl(page, 'tool_clone')
     expect(await rects(page)).toEqual([['r1', 50, 50], ['svg_1', 70, 100], ['svg_2', 90, 150]])
   })
 })

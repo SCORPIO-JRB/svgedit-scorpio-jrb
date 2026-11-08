@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, clickControl } from './helpers.js'
 
 // V2: the grid of the interaction layer, the snapping and its guides, the
 // measures with Alt, and the alignment shortcuts (decision D6).
@@ -113,7 +113,7 @@ test('a resize snaps its edge to a neighbour and its width to a width', async ({
 
 test('the grid is drawn over the whole view, outside the document, and the button shows it', async ({ page }) => {
   const before = await source(page)
-  await page.locator('#view_grid').click()
+  await clickControl(page, 'view_grid')
   const grid = await page.evaluate(() => {
     const group = document.getElementById('se-grid')
     const area = document.getElementById('workarea').getBoundingClientRect()
