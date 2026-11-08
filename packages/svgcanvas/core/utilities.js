@@ -1417,6 +1417,49 @@ export const escapeCssIdent = (value) => (
     : cssEscapeFallback(value)
 )
 
+const GRADIENT_TAGS = new Set(['linearGradient', 'radialGradient'])
+
+// Containers whose content is not drawn where it stands
+const DEFINITIONS = new Set(['defs', 'symbol', 'clipPath', 'mask', 'pattern', 'marker'])
+
+/**
+ * Whether an element is the content of a definition (`<defs>`, `<symbol>`,
+ * clip path, mask, pattern, marker) below a given root: such an element is
+ * not an object of the drawing, and needs no identifier.
+ * @function module:utilities.isInsideDefinition
+ * @param {Element} elem
+ * @param {Element} root - Where the search stops (not tested)
+ * @returns {boolean}
+ */
+export const isInsideDefinition = (elem, root) => {
+  for (let parent = elem.parentNode; parent && parent !== root; parent = parent.parentNode) {
+    if (DEFINITIONS.has(parent.localName)) return true
+  }
+  return false
+}
+
+/**
+ * An attribute of a gradient, or the one it takes from the gradients it
+ * refers to by href: a gradient inherits this way its units, its transform,
+ * its coordinates and its stops.
+ * @function module:utilities.getGradientAttribute
+ * @param {Element} grad - A linearGradient or a radialGradient
+ * @param {string} name
+ * @returns {string|null}
+ */
+export const getGradientAttribute = (grad, name) => {
+  const seen = new Set()
+  let current = grad
+  while (current && !seen.has(current)) {
+    if (current.hasAttribute(name)) return current.getAttribute(name)
+    seen.add(current)
+    const href = getHref(current)
+    const next = href?.startsWith('#') ? getElement(href.slice(1)) : null
+    current = next && GRADIENT_TAGS.has(next.tagName) ? next : null
+  }
+  return null
+}
+
 /**
  * Get a DOM element by ID within the SVG root element.
  * @function module:utilities.getElement

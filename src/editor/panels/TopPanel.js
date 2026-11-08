@@ -8,14 +8,17 @@ import { askText } from '../components/askText.js'
 
 const { $qa, $id, $click, isValidUnit, getTypeMap, convertUnit } = SvgCanvas
 
-// Elements alone whose box has W and H fields: they are scaled from its top
-// left corner, as by a grip. A text always keeps its proportions.
 /** Criteria of the "select same" entries of the context menu (M6). */
 const SIMILAR_CRITERIA = ['symbol', 'fill', 'stroke']
-const SIZED_ALONE = new Set(['path', 'polyline', 'g', 'text'])
+// Elements alone whose box has W and H fields: they are scaled from its top
+// left corner, as by a grip. A text always keeps its proportions. An
+// imported file (<use>) is placed and sized by its transform.
+const SIZED_ALONE = new Set(['path', 'polyline', 'g', 'text', 'use'])
 // Elements alone whose X and Y fields describe their box without the stroke,
-// as for a multi-selection and the dimension label: they have no x or y.
-const POSITIONED_BY_BOX = new Set(['path', 'polyline', 'g'])
+// as for a multi-selection and the dimension label: they have no x or y,
+// or, for a <use>, an x and a y that its transform moves (the fields showed
+// "null" for an import, placed by its transform only).
+const POSITIONED_BY_BOX = new Set(['path', 'polyline', 'g', 'use'])
 // Shapes that can be converted to a path.
 const CONVERTIBLE = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
 // Text fields of the panel, the attribute each one shows and its default.
@@ -1019,9 +1022,9 @@ class TopPanel {
   }
 
   /**
-   * Moves a multi-selection, or a path, polyline or group alone, by its X or
-   * Y field, which describe its box without the stroke; another element
-   * alone keeps the field's own meaning (its x or y).
+   * Moves a multi-selection, or a path, polyline, group or imported file
+   * alone, by its X or Y field, which describe its box without the stroke;
+   * another element alone keeps the field's own meaning (its x or y).
    * @param {Event} e
    * @returns {void}
    */

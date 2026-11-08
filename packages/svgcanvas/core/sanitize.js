@@ -143,7 +143,9 @@ const svgWhiteList_ = {
   // (`fill="none"` of the files exported by Figma)
   svg: [...FONT_ATTRIBUTES, ...PRESENTATION, 'enable-background', 'height', 'preserveAspectRatio', 'requiredFeatures', 'systemLanguage', 'text-anchor', 'version', 'viewBox', 'width', 'x', 'xmlns', 'xmlns:se', 'xmlns:xlink', 'xmlns:oi', 'oi:animations', 'y', 'xml:space'],
   switch: ['requiredFeatures', 'systemLanguage'],
-  symbol: [...FONT_ATTRIBUTES, 'fill', 'fill-opacity', 'fill-rule', 'filter', 'opacity', 'overflow', 'preserveAspectRatio', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'viewBox', 'width', 'height'],
+  // An import puts the attributes of the file's root on its <symbol>: they
+  // must survive the next opening of the drawing.
+  symbol: [...FONT_ATTRIBUTES, ...PRESENTATION, 'overflow', 'preserveAspectRatio', 'requiredFeatures', 'systemLanguage', 'text-anchor', 'viewBox', 'width', 'height'],
   text: [...FONT_ATTRIBUTES, 'clip-path', 'clip-rule', 'alignment-baseline', 'dominant-baseline', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'mask', 'opacity', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'text-anchor', 'letter-spacing', 'word-spacing', 'text-decoration', 'textLength', 'lengthAdjust', 'x', 'xml:space', 'y'],
   textPath: ['dominant-baseline', 'href', 'method', 'requiredFeatures', 'spacing', 'startOffset', 'systemLanguage', 'xlink:href'],
   title: [],
