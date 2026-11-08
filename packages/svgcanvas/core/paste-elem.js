@@ -1,6 +1,7 @@
 import {
   getStrokedBBoxDefaultVisible,
-  getUrlFromAttr
+  getUrlFromAttr,
+  remapTimingIds
 } from './utilities.js'
 import * as hstry from './history.js'
 import {
@@ -222,6 +223,10 @@ const pasteInSameDocument = (clipboardElements, type, x, y) => {
         ) {
           const refId = attrValue.slice(1)
           if (refId in changedIDs) attrs[attrName] = `#${changedIDs[refId]}`
+        }
+        if (attrName === 'begin' || attrName === 'end') {
+          attrs[attrName] = remapTimingIds(attrValue, (id) => changedIDs[id])
+          return
         }
         const url = getUrlFromAttr(attrValue)
         if (url) {

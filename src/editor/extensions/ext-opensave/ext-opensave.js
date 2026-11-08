@@ -80,14 +80,25 @@ export default {
       if (file.type.includes('svg')) {
         reader = new FileReader()
         reader.onloadend = (ev) => {
-          // imgImport.shiftKey (shift key pressed or not) will determine if import should preserve dimension)
-          const newElement = this.svgCanvas.importSvgString(ev.target.result, imgImport.shiftKey)
-          this.svgCanvas.alignSelectedElements('m', 'page')
-          this.svgCanvas.alignSelectedElements('c', 'page')
-          // highlight imported element, otherwise we get strange empty selectbox
-          this.svgCanvas.selectOnly([newElement])
+          // At the size the file declares
+          const newElement = this.svgCanvas.importSvgString(ev.target.result)
           $id('se-prompt-dialog').setAttribute('close', true)
           resetFileInput()
+          if (!newElement) {
+            // Nothing was imported: the selection is still the user's own,
+            // so it must not be centered on the page.
+            seAlert(this.i18next.t('notification.importFailed', {
+              defaultValue: 'This file could not be imported, the drawing is unchanged: {{name}}',
+              name: file.name
+            }))
+            return
+          }
+          // Centered on the page within the import's own undo step: the new
+          // element is put back as it is, so one undo removes the import.
+          this.svgCanvas.alignSelectedElements('m', 'page', { undoable: false })
+          this.svgCanvas.alignSelectedElements('c', 'page', { undoable: false })
+          // highlight imported element, otherwise we get strange empty selectbox
+          this.svgCanvas.selectOnly([newElement])
         }
         reader.readAsText(file)
       } else {
@@ -291,8 +302,7 @@ export default {
         $click($id('tool_open'), clickOpen.bind(this))
         $click($id('tool_save'), clickSave.bind(this, 'save'))
         $click($id('tool_save_as'), clickSave.bind(this, 'saveas'))
-        // tool_import pressed with shiftKey will not scale the SVG
-        $click($id('tool_import'), (ev) => { imgImport.shiftKey = ev.shiftKey; imgImport.click() })
+        $click($id('tool_import'), () => { imgImport.click() })
       }
     }
   }

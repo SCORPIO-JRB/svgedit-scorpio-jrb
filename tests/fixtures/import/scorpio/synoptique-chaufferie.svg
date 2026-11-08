@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" id="synoptique-chaufferie" class="synoptique" viewBox="0 0 1920 1080" role="img" aria-labelledby="titre-synoptique desc-synoptique">
+  <title id="titre-synoptique">Chaufferie, variante a, fidèle à l'ancien synoptique (états de démonstration)</title>
+  <desc id="desc-synoptique">Synoptique de chaufferie : deux chaudières avec pompes de charge, bouteille de découplage, six circuits de distribution (Constant, Plancher, Salle activité, Salle Claire, Bureau, Annexes) avec pompes doubles et vannes 3 voies.</desc>
+  <!--
+  Maquette de synoptique GTB Scorp-io, chaufferie.
+  Classes sur la racine <svg> :
+    afficher-detail  affiche le groupe #mesures-detail (masqué par défaut)
+    sans-animation   coupe l'animation des flux
+  Classes d'état des équipements (sur le <g> de l'équipement) : en-marche | arret | defaut
+  Classes d'état des tuyauteries : en-marche | arret (+ chaud|froid, depart|retour)
+  Chaque mesure est un <text> avec un id stable : le front remplace son contenu.
+  Une donnée absente s'affiche « — ».
+-->
+  <style>
+svg.synoptique { font-family: 'Roboto Flex', Roboto, 'Segoe UI', Helvetica, Arial, sans-serif; }
+.fond { fill: #160F23; }
+.bandeau-fond { fill: #1F1430; }
+.bandeau-ligne, .separateur { stroke: #3D374C; stroke-width: 1; }
+.tuile, .carte, .pastille { fill: #1F1430; stroke: #3D374C; stroke-width: 1; }
+.carte-ligne { stroke: #3D374C; stroke-width: 1; }
+
+/* Typographie */
+.titre { font-family: 'Space Grotesk', 'Segoe UI', Helvetica, Arial, sans-serif; fill: #CEB8FF; font-weight: 500; }
+.titre-page { font-size: 34px; }
+.titre-section { font-size: 19px; }
+.titre-carte { font-size: 17px; }
+.sous-titre { font-size: 16px; fill: #9B92AA; }
+.note-demo { font-size: 14px; fill: #CEB8FF; }
+.libelle { font-size: 15px; fill: #9B92AA; }
+.libelle-petit { font-size: 13px; fill: #9B92AA; }
+.libelle-pompe { font-size: 12px; fill: #9B92AA; }
+.libelle-circuit { font-size: 17px; fill: #C9C5D1; }
+.libelle-equipement { font-size: 17px; fill: #C9C5D1; }
+.libelle-gaz { font-size: 13px; fill: #625A6E; }
+.mesure { fill: #EEECF1; font-variant-numeric: tabular-nums; }
+.mesure-essentielle { font-size: 34px; font-weight: 500; }
+.mesure-production { font-size: 20px; fill: #C9C5D1; }
+.mesure-detail { font-size: 14px; fill: #C9C5D1; }
+.synthese-libelle { font-size: 15px; fill: #9B92AA; }
+.synthese-valeur { font-size: 30px; font-weight: 500; fill: #EEECF1; font-variant-numeric: tabular-nums; }
+.synthese-sous { font-size: 14px; fill: #9B92AA; }
+.alerte { fill: #F43F5E; }
+.centre { text-anchor: middle; }
+.droite { text-anchor: end; }
+
+/* Mesures de détail : masquées par défaut, affichées avec la classe afficher-detail sur la racine */
+#mesures-detail { display: none; }
+svg.afficher-detail #mesures-detail { display: inline; }
+
+/* Tuyauteries : gris fin à l'arrêt, couleur et flux animé en fonctionnement */
+.tuyau { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.tuyau.arret { stroke: #4F465F; stroke-width: 1.5; }
+.tuyau.en-marche { stroke-width: 3; stroke-dasharray: 14 5; animation: flux 1s linear infinite; }
+.tuyau.en-marche.chaud.depart { stroke: #F08A62; }
+.tuyau.en-marche.chaud.retour { stroke: #B5623F; }
+.tuyau.en-marche.froid.depart { stroke: #6E9CF5; }
+.tuyau.en-marche.froid.retour { stroke: #4A70BD; }
+svg.sans-animation .tuyau.en-marche { animation: none; stroke-dasharray: none; }
+@keyframes flux { from { stroke-dashoffset: 19; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .tuyau.en-marche { animation: none; stroke-dasharray: none; } }
+.masque { fill: none; stroke: #160F23; stroke-width: 11; }
+.fleche.arret { fill: #4F465F; }
+.fleche.en-marche.chaud.depart { fill: #F08A62; }
+.fleche.en-marche.chaud.retour { fill: #B5623F; }
+.gaz { fill: none; stroke: #625A6E; stroke-width: 1.5; stroke-dasharray: 6 5; }
+.fleche-gaz { fill: #625A6E; }
+
+/* Équipements : contour gris à l'arrêt, vert en marche, rouge en défaut */
+.equipement .corps { fill: #1F1430; stroke: #625A6E; stroke-width: 1.5; }
+.equipement.en-marche .corps { stroke: #4CC38A; stroke-width: 2; }
+.equipement.defaut .corps { stroke: #F43F5E; stroke-width: 2; }
+.pompe .corps, .vanne .corps { fill: #160F23; }
+.pompe .sens { fill: #625A6E; }
+.pompe.en-marche .sens, .pompe.defaut .sens { fill: #C9C5D1; }
+.vanne .axe { stroke: #625A6E; stroke-width: 1.5; }
+.vanne .pivot { fill: #9B92AA; }
+.bouteille.en-marche .corps { stroke: #625A6E; stroke-width: 1.5; }
+.etat { font-size: 15px; fill: #9B92AA; }
+.en-marche .etat { fill: #4CC38A; }
+.defaut .etat { fill: #F43F5E; }
+  </style>
+  <rect class="fond" x="0" y="0" width="1920" height="1080"/>
+  <g id="bandeau">
+    <rect class="bandeau-fond" x="0" y="0" width="1920" height="150"/>
+    <line class="bandeau-ligne" x1="0" y1="150" x2="1920" y2="150"/>
+    <text class="titre titre-page" x="48" y="72">Chaufferie</text>
+    <text class="sous-titre" x="48" y="104">Schéma de chaufferie</text>
+    <text class="note-demo" x="48" y="128">États de démonstration, valeurs de la capture</text>
+    <line class="separateur" x1="400" y1="30" x2="400" y2="122"/>
+    <text class="synthese-libelle" x="426" y="56">Extérieur</text>
+    <text id="synthese-temperature-exterieure" class="synthese-valeur" x="426" y="98">17,5 °C</text>
+    <line class="separateur" x1="645" y1="30" x2="645" y2="122"/>
+    <text class="synthese-libelle" x="671" y="56">Production</text>
+    <text id="synthese-etat-production" class="synthese-valeur" x="671" y="98">En marche</text>
+    <text id="synthese-chaudieres-en-marche" class="synthese-sous" x="671" y="124">1/2 chaudières en marche</text>
+    <line class="separateur" x1="890" y1="30" x2="890" y2="122"/>
+    <text class="synthese-libelle" x="916" y="56">Départ production</text>
+    <text id="synthese-depart-production" class="synthese-valeur" x="916" y="98">23,8 °C</text>
+    <line class="separateur" x1="1135" y1="30" x2="1135" y2="122"/>
+    <text class="synthese-libelle" x="1161" y="56">Retour production</text>
+    <text id="synthese-retour-production" class="synthese-valeur" x="1161" y="98">23,6 °C</text>
+    <text id="synthese-delta-t-production" class="synthese-sous" x="1161" y="124">ΔT 0,2 K</text>
+    <line class="separateur" x1="1380" y1="30" x2="1380" y2="122"/>
+    <text class="synthese-libelle" x="1406" y="56">Circuits en service</text>
+    <text id="synthese-circuits-en-service" class="synthese-valeur" x="1406" y="98">5/6</text>
+    <line class="separateur" x1="1625" y1="30" x2="1625" y2="122"/>
+    <text class="synthese-libelle" x="1651" y="56">Défauts actifs</text>
+    <text id="synthese-defauts-actifs" class="synthese-valeur alerte" x="1651" y="98">1</text>
+    <text id="synthese-defauts-detail" class="synthese-sous" x="1651" y="124">Pompe 1 Bureau</text>
+  </g>
+  <g id="synoptique">
+   <g id="tuyauteries">
+    <path id="tuyau-gaz" class="gaz" d="M360,344 H690 V404 H140 V700 H170 M660,404 V700 H630"/>
+    <path class="fleche-gaz" d="M338,338 L338,350 L352,344 Z"/>
+    <path class="masque" d="M510,500 H820"/>
+    <path id="tuyau-depart-chaudiere-1" class="tuyau chaud depart en-marche" d="M210,660 V500 H510"/>
+    <path id="tuyau-depart-chaudiere-2" class="tuyau chaud depart arret" d="M510,660 V500"/>
+    <path id="tuyau-depart-production" class="tuyau chaud depart en-marche" d="M510,500 H820 V696 H900"/>
+    <path id="tuyau-retour-production" class="tuyau chaud retour en-marche" d="M900,954 H610"/>
+    <path id="tuyau-retour-chaudiere-2" class="tuyau chaud retour arret" d="M610,954 V864"/>
+    <path id="tuyau-retour-chaudiere-1" class="tuyau chaud retour en-marche" d="M610,954 H310 V864"/>
+    <path id="tuyau-retour-constant" class="tuyau chaud retour en-marche" d="M1088,384 V954"/>
+    <path id="tuyau-retour-plancher" class="tuyau chaud retour arret" d="M1236,384 V954"/>
+    <path id="tuyau-bipasse-plancher" class="tuyau chaud retour arret" d="M1236,596 H1198"/>
+    <path id="tuyau-retour-salle-activite" class="tuyau chaud retour en-marche" d="M1384,384 V954"/>
+    <path id="tuyau-bipasse-salle-activite" class="tuyau chaud retour en-marche" d="M1384,596 H1346"/>
+    <path id="tuyau-retour-salle-claire" class="tuyau chaud retour en-marche" d="M1532,384 V954"/>
+    <path id="tuyau-bipasse-salle-claire" class="tuyau chaud retour en-marche" d="M1532,596 H1494"/>
+    <path id="tuyau-retour-bureau" class="tuyau chaud retour en-marche" d="M1680,384 V954"/>
+    <path id="tuyau-bipasse-bureau" class="tuyau chaud retour en-marche" d="M1680,596 H1642"/>
+    <path id="tuyau-retour-annexes" class="tuyau chaud retour en-marche" d="M1828,384 V954"/>
+    <path id="tuyau-bipasse-annexes" class="tuyau chaud retour en-marche" d="M1828,596 H1790"/>
+    <path class="masque" d="M950,696 H1770"/>
+    <path id="tuyau-depart-collecteur" class="tuyau chaud depart en-marche" d="M950,696 H1770"/>
+    <path id="tuyau-retour-collecteur" class="tuyau chaud retour en-marche" d="M1828,954 H950"/>
+    <path id="tuyau-depart-constant" class="tuyau chaud depart en-marche" d="M1030,696 V384"/>
+    <path id="fleche-depart-constant" class="fleche chaud depart en-marche" d="M1024,384 L1036,384 L1030,372 Z"/>
+    <path id="fleche-retour-constant" class="fleche chaud retour en-marche" d="M1082,372 L1094,372 L1088,384 Z"/>
+    <path id="tuyau-depart-plancher" class="tuyau chaud depart arret" d="M1178,696 V384"/>
+    <path id="fleche-depart-plancher" class="fleche chaud depart arret" d="M1172,384 L1184,384 L1178,372 Z"/>
+    <path id="fleche-retour-plancher" class="fleche chaud retour arret" d="M1230,372 L1242,372 L1236,384 Z"/>
+    <path id="tuyau-depart-salle-activite" class="tuyau chaud depart en-marche" d="M1326,696 V384"/>
+    <path id="fleche-depart-salle-activite" class="fleche chaud depart en-marche" d="M1320,384 L1332,384 L1326,372 Z"/>
+    <path id="fleche-retour-salle-activite" class="fleche chaud retour en-marche" d="M1378,372 L1390,372 L1384,384 Z"/>
+    <path id="tuyau-depart-salle-claire" class="tuyau chaud depart en-marche" d="M1474,696 V384"/>
+    <path id="fleche-depart-salle-claire" class="fleche chaud depart en-marche" d="M1468,384 L1480,384 L1474,372 Z"/>
+    <path id="fleche-retour-salle-claire" class="fleche chaud retour en-marche" d="M1526,372 L1538,372 L1532,384 Z"/>
+    <path id="tuyau-depart-bureau" class="tuyau chaud depart en-marche" d="M1622,696 V384"/>
+    <path id="fleche-depart-bureau" class="fleche chaud depart en-marche" d="M1616,384 L1628,384 L1622,372 Z"/>
+    <path id="fleche-retour-bureau" class="fleche chaud retour en-marche" d="M1674,372 L1686,372 L1680,384 Z"/>
+    <path id="tuyau-depart-annexes" class="tuyau chaud depart en-marche" d="M1770,696 V384"/>
+    <path id="fleche-depart-annexes" class="fleche chaud depart en-marche" d="M1764,384 L1776,384 L1770,372 Z"/>
+    <path id="fleche-retour-annexes" class="fleche chaud retour en-marche" d="M1822,372 L1834,372 L1828,384 Z"/>
+   </g>
+   <g id="equipements">
+    <g id="chaudiere-1" class="equipement chaudiere en-marche"><title>Chaudière 1</title><rect class="corps" x="170" y="660" width="160" height="204" rx="8"/><text id="etat-chaudiere-1" class="etat centre" x="250" y="732">En marche</text></g>
+    <g id="chaudiere-2" class="equipement chaudiere arret"><title>Chaudière 2</title><rect class="corps" x="470" y="660" width="160" height="204" rx="8"/><text id="etat-chaudiere-2" class="etat centre" x="550" y="732">Arrêt</text></g>
+    <g id="pompe-charge-1" class="equipement pompe en-marche"><title>Pompe de charge 1</title><circle class="corps" cx="210" cy="584" r="16"/><path class="sens" d="M202.64,590.4 L217.36,590.4 L210,575.04 Z"/></g>
+    <g id="pompe-charge-2" class="equipement pompe arret"><title>Pompe de charge 2</title><circle class="corps" cx="510" cy="584" r="16"/><path class="sens" d="M502.64,590.4 L517.36,590.4 L510,575.04 Z"/></g>
+    <g id="bouteille-decouplage" class="equipement bouteille en-marche"><title>Bouteille de découplage</title><rect class="corps" x="900" y="624" width="50" height="390" rx="25"/></g>
+    <g id="pompes-constant" class="pompe-double">
+    <g id="pompe-1-constant" class="equipement pompe en-marche"><title>Pompe 1, circuit Constant</title><circle class="corps" cx="1017" cy="484" r="13"/><path class="sens" d="M1011.02,489.2 L1022.98,489.2 L1017,476.72 Z"/></g>
+    <g id="pompe-2-constant" class="equipement pompe arret"><title>Pompe 2, circuit Constant</title><circle class="corps" cx="1043" cy="484" r="13"/><path class="sens" d="M1037.02,489.2 L1048.98,489.2 L1043,476.72 Z"/></g>
+    </g>
+    <g id="pompes-plancher" class="pompe-double">
+    <g id="pompe-1-plancher" class="equipement pompe arret"><title>Pompe 1, circuit Plancher</title><circle class="corps" cx="1165" cy="484" r="13"/><path class="sens" d="M1159.02,489.2 L1170.98,489.2 L1165,476.72 Z"/></g>
+    <g id="pompe-2-plancher" class="equipement pompe arret"><title>Pompe 2, circuit Plancher</title><circle class="corps" cx="1191" cy="484" r="13"/><path class="sens" d="M1185.02,489.2 L1196.98,489.2 L1191,476.72 Z"/></g>
+    </g>
+    <g id="vanne-3-voies-plancher" class="equipement vanne arret"><title>Vanne 3 voies, circuit Plancher</title><line class="axe" x1="1156" y1="596" x2="1178" y2="596"/><rect class="corps" x="1144" y="587" width="12" height="18" rx="3"/><path class="corps" d="M1167,576 L1189,576 L1178,596 Z"/><path class="corps" d="M1167,616 L1189,616 L1178,596 Z"/><path class="corps" d="M1198,585 L1198,607 L1178,596 Z"/><circle class="pivot" cx="1178" cy="596" r="2.5"/></g>
+    <g id="pompes-salle-activite" class="pompe-double">
+    <g id="pompe-1-salle-activite" class="equipement pompe en-marche"><title>Pompe 1, circuit Salle activité</title><circle class="corps" cx="1313" cy="484" r="13"/><path class="sens" d="M1307.02,489.2 L1318.98,489.2 L1313,476.72 Z"/></g>
+    <g id="pompe-2-salle-activite" class="equipement pompe arret"><title>Pompe 2, circuit Salle activité</title><circle class="corps" cx="1339" cy="484" r="13"/><path class="sens" d="M1333.02,489.2 L1344.98,489.2 L1339,476.72 Z"/></g>
+    </g>
+    <g id="vanne-3-voies-salle-activite" class="equipement vanne en-marche"><title>Vanne 3 voies, circuit Salle activité</title><line class="axe" x1="1304" y1="596" x2="1326" y2="596"/><rect class="corps" x="1292" y="587" width="12" height="18" rx="3"/><path class="corps" d="M1315,576 L1337,576 L1326,596 Z"/><path class="corps" d="M1315,616 L1337,616 L1326,596 Z"/><path class="corps" d="M1346,585 L1346,607 L1326,596 Z"/><circle class="pivot" cx="1326" cy="596" r="2.5"/></g>
+    <g id="pompes-salle-claire" class="pompe-double">
+    <g id="pompe-1-salle-claire" class="equipement pompe en-marche"><title>Pompe 1, circuit Salle Claire</title><circle class="corps" cx="1461" cy="484" r="13"/><path class="sens" d="M1455.02,489.2 L1466.98,489.2 L1461,476.72 Z"/></g>
+    <g id="pompe-2-salle-claire" class="equipement pompe arret"><title>Pompe 2, circuit Salle Claire</title><circle class="corps" cx="1487" cy="484" r="13"/><path class="sens" d="M1481.02,489.2 L1492.98,489.2 L1487,476.72 Z"/></g>
+    </g>
+    <g id="vanne-3-voies-salle-claire" class="equipement vanne en-marche"><title>Vanne 3 voies, circuit Salle Claire</title><line class="axe" x1="1452" y1="596" x2="1474" y2="596"/><rect class="corps" x="1440" y="587" width="12" height="18" rx="3"/><path class="corps" d="M1463,576 L1485,576 L1474,596 Z"/><path class="corps" d="M1463,616 L1485,616 L1474,596 Z"/><path class="corps" d="M1494,585 L1494,607 L1474,596 Z"/><circle class="pivot" cx="1474" cy="596" r="2.5"/></g>
+    <g id="pompes-bureau" class="pompe-double">
+    <g id="pompe-1-bureau" class="equipement pompe defaut"><title>Pompe 1, circuit Bureau</title><circle class="corps" cx="1609" cy="484" r="13"/><path class="sens" d="M1603.02,489.2 L1614.98,489.2 L1609,476.72 Z"/></g>
+    <g id="pompe-2-bureau" class="equipement pompe en-marche"><title>Pompe 2, circuit Bureau</title><circle class="corps" cx="1635" cy="484" r="13"/><path class="sens" d="M1629.02,489.2 L1640.98,489.2 L1635,476.72 Z"/></g>
+    </g>
+    <g id="vanne-3-voies-bureau" class="equipement vanne en-marche"><title>Vanne 3 voies, circuit Bureau</title><line class="axe" x1="1600" y1="596" x2="1622" y2="596"/><rect class="corps" x="1588" y="587" width="12" height="18" rx="3"/><path class="corps" d="M1611,576 L1633,576 L1622,596 Z"/><path class="corps" d="M1611,616 L1633,616 L1622,596 Z"/><path class="corps" d="M1642,585 L1642,607 L1622,596 Z"/><circle class="pivot" cx="1622" cy="596" r="2.5"/></g>
+    <g id="pompes-annexes" class="pompe-double">
+    <g id="pompe-1-annexes" class="equipement pompe en-marche"><title>Pompe 1, circuit Annexes</title><circle class="corps" cx="1757" cy="484" r="13"/><path class="sens" d="M1751.02,489.2 L1762.98,489.2 L1757,476.72 Z"/></g>
+    <g id="pompe-2-annexes" class="equipement pompe arret"><title>Pompe 2, circuit Annexes</title><circle class="corps" cx="1783" cy="484" r="13"/><path class="sens" d="M1777.02,489.2 L1788.98,489.2 L1783,476.72 Z"/></g>
+    </g>
+    <g id="vanne-3-voies-annexes" class="equipement vanne en-marche"><title>Vanne 3 voies, circuit Annexes</title><line class="axe" x1="1748" y1="596" x2="1770" y2="596"/><rect class="corps" x="1736" y="587" width="12" height="18" rx="3"/><path class="corps" d="M1759,576 L1781,576 L1770,596 Z"/><path class="corps" d="M1759,616 L1781,616 L1770,596 Z"/><path class="corps" d="M1790,585 L1790,607 L1770,596 Z"/><circle class="pivot" cx="1770" cy="596" r="2.5"/></g>
+   </g>
+   <g id="libelles">
+    <text class="libelle-equipement centre" x="250" y="700">Chaudière 1</text>
+    <text class="libelle-equipement centre" x="550" y="700">Chaudière 2</text>
+    <text class="libelle-petit centre" x="925" y="1044">Bouteille de découplage</text>
+    <text class="libelle-gaz droite" x="330" y="349">Gaz</text>
+    <text class="libelle-petit" x="236" y="589">Pompe de charge 1</text>
+    <text class="libelle-petit" x="536" y="589">Pompe de charge 2</text>
+    <text class="libelle-pompe centre" x="1017" y="514">P1</text>
+    <text class="libelle-pompe centre" x="1043" y="514">P2</text>
+    <text class="libelle-pompe centre" x="1165" y="514">P1</text>
+    <text class="libelle-pompe centre" x="1191" y="514">P2</text>
+    <text class="libelle-pompe centre" x="1313" y="514">P1</text>
+    <text class="libelle-pompe centre" x="1339" y="514">P2</text>
+    <text class="libelle-pompe centre" x="1461" y="514">P1</text>
+    <text class="libelle-pompe centre" x="1487" y="514">P2</text>
+    <text class="libelle-pompe centre" x="1609" y="514">P1</text>
+    <text class="libelle-pompe centre" x="1635" y="514">P2</text>
+    <text class="libelle-pompe centre" x="1757" y="514">P1</text>
+    <text class="libelle-pompe centre" x="1783" y="514">P2</text>
+    <text class="titre titre-section" x="140" y="204">Production</text>
+    <text class="titre titre-section" x="1002" y="204">Distribution</text>
+    <text class="libelle droite" x="985" y="292">Départ</text>
+    <text class="libelle droite" x="985" y="330">Consigne</text>
+    <text class="libelle-circuit centre" x="1059" y="248">Constant</text>
+    <text class="libelle-circuit centre" x="1207" y="248">Plancher</text>
+    <text class="libelle-circuit centre" x="1355" y="248">Salle activité</text>
+    <text class="libelle-circuit centre" x="1503" y="248">Salle Claire</text>
+    <text class="libelle-circuit centre" x="1651" y="248">Bureau</text>
+    <text class="libelle-circuit centre" x="1799" y="248">Annexes</text>
+    <text class="libelle droite" x="805" y="644">Départ production</text>
+    <text class="libelle droite" x="805" y="902">Retour production</text>
+   </g>
+   <g id="mesures">
+    <text id="mesure-depart-constant" class="mesure mesure-essentielle centre" x="1059" y="298">23,8 °C</text>
+    <text id="mesure-consigne-calculee-constant" class="mesure mesure-production centre" x="1059" y="332">49,6 °C</text>
+    <text id="mesure-depart-plancher" class="mesure mesure-essentielle centre" x="1207" y="298">23,5 °C</text>
+    <text id="mesure-consigne-calculee-plancher" class="mesure mesure-production centre" x="1207" y="332">26,8 °C</text>
+    <text id="mesure-depart-salle-activite" class="mesure mesure-essentielle centre" x="1355" y="298">22,6 °C</text>
+    <text id="mesure-consigne-calculee-salle-activite" class="mesure mesure-production centre" x="1355" y="332">33,8 °C</text>
+    <text id="mesure-depart-salle-claire" class="mesure mesure-essentielle centre" x="1503" y="298">23,6 °C</text>
+    <text id="mesure-consigne-calculee-salle-claire" class="mesure mesure-production centre" x="1503" y="332">38,8 °C</text>
+    <text id="mesure-depart-bureau" class="mesure mesure-essentielle centre" x="1651" y="298">23,5 °C</text>
+    <text id="mesure-consigne-calculee-bureau" class="mesure mesure-production centre" x="1651" y="332">60,0 °C</text>
+    <text id="mesure-depart-annexes" class="mesure mesure-essentielle centre" x="1799" y="298">23,7 °C</text>
+    <text id="mesure-consigne-calculee-annexes" class="mesure mesure-production centre" x="1799" y="332">32,3 °C</text>
+    <text id="mesure-depart-production" class="mesure mesure-essentielle droite" x="805" y="680">23,8 °C</text>
+    <text id="mesure-retour-production" class="mesure mesure-essentielle droite" x="805" y="938">23,6 °C</text>
+    <g id="mesures-detail">
+      <text id="mesure-ouverture-vanne-3-voies-plancher" class="mesure mesure-detail" x="1193" y="570">0 %</text>
+      <text id="mesure-ouverture-vanne-3-voies-salle-activite" class="mesure mesure-detail" x="1341" y="570">0 %</text>
+      <text id="mesure-ouverture-vanne-3-voies-salle-claire" class="mesure mesure-detail" x="1489" y="570">0 %</text>
+      <text id="mesure-ouverture-vanne-3-voies-bureau" class="mesure mesure-detail" x="1637" y="570">0 %</text>
+      <text id="mesure-ouverture-vanne-3-voies-annexes" class="mesure mesure-detail" x="1785" y="570">0 %</text>
+    </g>
+   </g>
+  </g>
+</svg>

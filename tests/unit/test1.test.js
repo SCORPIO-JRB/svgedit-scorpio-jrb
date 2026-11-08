@@ -181,7 +181,7 @@ describe('Basic Module', function () {
       const hasXlink = output.includes('xmlns:xlink="http://www.w3.org/1999/xlink"')
       const hasImageHref = /<image[^>]+href=/.test(output)
       const hasSe = output.includes('xmlns:se=')
-      const hasFoo = output.includes('xmlns:foo=')
+      const hasFoo = output.includes('xmlns:foo="http://example.com"') && output.includes('foo:bar="baz"')
       const hasAttr = output.includes('se:foo="bar"')
 
       assert.equal(hasAttr, true, 'Preserved namespaced attribute on export')
@@ -189,7 +189,8 @@ describe('Basic Module', function () {
       // xlink namespace is optional (href is preferred), accept either
       assert.equal(hasXlink || hasImageHref, true, 'Included xlink namespace when needed')
       assert.equal(hasSe, true, 'Included se: xmlns')
-      assert.equal(hasFoo, false, 'Did not include foo: xmlns')
+      // The attributes of another application are kept, with their namespace
+      assert.equal(hasFoo, true, 'Kept the foo: attribute and its xmlns')
     })
 
     it('Test import math elements inside a foreignObject', function () {
