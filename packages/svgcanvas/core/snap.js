@@ -341,9 +341,34 @@ const snapMoveAxis = (index, axis, frame, delta, { tolerance, grid, objects, spa
  * @returns {{dx: number, dy: number, guides: Guide[]}}
  */
 export const snapMove = (index, frame, dx, dy, { tolerance, grid = 0, objects = true, spacing = true }) => {
-  const x = snapMoveAxis(index, 'x', frame, dx, { tolerance, grid, objects, spacing })
-  const y = snapMoveAxis(index, 'y', frame, dy, { tolerance, grid, objects, spacing })
+  // Each axis sees the box where the other axis puts it: its row, its
+  // column and its guides are those of where it is now.
+  const x = snapMoveAxis(index, 'x', { ...frame, y: frame.y + dy }, dx, { tolerance, grid, objects, spacing })
+  const y = snapMoveAxis(index, 'y', { ...frame, x: frame.x + x.delta }, dy, { tolerance, grid, objects, spacing })
+  if (y.delta !== dy && x.guides.length) {
+    // The guides of x reach the box where y snapped it.
+    const again = snapMoveAxis(index, 'x', { ...frame, y: frame.y + y.delta }, dx, { tolerance, grid, objects, spacing })
+    return { dx: again.delta, dy: y.delta, guides: [...again.guides, ...y.guides] }
+  }
   return { dx: x.delta, dy: y.delta, guides: [...x.guides, ...y.guides] }
+}
+
+/**
+ * A box after one of its edges moved, or both from the middle.
+ * @param {Box} frame
+ * @param {"x"|"y"} axis
+ * @param {number} move The move of the dragged edge
+ * @param {1|-1} side 1: the end edge; -1: the start edge
+ * @param {boolean} centered
+ * @returns {Box}
+ */
+const resizeBox = (frame, axis, move, side, centered) => {
+  const { pos, size } = AXES[axis]
+  const start = frame[pos]
+  const end = start + frame[size]
+  const s = side > 0 ? start - (centered ? move : 0) : start + move
+  const e = side > 0 ? end + move : end - (centered ? move : 0)
+  return { ...frame, [pos]: Math.min(s, e), [size]: Math.abs(e - s) }
 }
 
 /**
@@ -364,11 +389,7 @@ const snapResizeAxis = (index, axis, frame, delta, side, { tolerance, grid, obje
   // Each moving edge, and how it follows the pointer.
   const edges = side > 0 ? [{ origin: end, factor: 1 }] : [{ origin: start, factor: 1 }]
   if (centered) edges.push(side > 0 ? { origin: start, factor: -1 } : { origin: end, factor: -1 })
-  const resized = (move) => {
-    const s = side > 0 ? start - (centered ? move : 0) : start + move
-    const e = side > 0 ? end + move : end - (centered ? move : 0)
-    return { ...frame, [pos]: Math.min(s, e), [size]: Math.abs(e - s) }
-  }
+  const resized = (move) => resizeBox(frame, axis, move, side, centered)
   let best = null
   const consider = (move, rank, guides) => {
     const d = Math.abs(move - delta)
@@ -437,13 +458,16 @@ export const snapResize = (index, frame, mode, dx, dy, { tolerance, grid = 0, ob
   const result = { dx, dy, guides: [] }
   const horizontal = mode.includes('e') ? 1 : (mode.includes('w') ? -1 : 0)
   const vertical = mode.includes('s') ? 1 : (mode.includes('n') ? -1 : 0)
+  // As for a move, each axis sees the box resized on the other one.
+  const across = vertical ? resizeBox(frame, 'y', dy, vertical, centered) : frame
   if (horizontal) {
-    const x = snapResizeAxis(index, 'x', frame, dx, horizontal, options)
+    const x = snapResizeAxis(index, 'x', across, dx, horizontal, options)
     result.dx = x.delta
     result.guides.push(...x.guides)
   }
   if (vertical && !(proportional && horizontal)) {
-    const y = snapResizeAxis(index, 'y', frame, dy, vertical, options)
+    const along = horizontal ? resizeBox(frame, 'x', result.dx, horizontal, centered) : frame
+    const y = snapResizeAxis(index, 'y', along, dy, vertical, options)
     result.dy = y.delta
     result.guides.push(...y.guides)
   }

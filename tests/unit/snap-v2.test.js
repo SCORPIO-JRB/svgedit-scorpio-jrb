@@ -159,3 +159,19 @@ describe('measures with Alt (V2)', () => {
     ])
   })
 })
+
+describe('snapping: the row where the box is now (V2)', () => {
+  it('takes the spacings and the guides of the row a diagonal drag brings the box to', () => {
+    const a = { x: 80, y: 80, width: 120, height: 80 }
+    const c = { x: 260, y: 80, width: 120, height: 80 }
+    const index = new SnapIndex([a, c])
+    const moving = { x: 420, y: 300, width: 120, height: 80 }
+    // Up into the row of a and c, 2 short of the spacing of a and c (60).
+    const result = snapMove(index, moving, 18, -218, options)
+    expect([moving.x + result.dx, moving.y + result.dy]).toEqual([440, 80])
+    expect(result.guides.filter((guide) => guide.type === 'gap').map((gap) => [gap.from, gap.to])).toEqual([[200, 260], [380, 440]])
+    // The line of the tops reaches the box where it is.
+    const top = result.guides.find((guide) => guide.type === 'line' && guide.axis === 'y' && guide.at === 80)
+    expect([top.from, top.to]).toEqual([80, 560])
+  })
+})
