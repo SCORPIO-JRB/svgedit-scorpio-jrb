@@ -342,6 +342,8 @@ export default {
     enterNewLinkURL: "Entrez la nouvelle URL de l'hyperlien",
     errorLoadingSVG: 'Erreur : Impossible de charger les données SVG',
     importFailed: "Ce fichier n'a pas pu être importé, le dessin n'a pas changé : {{name}}",
+    importRemoved: "Ces styles du fichier importé s'appliquent à tout le dessin et ont été retirés : {{list}}",
+    ungroupRemoved: 'Ces styles des objets dégroupés ne peuvent pas devenir des attributs et ont été retirés : {{list}}',
     URLLoadFail: "Impossible de charger l'URL",
     retrieving: 'Récupération de « %s »…',
     popupWindowBlocked: 'Popup window may be blocked by browser',

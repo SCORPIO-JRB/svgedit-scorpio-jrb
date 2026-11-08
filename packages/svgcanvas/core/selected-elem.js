@@ -37,6 +37,9 @@ import { getParents } from '../common/util.js'
 import { createClipboardPayload } from './clipboard.js'
 import { drawingMatrixInParent, invert, multiply, parentBoxToDrawing, parentDelta, parentToDrawing } from './multi-transform.js'
 import { INHERITED_PROPERTIES, inheritedFromAncestors, ownPresentationValue } from './inherited.js'
+import { inlineStyleSheets, readViewBox, styleToAttributes } from './svg-paste.js'
+import { convertToNum } from './units.js'
+import { unscopeSelector } from './css-scope.js'
 
 const {
   MoveElementCommand,
@@ -1334,6 +1337,57 @@ const pushGroupProperty = (g, undoable) => {
   return undefined
 }
 
+/** Attributes of a <symbol> that place it, not its objects. */
+const SYMBOL_GEOMETRY = new Set(['id', 'viewBox', 'preserveAspectRatio', 'x', 'y', 'width', 'height', 'refX', 'refY'])
+
+/**
+ * A length of a <use> or <symbol> in user units; a percentage is of the
+ * drawing.
+ * @param {string|null} value
+ * @param {number} size - Size of the drawing in that direction
+ * @returns {number|null} Null when not given
+ */
+const useLength = (value, size) => {
+  if (!value || value === 'auto') return null
+  if (value.trim().endsWith('%')) return size * parseFloat(value) / 100
+  const length = convertToNum('width', value)
+  return Number.isFinite(length) ? length : null
+}
+
+/**
+ * The transform from the view box of a symbol to the area of its <use>
+ * (SVG, "the viewBox attribute"), as the browser shows it.
+ * @param {Element} use
+ * @param {Element} symbol
+ * @returns {string} Empty when the symbol has no view box
+ */
+const viewBoxTransform = (use, symbol) => {
+  const viewBox = readViewBox(symbol)
+  if (!viewBox) return ''
+  const content = svgCanvas.getSvgContent()
+  const area = ['width', 'height'].map((name) => {
+    const size = Number(content.getAttribute(name)) || 0
+    // Without a size, the <use> takes that of the symbol, then the drawing's
+    return useLength(use.getAttribute(name), size) ?? useLength(symbol.getAttribute(name), size) ?? size
+  })
+  const [x, y, w, h] = viewBox
+  let sx = area[0] / w
+  let sy = area[1] / h
+  const [align = 'xMidYMid', meetOrSlice] = (symbol.getAttribute('preserveAspectRatio') || '').trim().split(/\s+/).filter(Boolean)
+  if (align !== 'none') {
+    sx = sy = meetOrSlice === 'slice' ? Math.max(sx, sy) : Math.min(sx, sy)
+  }
+  let tx = -x * sx
+  let ty = -y * sy
+  if (align !== 'none') {
+    if (align.includes('xMid')) tx += (area[0] - w * sx) / 2
+    else if (align.includes('xMax')) tx += area[0] - w * sx
+    if (align.includes('YMid')) ty += (area[1] - h * sy) / 2
+    else if (align.includes('YMax')) ty += area[1] - h * sy
+  }
+  return `matrix(${sx},0,0,${sy},${tx},${ty})`
+}
+
 /**
  * Converts selected/given `<use>` or child SVG element to a group.
  * @function module:selected-elem.SvgCanvas#convertToGroup
@@ -1380,23 +1434,15 @@ const convertToGroup = elem => {
       warn('Unable to convert <use>: missing symbol reference', null, 'selected-elem')
       return
     }
+    const symbol = elem
 
-    ts = $elem.getAttribute('transform') || ''
-    const pos = {
-      x: Number($elem.getAttribute('x')),
-      y: Number($elem.getAttribute('y'))
-    }
-
-    const vb = elem.getAttribute('viewBox')
-
-    if (vb) {
-      const nums = vb.split(/[ ,]+/)
-      pos.x -= Number(nums[0])
-      pos.y -= Number(nums[1])
-    }
-
-    // Not ideal, but works
-    ts += ' translate(' + (pos.x || 0) + ',' + (pos.y || 0) + ')'
+    // What shows the symbol: the transform and position of the <use>, and
+    // the view box of the symbol fitted to the size of the <use>.
+    ts = [
+      $elem.getAttribute('transform'),
+      `translate(${Number($elem.getAttribute('x')) || 0},${Number($elem.getAttribute('y')) || 0})`,
+      viewBoxTransform($elem, symbol)
+    ].filter(Boolean).join(' ')
 
     const useParent = $elem.parentNode
     const useNextSibling = $elem.nextSibling
@@ -1411,19 +1457,24 @@ const convertToGroup = elem => {
     )
     $elem.remove()
 
-    // See if other elements reference this symbol
-    const svgContent = svgCanvas.getSvgContent()
-    // const hasMore = svgContent.querySelectorAll('use:data(symbol)').length;
-    // @todo review this logic
-    const hasMore = svgContent.querySelectorAll('use').length
+    // Other <use> of the same symbol keep it, and the copy gets new identifiers
+    const hasMore = [...svgCanvas.getSvgContent().querySelectorAll('use')]
+      .some((use) => getHref(use) === `#${symbol.id}`)
 
+    // The objects become objects of the drawing, as pasted ones: the
+    // stylesheets, which would apply to the whole drawing, become attributes.
+    const copy = symbol.cloneNode(true)
+    const removed = inlineStyleSheets(copy, { original: (selector) => unscopeSelector(selector, { id: symbol.id, tag: 'symbol' }) })
+    styleToAttributes(copy)
     const g = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'g')
-    const childs = elem.childNodes
-
-    let i
-    for (i = 0; i < childs.length; i++) {
-      g.append(childs[i].cloneNode(true))
+    // The attributes of the file's root (fill, font, class...) apply to its objects
+    for (const attr of copy.attributes) {
+      if (!SYMBOL_GEOMETRY.has(attr.nodeName) && !attr.nodeName.startsWith('xmlns')) {
+        if (attr.namespaceURI) g.setAttributeNS(attr.namespaceURI, attr.nodeName, attr.value)
+        else g.setAttribute(attr.nodeName, attr.value)
+      }
     }
+    g.append(...copy.childNodes)
 
     // Duplicate the gradients for Gecko, since they weren't included in the <symbol>
     if (isGecko()) {
@@ -1440,7 +1491,13 @@ const convertToGroup = elem => {
       g.setAttribute('transform', ts)
     }
 
-    const parent = elem.parentNode
+    const parent = symbol.parentNode
+    if (parent && !hasMore) {
+      // Removed first: the objects keep the identifiers the platform binds to
+      const { nextSibling } = symbol
+      symbol.remove()
+      batchCmd.addSubCommand(new RemoveElementCommand(symbol, nextSibling, parent))
+    }
 
     svgCanvas.uniquifyElems(g)
 
@@ -1461,17 +1518,11 @@ const convertToGroup = elem => {
     if (useParent) {
       useParent.insertBefore(g, useNextSibling)
     }
-
     if (parent) {
-      if (!hasMore) {
-        // remove symbol/svg element
-        const { nextSibling } = elem
-        elem.remove()
-        batchCmd.addSubCommand(
-          new RemoveElementCommand(elem, nextSibling, parent)
-        )
-      }
       batchCmd.addSubCommand(new InsertElementCommand(g))
+    }
+    if (removed.length) {
+      svgCanvas.call('contentRemoved', { action: 'ungroup', items: removed })
     }
 
     svgCanvas.setUseData(g)

@@ -923,6 +923,22 @@ class Editor extends EditorStartup {
   }
 
   /**
+   * Says what an import or an ungrouping could not keep.
+   * @param {external:Window} win
+   * @param {{action: 'import'|'ungroup', items: string[]}} removed
+   * @returns {void}
+   */
+  contentRemoved (win, { action, items }) {
+    const shown = items.slice(0, 12).join(', ') + (items.length > 12 ? ` … (+${items.length - 12})` : '')
+    seAlert(this.i18next.t(action === 'ungroup' ? 'notification.ungroupRemoved' : 'notification.importRemoved', {
+      defaultValue: action === 'ungroup'
+        ? 'These styles of the ungrouped objects could not become attributes and were removed: {{list}}'
+        : 'These styles of the imported file apply to the whole drawing and were removed: {{list}}',
+      list: shown
+    }))
+  }
+
+  /**
    * @returns {void}
    */
   elementRenamed (win, renameObj) {

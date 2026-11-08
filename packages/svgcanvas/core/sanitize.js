@@ -168,6 +168,30 @@ for (const [elt, atts] of Object.entries(svgWhiteList_)) {
 const STYLE_FORBIDDEN_PROPS = ['href', 'xlink:href', 'id', 'class', 'style']
 
 /**
+ * Properties that the stylesheets of a document set, by document.
+ * @type {WeakMap<Document, Set<string>>}
+ */
+const ruleProperties = new WeakMap()
+
+/**
+ * Properties that the stylesheets of a document set (a rough reading: a name
+ * followed by a colon at the start of a declaration).
+ * @param {Document} doc
+ * @returns {Set<string>}
+ */
+const getRuleProperties = (doc) => {
+  if (!ruleProperties.has(doc)) {
+    const names = new Set()
+    for (const style of doc.getElementsByTagNameNS(NS.SVG, 'style')) {
+      const css = style.textContent.replace(/\/\*[\s\S]*?\*\//g, '')
+      for (const [, name] of css.matchAll(/[{;]\s*([\w-]+)\s*:/g)) names.add(name.toLowerCase())
+    }
+    ruleProperties.set(doc, names)
+  }
+  return ruleProperties.get(doc)
+}
+
+/**
  * Tells whether a link or resource URL is safe to keep in the document.
  * Script-capable schemes (`javascript:`, `vbscript:`) are always rejected;
  * `data:` URLs are only kept for images (`<image href="data:image/...">`).
@@ -293,20 +317,29 @@ export const sanitizeSvg = (node) => {
         }
       }
 
-      // For the style attribute, rewrite it in terms of XML presentational attributes
+      // For the style attribute, rewrite it in terms of XML presentational
+      // attributes. A property that a rule of the stylesheets also sets stays
+      // in it: as an attribute, it would lose to that rule.
       if (attrName === 'style') {
-        const props = attr.value.split(';')
-        let p = props.length
-        while (p--) {
-          const [name, val] = props[p].split(':')
-          const styleAttrName = (name || '').trim()
-          const styleAttrVal = (val || '').trim()
+        const ruled = getRuleProperties(doc)
+        const kept = []
+        attr.value.split(';').forEach((declaration) => {
+          const colon = declaration.indexOf(':')
+          const styleAttrName = declaration.slice(0, colon).trim()
+          const styleAttrVal = declaration.slice(colon + 1).trim()
           // Now check that this attribute is supported
-          if (allowedAttrs.includes(styleAttrName) && !STYLE_FORBIDDEN_PROPS.includes(styleAttrName)) {
+          if (colon === -1 || !allowedAttrs.includes(styleAttrName) || STYLE_FORBIDDEN_PROPS.includes(styleAttrName)) return
+          if (ruled.has(styleAttrName)) {
+            kept.push(`${styleAttrName}:${styleAttrVal}`)
+          } else {
             node.setAttribute(styleAttrName, styleAttrVal)
           }
+        })
+        if (kept.length) {
+          node.setAttribute('style', kept.join(';'))
+        } else {
+          node.removeAttribute('style')
         }
-        node.removeAttribute('style')
       }
     }
 

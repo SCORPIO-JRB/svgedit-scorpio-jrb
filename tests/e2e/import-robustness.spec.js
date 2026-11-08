@@ -211,15 +211,13 @@ test.describe('SVG import: integrity of the drawing', () => {
 
   // Defects fixed by the next lots of the plan
 
-  test('a stylesheet in the imported file does not repaint the drawing (lot 4)', async ({ page }) => {
-    test.fail(true, 'The <style> of the imported file still applies to the whole drawing')
+  test('a stylesheet in the imported file does not repaint the drawing', async ({ page }) => {
     const before = await snapshot(page, ['exist'])
     await importFile(page, 'style.svg', `<svg xmlns="${NS}" width="10" height="10"><style>rect{fill:red} .cls-1{fill:#f0f}</style><rect class="cls-1" width="5" height="5"/></svg>`)
     expect(await snapshot(page, ['exist'])).toEqual(before)
   })
 
-  test('the style attribute keeps priority over the class rules (lot 4)', async ({ page }) => {
-    test.fail(true, 'The style attribute is turned into attributes that class rules override')
+  test('the style attribute keeps priority over the class rules', async ({ page }) => {
     const useId = await importFile(page, 'cascade.svg', `<svg xmlns="${NS}" width="10" height="10"><style>.a{fill:red}</style><rect class="a" style="fill:blue" width="5" height="5"/></svg>`)
     const fill = await page.evaluate((useId) => {
       const canvas = window.svgEditor.svgCanvas
@@ -229,8 +227,7 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(fill).toBe('rgb(0, 0, 255)')
   })
 
-  test('an imported file takes the size it declares, before and after ungrouping (lot 4)', async ({ page }) => {
-    test.fail(true, 'The import is scaled to a third of the canvas, and the size changes when ungrouped')
+  test('an imported file takes the size it declares, before and after ungrouping', async ({ page }) => {
     const useId = await importFile(page, 'mm.svg', `<svg xmlns="${NS}" width="200mm" height="100mm" viewBox="0 0 200 100"><rect width="200" height="100" fill="orange"/></svg>`)
     const result = await page.evaluate((useId) => {
       const canvas = window.svgEditor.svgCanvas
@@ -246,8 +243,7 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(result).toEqual({ shown: 756, ungrouped: 756 })
   })
 
-  test('a file that declares only a viewBox is imported at that size (lot 4)', async ({ page }) => {
-    test.fail(true, 'The import is scaled for the canvas, then shrunk again: 53 px wide instead of 1920')
+  test('a file that declares only a viewBox is imported at that size', async ({ page }) => {
     const useId = await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
     const width = await page.evaluate((useId) => {
       const canvas = window.svgEditor.svgCanvas
@@ -256,14 +252,100 @@ test.describe('SVG import: integrity of the drawing', () => {
     expect(width).toBe(1920)
   })
 
-  test('the stylesheet of an imported synoptic does not repaint the drawing (lot 4)', async ({ page }) => {
-    test.fail(true, 'The .fond and .titre rules of the file repaint the objects of the drawing that have these classes')
+  test('the stylesheet of an imported synoptic does not repaint the drawing', async ({ page }) => {
     await openDrawing(page, `<svg width="640" height="480" xmlns="${NS}"><g class="layer"><title>Layer 1</title>` +
       '<rect id="exist" class="fond" x="10" y="10" width="100" height="50" fill="blue"/>' +
       '<text id="exist_text" class="titre" x="10" y="100" font-size="20" fill="black">Existant</text></g></svg>')
     const before = await snapshot(page, ['exist', 'exist_text'])
     await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
     expect(await snapshot(page, ['exist', 'exist_text'])).toEqual(before)
+  })
+
+  test('ungrouping an imported synoptic keeps its look and its live identifiers, and says which styles it removed', async ({ page }) => {
+    await openDrawing(page, `<svg width="640" height="480" xmlns="${NS}"><g class="layer"><title>Layer 1</title>` +
+      '<rect id="exist" class="fond" x="10" y="10" width="100" height="50" fill="blue"/></g></svg>')
+    const before = await snapshot(page, ['exist'])
+    const useId = await importFile(page, 'synoptique-chaufferie.svg', fixture('synoptique-chaufferie.svg'))
+    const look = () => page.evaluate(() => {
+      const paint = (elem) => {
+        const style = getComputedStyle(elem)
+        return [style.fill, style.stroke, style.fontFamily, style.fontSize, style.fontWeight]
+      }
+      return {
+        band: paint(document.querySelector('#bandeau rect')),
+        value: paint(document.getElementById('synthese-temperature-exterieure')),
+        boiler: paint(document.querySelector('#chaudiere-1 .corps')),
+        hidden: getComputedStyle(document.getElementById('mesures-detail')).display,
+        live: document.querySelectorAll('#svgcontent [id^="mesure-"], #svgcontent [id^="synthese-"], #svgcontent [id^="etat-"]').length
+      }
+    })
+    const imported = await look()
+    const alerts = await page.evaluate(() => document.querySelectorAll('se-elix-alert-dialog').length)
+
+    await page.evaluate((useId) => {
+      const canvas = window.svgEditor.svgCanvas
+      canvas.selectOnly([document.getElementById(useId)])
+      canvas.ungroupSelectedElement()
+    }, useId)
+    await page.waitForFunction((alerts) => document.querySelectorAll('se-elix-alert-dialog').length > alerts, alerts)
+
+    expect(await look()).toEqual(imported)
+    expect(imported.live).toBe(30)
+    expect(imported.hidden).toBe('none')
+    expect(await page.evaluate(() => document.querySelectorAll('#svgcontent style, #svgcontent symbol, #svgcontent use').length)).toBe(0)
+    const message = await page.evaluate(() => [...document.querySelectorAll('se-elix-alert-dialog')].pop().textContent)
+    expect(message).toContain('@keyframes flux')
+    expect(message).toContain('font-variant-numeric')
+    expect(await snapshot(page, ['exist'])).toEqual(before)
+  })
+
+  test('a drawing saved with an earlier import ungroups at the same place and size', async ({ page }) => {
+    const drawings = [
+      // A file in millimetres, scaled by the import of the time
+      `<svg xmlns="${NS}" width="640" height="480"><defs><symbol id="s1" width="200mm" height="100mm" viewBox="0 0 200 100">` +
+        '<rect fill="orange" width="200" height="100"/></symbol></defs>' +
+        '<g class="layer"><title>L</title><use id="u1" href="#s1" transform="translate(0) scale(0.8) translate(0)"/></g></svg>',
+      // A view box that does not start at 0, then moved
+      `<svg xmlns="${NS}" width="640" height="480"><defs><symbol id="s2" viewBox="50 20 1920 1080">` +
+        '<rect fill="orange" x="50" y="20" width="1920" height="1080"/></symbol></defs>' +
+        '<g class="layer"><title>L</title><use id="u2" href="#s2" transform="translate(30,40) scale(0.5)"/></g></svg>',
+      // A size given to the <use>, without keeping the proportions
+      `<svg xmlns="${NS}" width="640" height="480"><defs><symbol id="s3" viewBox="0 0 100 100" preserveAspectRatio="none">` +
+        '<rect fill="orange" width="100" height="100"/></symbol></defs>' +
+        '<g class="layer"><title>L</title><use id="u3" href="#s3" x="10" y="20" width="300" height="100"/></g></svg>'
+    ]
+    const box = (selector) => page.evaluate((selector) => {
+      const zoom = window.svgEditor.svgCanvas.getZoom()
+      const rects = [...document.querySelectorAll(selector)].map((elem) => elem.getBoundingClientRect())
+      const left = Math.min(...rects.map((r) => r.left))
+      const top = Math.min(...rects.map((r) => r.top))
+      return [left, top, Math.max(...rects.map((r) => r.right)) - left, Math.max(...rects.map((r) => r.bottom)) - top]
+        .map((n) => Math.round(n / zoom))
+    }, selector)
+    for (const drawing of drawings) {
+      await openDrawing(page, drawing)
+      const before = await box('#svgcontent g.layer use')
+      await page.evaluate(() => {
+        const canvas = window.svgEditor.svgCanvas
+        canvas.selectOnly([document.querySelector('#svgcontent g.layer use')])
+        canvas.ungroupSelectedElement()
+      })
+      expect(await box('#svgcontent g.layer > rect')).toEqual(before)
+    }
+  })
+
+  test('a file imported into a turned group keeps its own look', async ({ page }) => {
+    await openDrawing(page, `<svg xmlns="${NS}" width="640" height="480"><g class="layer"><title>L</title>` +
+      '<g id="turned" transform="rotate(30 100 100) scale(2)"><rect width="20" height="20" fill="green"/></g></g></svg>')
+    await page.evaluate(() => window.svgEditor.svgCanvas.setContext(document.getElementById('turned')))
+    const useId = await importFile(page, 'plain.svg', `<svg xmlns="${NS}" width="100" height="50"><rect width="100" height="50" fill="orange"/></svg>`)
+    const result = await page.evaluate((useId) => {
+      const use = document.getElementById(useId)
+      const zoom = window.svgEditor.svgCanvas.getZoom()
+      const rect = use.getBoundingClientRect()
+      return { group: use.parentNode.id, size: [rect.width / zoom, rect.height / zoom].map(Math.round) }
+    }, useId)
+    expect(result).toEqual({ group: 'turned', size: [100, 50] })
   })
 
   test('a synoptic keeps the id and the accessibility attributes of its root (lot 5)', async ({ page }) => {

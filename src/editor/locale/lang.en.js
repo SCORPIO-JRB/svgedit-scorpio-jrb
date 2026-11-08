@@ -340,6 +340,8 @@ export default {
     enterNewLinkURL: 'Enter the new hyperlink URL',
     errorLoadingSVG: 'Error: Unable to load SVG data',
     importFailed: 'This file could not be imported, the drawing is unchanged: {{name}}',
+    importRemoved: 'These styles of the imported file apply to the whole drawing and were removed: {{list}}',
+    ungroupRemoved: 'These styles of the ungrouped objects could not become attributes and were removed: {{list}}',
     URLLoadFail: 'Unable to load from URL',
     retrieving: "Retrieving '%s' ...",
     popupWindowBlocked: 'Popup window may be blocked by browser',

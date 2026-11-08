@@ -23,15 +23,19 @@ import {
 import {
   transformPoint,
   transformListToTransform,
-  getTransformList
+  getTransformList,
+  getMatrix,
+  isIdentity,
+  matrixMultiply
 } from './math.js'
 import { convertUnit, shortFloat, convertToNum } from './units.js'
 import { isGecko, isChrome, isWebkit } from '../common/browser.js'
 import * as pathModule from './path.js'
 import { NS } from './namespaces.js'
 import * as draw from './draw.js'
-import { recalculateDimensions } from './recalculate.js'
 import { getClosest } from '../common/util.js'
+import { parseSvgText, getDeclaredSize } from './svg-paste.js'
+import { scopeStyleSheet, keyframesNames } from './css-scope.js'
 
 const {
   InsertElementCommand,
@@ -707,33 +711,69 @@ const setSvgString = (xmlString, preventUndo) => {
 }
 
 /**
+ * Confines the stylesheets of an imported `<symbol>` to it: in an SVG shown
+ * in a page, a stylesheet applies to the whole drawing.
+ * @param {Element} symbol - In the drawing, with its identifier
+ * @returns {string[]} What could not be confined, so was removed
+ */
+const scopeImportedStyles = (symbol) => {
+  const styles = [...symbol.querySelectorAll('style')]
+  if (!styles.length) return []
+  const takenKeyframes = new Set()
+  svgCanvas.getSvgContent().querySelectorAll('style').forEach((style) => {
+    if (!symbol.contains(style)) keyframesNames(style.textContent).forEach((name) => takenKeyframes.add(name))
+  })
+  return styles.flatMap((style) => {
+    const { css, removed } = scopeStyleSheet(style.textContent, { id: symbol.id, tag: 'symbol', takenKeyframes })
+    style.textContent = css
+    return removed
+  })
+}
+
+/**
+ * The transform that cancels those of the open group, from the layer: an
+ * import into a turned or scaled group keeps its own look.
+ * @param {Element} parent - Where the import goes
+ * @param {Element} layer
+ * @returns {string|null} Null when the group has no transform
+ */
+const cancelGroupTransform = (parent, layer) => {
+  const groups = []
+  for (let elem = parent; elem && elem !== layer; elem = elem.parentNode) groups.unshift(elem)
+  if (!groups.length) return null
+  const matrix = matrixMultiply(...groups.map((group) => getMatrix(group)))
+  if (isIdentity(matrix)) return null
+  const { a, b, c, d, e, f } = matrix.inverse()
+  return `matrix(${[a, b, c, d, e, f].map((n) => Number(n.toFixed(6))).join(',')})`
+}
+
+/**
  * This function imports the input SVG XML as a `<symbol>` in the `<defs>`, then adds a
- * `<use>` to the current layer.
+ * `<use>` to the current layer, at the size the file declares. The stylesheets
+ * of the file apply only to it. The import is one undo step; when it fails,
+ * the drawing is put back as it was.
  * @function module:svgcanvas.SvgCanvas#importSvgString
  * @param {string} xmlString - The SVG as XML text.
- * @param {boolean} preserveDimension - A boolean to force to preserve initial dimension of the imported svg (force svgEdit don't apply a transformation on the imported svg)
+ * @param {boolean} [_preserveDimension] - No longer used: the import always
+ *   takes the size the file declares
  * @param {boolean} [_doNotUseExisting] - No longer used: each import has its
  *   own `<symbol>` (the same file imported again reused the first one, found
  *   by a 32-bit hash of its text)
  * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @fires module:svgcanvas.SvgCanvas#event:contentRemoved
  * @returns {null|Element} This function returns null if the import was unsuccessful, or the element otherwise.
- * @todo
- * - properly handle if namespace is introduced by imported content (must add to svgcontent
- * and update all prefixes in the imported node)
- * - properly handle recalculating dimensions, `recalculateDimensions()` doesn't handle
- * arbitrary transform lists, but makes some assumptions about how the transform list
- * was obtained
  */
-const importSvgString = (xmlString, preserveDimension, _doNotUseExisting) => {
+const importSvgString = (xmlString, _preserveDimension, _doNotUseExisting) => {
   const dataStorage = svgCanvas.getDataStorage()
-  let j
-  let ts
+  const batchCmd = new BatchCommand('Import Image')
   let useEl
+  let removed
   try {
-    const batchCmd = new BatchCommand('Import Image')
-    // convert string into XML document
-    const newDoc = text2xml(xmlString)
-
+    // Checked before anything changes in the drawing
+    const newDoc = parseSvgText(xmlString)
+    if (!newDoc) {
+      throw new Error('Not an SVG document')
+    }
     svgCanvas.prepareSvg(newDoc)
 
     // import new svg document into our document
@@ -743,51 +783,25 @@ const importSvgString = (xmlString, preserveDimension, _doNotUseExisting) => {
       : svgCanvas.getDOMDocument().importNode(newDoc.documentElement, true)
 
     svgCanvas.uniquifyElems(svg)
-
-    const innerw = convertToNum('width', svg.getAttribute('width'))
-    const innerh = convertToNum('height', svg.getAttribute('height'))
-    const innervb = svg.getAttribute('viewBox')
-    // if no explicit viewbox, create one out of the width and height
-    const vb = innervb ? innervb.split(/[ ,]+/) : [0, 0, innerw, innerh]
-    for (j = 0; j < 4; ++j) {
-      vb[j] = Number(vb[j])
-    }
-
-    // TODO: properly handle preserveAspectRatio
-    const // canvasw = +svgContent.getAttribute('width'),
-      rawCanvash = Number(svgCanvas.getSvgContent().getAttribute('height'))
-    const canvash =
-      Number.isFinite(rawCanvash) && rawCanvash > 0
-        ? rawCanvash
-        : (Number(svgCanvas.getCurConfig().dimensions?.[1]) || 100)
-    // imported content should be 1/3 of the canvas on its largest dimension
-
-    const vbWidth = vb[2]
-    const vbHeight = vb[3]
-    const importW = Number.isFinite(vbWidth) && vbWidth > 0 ? vbWidth : (innerw > 0 ? innerw : 100)
-    const importH = Number.isFinite(vbHeight) && vbHeight > 0 ? vbHeight : (innerh > 0 ? innerh : 100)
-    const safeImportW = Number.isFinite(importW) && importW > 0 ? importW : 100
-    const safeImportH = Number.isFinite(importH) && importH > 0 ? importH : 100
-    ts =
-      safeImportH > safeImportW
-        ? 'scale(' + canvash / 3 / safeImportH + ')'
-        : 'scale(' + canvash / 3 / safeImportW + ')'
-
-    // Hack to make recalculateDimensions understand how to scale
-    ts = `translate(0) ${ts} translate(0)`
+    const { width, height } = getDeclaredSize(svg)
 
     const symbol = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'symbol')
+    const hadDefs = svgCanvas.getSvgContent().getElementsByTagNameNS(NS.SVG, 'defs').length > 0
     const defs = findDefs()
+    if (!hadDefs) {
+      // A <defs> made for the import goes with it
+      batchCmd.addSubCommand(new InsertElementCommand(defs))
+    }
 
     if (isGecko()) {
       // Move all gradients into root for Firefox, workaround for this bug:
       // https://bugzilla.mozilla.org/show_bug.cgi?id=353575
-      // TODO: Make this properly undo-able.
       const elements = svg.querySelectorAll(
         'linearGradient, radialGradient, pattern'
       )
       Array.prototype.forEach.call(elements, el => {
         defs.appendChild(el)
+        batchCmd.addSubCommand(new InsertElementCommand(el))
       })
     }
 
@@ -795,47 +809,48 @@ const importSvgString = (xmlString, preserveDimension, _doNotUseExisting) => {
       const first = svg.firstChild
       symbol.append(first)
     }
-    const attrs = svg.attributes
-    for (const attr of attrs) {
-      // Ok for `NamedNodeMap`
-      symbol.setAttribute(attr.nodeName, attr.value)
+    // The size of the root goes to the <use>: the <symbol> keeps its view
+    // box, which scales the file to that size.
+    for (const attr of svg.attributes) {
+      if (!['x', 'y', 'width', 'height'].includes(attr.nodeName)) {
+        symbol.setAttribute(attr.nodeName, attr.value)
+      }
     }
     // In the drawing before any new identifier is chosen: the identifiers of
     // the file are kept, so a new one must not take one of them.
     defs.append(symbol)
-    if (!symbol.id) symbol.id = svgCanvas.getNextId()
     batchCmd.addSubCommand(new InsertElementCommand(symbol))
+    if (!symbol.id) symbol.id = svgCanvas.getNextId()
+    removed = scopeImportedStyles(symbol)
 
     useEl = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'use')
     useEl.id = svgCanvas.getNextId()
     svgCanvas.setHref(useEl, '#' + symbol.id)
-    ;(
-      svgCanvas.getCurrentGroup() ||
-      svgCanvas.getCurrentDrawing().getCurrentLayer()
-    ).append(useEl)
+    if (width !== null) useEl.setAttribute('width', shortFloat(width))
+    if (height !== null) useEl.setAttribute('height', shortFloat(height))
+    const layer = svgCanvas.getCurrentDrawing().getCurrentLayer()
+    const parent = svgCanvas.getCurrentGroup() || layer
+    const cancel = cancelGroupTransform(parent, layer)
+    if (cancel) useEl.setAttribute('transform', cancel)
+    parent.append(useEl)
     batchCmd.addSubCommand(new InsertElementCommand(useEl))
-    svgCanvas.clearSelection()
-
-    if (!preserveDimension) {
-      useEl.setAttribute('transform', ts)
-      recalculateDimensions(useEl)
-    }
     dataStorage.put(useEl, 'symbol', symbol)
     dataStorage.put(useEl, 'ref', symbol)
-    svgCanvas.addToSelection([useEl])
-
-    // TODO: Find way to add this in a recalculateDimensions-parsable way
-    // if (vb[0] !== 0 || vb[1] !== 0) {
-    //   ts = 'translate(' + (-vb[0]) + ',' + (-vb[1]) + ') ' + ts;
-    // }
-    svgCanvas.addCommandToHistory(batchCmd)
-    // Only the new <use> changed: signalling the whole <svg> made the editor
-    // rebuild its layer list, which cleared the selection made just above, so
-    // the editor could not center the import on the page.
-    svgCanvas.call('changed', [useEl])
   } catch (e) {
+    // Nothing of a failed import stays in the drawing
+    batchCmd.unapply()
     error('Error importing SVG string', e, 'svg-exec')
     return null
+  }
+  svgCanvas.addCommandToHistory(batchCmd)
+  svgCanvas.clearSelection()
+  svgCanvas.addToSelection([useEl])
+  // Only the new <use> changed: signalling the whole <svg> made the editor
+  // rebuild its layer list, which cleared the selection made just above, so
+  // the editor could not center the import on the page.
+  svgCanvas.call('changed', [useEl])
+  if (removed.length) {
+    svgCanvas.call('contentRemoved', { action: 'import', items: removed })
   }
 
   // we want to return the element so we can automatically select it

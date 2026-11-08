@@ -207,7 +207,9 @@ describe('Opening and importing SCorp-io drawings', () => {
       assert.equal(document.getElementById(refOf(rect, 'fill')).firstElementChild.getAttribute('stop-color'), 'blue')
       assert.equal(refOf(rect, 'clip-path'), 'c')
       assert.equal(svgCanvas.getHref(symbol.querySelector('use')), `#${rect.id}`)
-      assert.equal(style, `#${rect.id} { stroke: black } .x #keep { fill: #abc; }`)
+      // Confined to the symbol (lot 4)
+      const scope = `#${symbol.id}`
+      assert.equal(style, `${scope} #${rect.id} { stroke: black } ${scope} .x #keep, ${scope}.x #keep { fill: #abc; }`)
       assert.ok(symbol.querySelector('#u') && symbol.querySelector('#keep'))
       assert.equal(new Set(drawingIds()).size, drawingIds().length, 'No identifier is duplicated')
     })
