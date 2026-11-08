@@ -354,3 +354,62 @@ test.describe('Tidy up and imposed spacing (M9)', () => {
     expect([await num(page, 'e', 'x'), await num(page, 'f', 'x'), await num(page, 'g', 'x')]).toEqual([300, 325, 370])
   })
 })
+
+test.describe('Ungroup keeps stroke widths and inherited properties (M9)', () => {
+  const GROUPED = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
+  <g class="layer"><title>Layer 1</title>
+    <g id="G" transform="scale(2)" fill="#f00" stroke="#000" stroke-width="4" font-size="12">
+      <rect id="a" x="10" y="10" width="20" height="10"/>
+      <rect id="b" x="40" y="10" width="20" height="10" fill="#00f" stroke-width="1"/>
+      <text id="t" x="10" y="50">T</text>
+    </g>
+    <g id="M" transform="matrix(2 0 0 2 10 10)"><rect id="m" x="100" y="100" width="20" height="10" stroke="#000" stroke-width="2"/></g>
+  </g>
+</svg>`
+
+  test.beforeEach(async ({ page }) => {
+    errors.length = 0
+    page.on('pageerror', (err) => errors.push(err.message))
+    await visitAndApproveStorage(page)
+    await loadDrawing(page, GROUPED)
+  })
+
+  test.afterEach(() => {
+    expect(errors).toEqual([])
+  })
+
+  // The layer with the attributes of each element in alphabetical order:
+  // undoing an ungroup puts the group's transform back after its other
+  // attributes, as before M9.
+  const canonical = (page) => page.evaluate(() => {
+    const walk = (el) => `<${el.tagName} ${[...el.attributes].map((a) => `${a.name}="${a.value}"`).sort().join(' ')}>` +
+      [...el.children].map(walk).join('') + (el.children.length ? '' : el.textContent) + `</${el.tagName}>`
+    return walk(document.querySelector('#svgcontent g.layer'))
+  })
+
+  test('the children keep their widths and get the colors, width and font of the group', async ({ page }) => {
+    const before = await canonical(page)
+    await select(page, ['G'])
+    await page.evaluate(() => window.svgEditor.svgCanvas.ungroupSelectedElement())
+    expect(await page.evaluate(() => document.getElementById('G'))).toBeNull()
+    // The geometry takes the scale, the stroke width does not.
+    expect(await nums(page, 'a', ['width', 'stroke-width'])).toEqual({ width: 40, 'stroke-width': 4 })
+    expect(await attr(page, 'a', 'fill')).toBe('#f00')
+    expect(await attr(page, 'a', 'stroke')).toBe('#000')
+    // Own values stay.
+    expect(await attr(page, 'b', 'fill')).toBe('#00f')
+    expect(await attr(page, 'b', 'stroke-width')).toBe('1')
+    expect(await attr(page, 'b', 'stroke')).toBe('#000')
+    expect(await attr(page, 't', 'font-size')).toBe('12')
+    // One undo step gives the group back exactly.
+    expect(await undoSize(page)).toBe(1)
+    await page.keyboard.press('Control+z')
+    expect(await canonical(page)).toBe(before)
+  })
+
+  test('a group with a matrix keeps the stroke widths of its children', async ({ page }) => {
+    await select(page, ['M'])
+    await page.evaluate(() => window.svgEditor.svgCanvas.ungroupSelectedElement())
+    expect(await nums(page, 'm', ['width', 'stroke-width'])).toEqual({ width: 40, 'stroke-width': 2 })
+  })
+})

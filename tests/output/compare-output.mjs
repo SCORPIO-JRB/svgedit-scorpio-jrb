@@ -74,6 +74,9 @@ const SCENARIOS = {
   // the drawing must not change.
   'distribute v page (multi)': `c.selectOnly(${byId(['r1', 'e1', 'p1', 't1'])}); c.alignSelectedElements('dv', 'page')`,
   'arrows, Shift+arrow (keys)': `c.selectOnly(${byId(['r1', 'grp', 'l1'])}); const press = (init) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })); press({ key: 'ArrowRight', code: 'ArrowRight' }); press({ key: 'ArrowRight', code: 'ArrowRight' }); press({ key: 'ArrowDown', code: 'ArrowDown', shiftKey: true })`,
+  // M9: ungrouping keeps stroke widths, and the children get the stroke the
+  // group gave them; M7 lost it (expected difference against M7).
+  'ungroup a scaled group with a stroke': `c.selectOnly(${byId(['r1', 'e1'])}); c.groupSelectedElements(); const g = c.getSelectedElements()[0]; g.setAttribute('stroke', '#00f'); g.setAttribute('stroke-width', '5'); g.setAttribute('transform', 'scale(1.5)'); c.ungroupSelectedElement()`,
   'Mod+D twice, Alt+right arrow (keys)': `c.selectOnly(${byId(['r1', 'p1'])}); const key = (init) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })); key({ key: 'd', code: 'KeyD', ctrlKey: true }); key({ key: 'd', code: 'KeyD', ctrlKey: true }); key({ key: 'ArrowRight', code: 'ArrowRight', altKey: true })`
 }
 // Every element type alone: flip, rotation by the API, resize by a grip,

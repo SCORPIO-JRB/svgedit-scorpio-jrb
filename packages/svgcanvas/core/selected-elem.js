@@ -1436,6 +1436,67 @@ const convertToGroup = elem => {
   }
 }
 
+// Properties a group passes on to its children by inheritance: they would be
+// lost with the group.
+const INHERITED_PROPERTIES = [
+  'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-dasharray',
+  'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit',
+  'stroke-opacity', 'stroke-width', 'font-family', 'font-size', 'font-style',
+  'font-weight', 'text-anchor', 'color', 'visibility'
+]
+// Children that draw with these properties, or pass them on.
+const INHERITING_CHILDREN = new Set([
+  'a', 'circle', 'ellipse', 'g', 'line', 'path', 'polygon', 'polyline', 'rect',
+  'switch', 'text', 'use'
+])
+
+/**
+ * An element's own value of a presentation property: its style first, then
+ * its attribute; null when it inherits the value.
+ * @param {Element} elem
+ * @param {string} prop
+ * @returns {string|null}
+ */
+const ownPresentationValue = (elem, prop) => {
+  const style = elem.getAttribute('style') || ''
+  for (const declaration of style.split(';')) {
+    const i = declaration.indexOf(':')
+    if (i > 0 && declaration.slice(0, i).trim().toLowerCase() === prop) {
+      const value = declaration.slice(i + 1).trim()
+      if (value && value !== 'inherit') { return value }
+    }
+  }
+  const value = elem.getAttribute(prop)?.trim()
+  return value && value !== 'inherit' ? value : null
+}
+
+/**
+ * Before a group is removed, gives each child the fill, stroke and font the
+ * group gave it by inheritance, unchanged: ungrouping changes neither the
+ * colors nor the stroke widths (M9). A child's own values stay.
+ * @param {Element} g
+ * @param {BatchCommand} batchCmd
+ * @returns {void}
+ */
+const pushInheritedProperties = (g, batchCmd) => {
+  const values = INHERITED_PROPERTIES
+    .map((prop) => [prop, ownPresentationValue(g, prop)])
+    .filter(([, value]) => value !== null)
+  if (!values.length) { return }
+  Array.from(g.children).forEach((child) => {
+    if (!INHERITING_CHILDREN.has(child.tagName)) { return }
+    const old = {}
+    values.forEach(([prop, value]) => {
+      if (ownPresentationValue(child, prop) !== null) { return }
+      old[prop] = child.getAttribute(prop)
+      child.setAttribute(prop, value)
+    })
+    if (Object.keys(old).length) {
+      batchCmd.addSubCommand(new ChangeElementCommand(child, old))
+    }
+  })
+}
+
 /**
  * Unwraps all the elements in a selected group (`g`) element. This requires
  * significant recalculations to apply group's transforms, etc. to its children.
@@ -1486,6 +1547,7 @@ const ungroupSelectedElement = () => {
     if (cmd) {
       batchCmd.addSubCommand(cmd)
     }
+    pushInheritedProperties(g, batchCmd)
 
     const parent = g.parentNode
     const anchor = g.nextSibling

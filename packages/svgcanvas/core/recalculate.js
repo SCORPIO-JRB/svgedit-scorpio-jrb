@@ -681,12 +681,9 @@ export const recalculateDimensions = selected => {
           batchCmd.addSubCommand(recalculatedDimensions)
         }
         svgCanvas.setStartTransform(oldStartTransform)
-
-        const sw = child.getAttribute('stroke-width')
-        if (child.getAttribute('stroke') !== 'none' && !Number.isNaN(Number(sw))) {
-          const avg = (Math.abs(em.a) + Math.abs(em.d)) / 2
-          child.setAttribute('stroke-width', Number(sw) * avg)
-        }
+        // Stroke widths are kept: the strokes of a technical drawing have
+        // standard widths (M9). A group returns earlier in this function, so
+        // this branch is not reached today.
       }
       tlist.clear()
     } else {

@@ -5,8 +5,9 @@ Branche `refonte-selection-m9`, partie de `refonte-selection-m7`. Ce lot apporte
 - **L'outil Échelle (K).** La sélection grandit ou rétrécit en gardant ses proportions. L'épaisseur des traits, les pointillés, la taille du texte et le flou suivent la géométrie.
 - **Ranger.** Une sélection disposée à peu près en ligne, en colonne ou en grille devient régulière.
 - **L'espacement imposé.** Un champ « écart » fixe l'espace entre les objets pour la distribution et pour Ranger.
+- **Le dégroupage garde les traits.** Les épaisseurs ne changent pas, et un trait, un remplissage ou une police portés par le groupe passent à ses enfants au lieu de disparaître.
 
-Rien ne change pour les gestes existants : la sortie SVG reste identique à celle de M7 à l'octet près.
+Pour les autres gestes existants, la sortie SVG reste identique à celle de M7 à l'octet près.
 
 ## 1. Ce qui change pour l'utilisateur
 
@@ -81,6 +82,14 @@ Un champ « écart » suit le bouton Ranger.
 
 La valeur est dans l'unité du document.
 
+### Le dégroupage
+
+Décision du 8 novembre : **le dégroupage ne change pas l'épaisseur des traits.**
+
+- **Épaisseurs.** C'était déjà le cas : un groupe mis à l'échelle passe son échelle à la géométrie de ses enfants, et leur `stroke-width` reste le même. Le code qui la multipliait, cité par l'audit, n'était plus atteint ; il est retiré. Conséquence voulue : à l'écran, le trait d'un groupe agrandi ×2 paraît deux fois plus fin après le dégroupage, puisqu'il reprend son épaisseur normalisée. Un texte et un `use` gardent leur matrice, comme avant.
+- **Propriétés du groupe, nouveau.** Un trait, un remplissage ou une police portés par le groupe disparaissaient avec lui : un rectangle qui tenait son trait de son groupe le perdait. Chaque enfant reçoit maintenant ces valeurs, inchangées, s'il n'a pas les siennes. Propriétés transmises : `fill`, `fill-opacity`, `fill-rule`, `stroke` et ses sept propriétés (`stroke-width`, `stroke-dasharray`…), `font-family`, `font-size`, `font-style`, `font-weight`, `text-anchor`, `color` et `visibility`. L'opacité et le flou étaient déjà transmis.
+- **Une seule étape d'annulation,** comme avant.
+
 ### Corrections au passage
 
 **Aligner, distribuer et déplacer par les flèches sont dix fois plus rapides** sur de grandes sélections. Après chaque objet déplacé, son cadre de sélection était redessiné, et la mesure de ce cadre forçait le navigateur à recalculer tout le dessin. Les cadres sont maintenant tous redessinés après les déplacements. Le SVG produit ne change pas.
@@ -99,13 +108,14 @@ Mesures sur 2 000 objets :
 
 Comparaison avec M7 (`c487bf3`) :
 - **allers-retours :** 15 sur 15 identiques ;
-- **scénarios :** 67 sur 67 identiques, sans aucune différence attendue.
+- **scénarios :** 67 sur 68 identiques. La seule différence est voulue : le dégroupage d'un groupe mis à l'échelle dont le trait passe maintenant à un enfant qui n'en avait pas.
 
-Deux scénarios s'ajoutent au script :
+Trois scénarios s'ajoutent au script :
 - une distribution verticale par rapport à la page ;
-- des déplacements aux flèches et Maj+flèche.
+- des déplacements aux flèches et Maj+flèche ;
+- ce dégroupage.
 
-Ils couvrent les déplacements dont le redessin des cadres a changé.
+Les deux premiers couvrent les déplacements dont le redessin des cadres a changé.
 
 Le redimensionnement par les poignées, outil Échelle éteint, garde exactement sa sortie : les huit scénarios « grip resize » sont identiques.
 
@@ -122,6 +132,7 @@ Le redimensionnement par les poignées, outil Échelle éteint, garde exactement
 **Méthodes modifiées :**
 - **`alignSelectedElements(type, relativeTo, { spacing })`.** Un troisième argument facultatif impose l'écart d'une distribution. Sans lui, rien ne change.
 - **`moveSelectedElements`.** Les cadres de sélection suivent après tous les déplacements, et non plus après chacun. Le SVG produit est le même, l'événement `changed` aussi.
+- **`ungroupSelectedElement`.** Les enfants reçoivent le remplissage, le trait et la police du groupe (voir section 1). `pushGroupProperties`, appelé aussi par la conversion d'un `use` en groupe, ne change pas.
 
 **Modules du canevas :**
 - `core/scale-tool.js`, nouveau : l'état de l'outil, la géométrie du geste (`boxPoint`, `anchorOfGrip`, `dragFactor`) et la règle des traits (`readStrokeLengths`, `scaleStrokeLengths`, `scaleNumbers`) ;
@@ -173,6 +184,7 @@ Vérifications manuelles conseillées, dans l'éditeur ouvert sur `http://localh
 5. **Texte, groupe, symbole.** Avec K, agrandissez un texte, un groupe et une pompe (`use`) : tout grossit, rien ne se déforme.
 6. **Ranger.** Disposez quatre rectangles en carré approximatif, sélectionnez-les, cliquez Ranger : ils forment une grille régulière.
 7. **Espacement.** Tapez 10 dans le champ « écart », puis cliquez « Distribuer horizontalement » : 10 unités séparent chaque objet du suivant. Videz le champ pour revenir aux espaces égaux.
+8. **Dégroupage.** Dans la source (Ctrl+U), mettez `stroke="#000" stroke-width="4"` sur un groupe dont les objets n'ont pas de trait. Dégroupez (Ctrl+Maj+G) : chaque objet garde un trait noir de 4.
 
 ### Comparer la sortie avec une autre version
 
@@ -183,10 +195,10 @@ node tests/output/build-reference.mjs refonte-selection-m7 ..\ref-m7
 npx vite preview --port 8010 --strictPort --outDir ..\ref-m7\dist\editor
 ```
 
-Puis, avec la version courante servie sur le port 8000, sans différence attendue :
+Puis, avec la version courante servie sur le port 8000, avec la différence voulue du dégroupage :
 
 ```powershell
-node tests/output/compare-output.mjs --ref=http://127.0.0.1:8010 --new=http://127.0.0.1:8000
+node tests/output/compare-output.mjs --ref=http://127.0.0.1:8010 --new=http://127.0.0.1:8000 --expect="ungroup a scaled group with a stroke"
 ```
 
 ## 4. Tests ajoutés
@@ -206,29 +218,27 @@ node tests/output/compare-output.mjs --ref=http://127.0.0.1:8010 --new=http://12
   - grille approximative rangée en une étape, puis immobile ;
 - **Ranger, fonctions pures :** lignes qu'un objet haut ne fusionne pas, écart le plus fréquent ou médian, rangée, colonne avec écart imposé, grille de largeurs et hauteurs différentes, case vide, objets d'une même ligne dans une même colonne.
 
-**`tests/e2e/scale-m9.spec.js` (12 tests, sans erreur dans la page) :**
+**`tests/e2e/scale-m9.spec.js` (14 tests, sans erreur dans la page) :**
 - **outil :** K, V et un outil de dessin ;
 - **gestes :** objet seul, poignée de côté, multi-sélection (proportions, traits, pointillés, positions relatives, aperçu identique au résultat, une étape, annuler et rétablir à l'octet près), Alt, Échap ;
 - **types :** texte, groupe et `use` ; rectangle tourné ;
 - **panneau :** remplacement de L et H, facteur compté depuis la sélection, largeur autour d'une ancre choisie, ancre au clavier ;
 - **Ranger et espacement :** grille approximative en une étape d'annulation, écart imposé à Ranger et à la distribution, champ vide.
+- **Dégroupage :** épaisseurs gardées et propriétés du groupe transmises, valeurs propres des enfants gardées, une étape d'annulation ; groupe à matrice.
 
-**`tests/output/`** : deux scénarios de déplacement.
+**`tests/output/`** : deux scénarios de déplacement et un de dégroupage.
 
 **`tests/perf/`** : trois mesures et leurs budgets.
 
 Bilan :
 - lint propre ;
 - 755 tests unitaires verts (735 + 20) ;
-- 259 tests E2E verts (247 + 12) ;
-- sortie identique à M7.
+- 261 tests E2E verts (247 + 14) ;
+- sortie identique à M7, sauf le dégroupage voulu.
 
 ## 5. Limites connues et décisions à prendre
 
-- **Dégroupage d'un groupe à matrice : décision à prendre.** Le plan demande que le dégroupage « cesse de modifier l'épaisseur des traits sans le dire ». Aujourd'hui, dégrouper un groupe mis à l'échelle multiplie l'épaisseur de ses enfants, pour garder leur rendu. M9 n'y touche pas, car ce serait changer la sortie d'un geste existant. Il y a trois options :
-  - garder ce comportement ;
-  - garder les épaisseurs, au prix d'un rendu qui change au dégroupage ;
-  - prévenir l'utilisateur.
+- **SVG collé en millimètres (M7).** Il arrive dans un groupe mis à l'échelle (×3,78). Une fois dégroupé, ses traits gardent leur valeur et paraissent donc 3,78 fois plus fins qu'avant le dégroupage. C'est la conséquence de la décision du 8 novembre.
 - **Alignement dans une case de Ranger : à confirmer.** Ranger aligne chaque objet sur le haut et la gauche de sa case. Un centrage serait possible si les synoptiques le demandent ; le bouton « Centrer » reste disponible ensuite.
 - **Ce que l'outil Échelle laisse de côté :**
   - les filtres autres que le flou de l'éditeur ;
