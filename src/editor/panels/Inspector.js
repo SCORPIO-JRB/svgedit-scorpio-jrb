@@ -3,10 +3,12 @@
  * section 4.5): one inspector, with sections at fixed places.
  *
  * Order: actions on the selection, Geometry, Appearance, Fill, Stroke,
- * Text, Effects, Identity, Extensions, Document. A section where nothing
- * applies is hidden and the others keep their order. Without selection the
- * tab describes the document; Fill and Stroke then give the style of the
- * next objects drawn, as they always did in SVG-Edit.
+ * Text, Effects, Identity, Extensions, Frame, Document, Frames. A section
+ * where nothing applies is hidden and the others keep their order. Without
+ * selection the tab describes the document and lists its frames to export;
+ * Fill and Stroke then give the style of the next objects drawn, as they
+ * always did in SVG-Edit. A frame selected (lot V5) shows its own section
+ * alone; the frames module fills both.
  *
  * The groups of fields are those of TopPanel and BottomPanel, with their ids
  * and classes: TopPanel.js still shows and hides them and fills their values,
@@ -25,7 +27,7 @@ import { escapeHtml } from './TopBar.js'
 
 const { isValidUnit } = SvgCanvas
 
-export const SECTIONS = ['actions', 'geometry', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity', 'extensions', 'document']
+export const SECTIONS = ['actions', 'geometry', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity', 'extensions', 'frame', 'document', 'frames']
 
 /** Order of the geometry groups: position, size, then angle. */
 const GEOMETRY_ORDER = {
@@ -379,10 +381,13 @@ export class Inspector {
   refreshSections () {
     const selected = this.editor.svgCanvas?.getSelectedElements().filter(Boolean) ?? []
     const none = selected.length === 0
+    const frame = none && Boolean(this.editor.frames?.selected)
     for (const section of this.root.querySelectorAll('.se-section')) {
       const name = section.dataset.section
       let shown
-      if (name === 'document') shown = none
+      if (frame) shown = name === 'frame'
+      else if (name === 'frame') shown = false
+      else if (name === 'document' || name === 'frames') shown = none && Boolean(section.querySelector('.se-section-body').children.length)
       else if (['fill', 'stroke', 'appearance'].includes(name)) shown = true
       else shown = [...section.querySelector('.se-section-body').children].some(isShown)
       if (name === 'actions') {
@@ -400,12 +405,19 @@ export class Inspector {
     const { editor } = this
     const selected = editor.svgCanvas?.getSelectedElements().filter(Boolean) ?? []
     const none = this.refreshSections()
-    if (none) this.refreshDocument()
+    if (none) {
+      this.refreshDocument()
+      editor.frames?.refreshInspector()
+    }
     this.root.dataset.empty = String(none)
     // The head: the type and the id of the selection.
     const type = this.tab.querySelector('.se-inspector-type')
     const id = this.tab.querySelector('.se-inspector-id')
-    if (none) {
+    const frame = none && editor.frames?.selected
+    if (frame) {
+      type.textContent = editor.i18next.t('layout.section_frame')
+      id.textContent = frame.getAttribute('name') || ''
+    } else if (none) {
       type.textContent = editor.i18next.t('layout.section_document')
       id.textContent = ''
     } else if (selected.length > 1) {

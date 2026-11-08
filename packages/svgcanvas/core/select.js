@@ -854,6 +854,27 @@ export class SelectorManager {
   }
 
   /**
+  * Moves the frames of the selection, its common frame and its grips by a
+  * translation on the screen, during a drag (lot V5, S1). Each frame was
+  * computed again for each element on each move: 60 ms a move at 5 000
+  * objects. The frames are drawn again once, when the drag ends.
+  * @param {number} dx - Screen pixels
+  * @param {number} dy - Screen pixels
+  * @returns {void}
+  */
+  setDragOffset (dx, dy) {
+    this.selectionGroup?.setAttribute('transform', `translate(${dx},${dy})`)
+  }
+
+  /**
+  * Ends the translation of `setDragOffset`.
+  * @returns {void}
+  */
+  clearDragOffset () {
+    this.selectionGroup?.removeAttribute('transform')
+  }
+
+  /**
   * Keeps the common frame on a box during a gesture on the whole selection,
   * whatever the selectors' boxes; null releases it.
   * @param {module:utilities.BBoxObject|null} box - Screen coordinates
@@ -941,8 +962,8 @@ export class SelectorManager {
       if (selector) { selector.hasGrips = false }
     })
     this.multiGrips = true
-    if (this.selectorGripsGroup.parentNode !== this.selectorParentGroup) {
-      this.selectorParentGroup.append(this.selectorGripsGroup)
+    if (this.selectorGripsGroup.parentNode !== this.selectionGroup) {
+      this.selectionGroup.append(this.selectorGripsGroup)
       Selector.updateGripCursors(0)
     }
     this.showRotateGrip(true)
@@ -1038,7 +1059,14 @@ export class SelectorManager {
       }
     })
     this.dimensionLabel.append(this.dimensionBack, this.dimensionText)
-    this.selectorParentGroup.append(this.hoverOutline, this.multiFrame, this.selectorGripsGroup, this.dimensionLabel)
+    // The frames of the selection, its common frame and its grips: a drag
+    // moves them as one, by a single translation of this group (lot V5).
+    this.selectionGroup = svgCanvas.createSVGElement({
+      element: 'g',
+      attr: { id: 'selectorSelectionGroup' }
+    })
+    this.selectionGroup.append(this.multiFrame, this.selectorGripsGroup)
+    this.selectorParentGroup.append(this.hoverOutline, this.selectionGroup, this.dimensionLabel)
     svgCanvas.getSvgRoot().append(this.selectorParentGroup)
     this.multiGrips = false
     this.frameBox = null
@@ -1209,7 +1237,7 @@ export class SelectorManager {
     }
     // if we reached here, no available selectors were found, we create one
     this.selectors[N] = new Selector(N, elem, bbox, exactBBox)
-    this.selectorParentGroup.append(this.selectors[N].selectorGroup)
+    this.selectionGroup.append(this.selectors[N].selectorGroup)
     this.selectorMap[elem.id] = this.selectors[N]
     return this.selectors[N]
   }

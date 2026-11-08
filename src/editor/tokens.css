@@ -85,6 +85,9 @@
   --se-grid-major: rgb(128 128 128 / 42%);
   --se-guide: #e0115f;
   --se-guide-text: #fff;
+  /* Frames to export (lot V5): a grey outline and its name, above it. */
+  --se-frame: #8c8c8c;
+  --se-frame-label: #a3a3a3;
 
   /*
    * Markers drawn over a colour being picked (gradient stops, opacity bar):
@@ -223,6 +226,8 @@
   --se-grid-major: rgb(96 96 96 / 38%);
   --se-guide: #e0115f;
   --se-guide-text: #fff;
+  --se-frame: #767676;
+  --se-frame-label: #5e5e5e;
 
   --se-shadow-float: 0 4px 16px rgb(0 0 0 / 12%);
   --se-shadow-menu: 0 8px 24px rgb(0 0 0 / 16%);

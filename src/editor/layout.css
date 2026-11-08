@@ -2145,3 +2145,112 @@
 #se-paint:focus {
   outline: none;
 }
+
+/* Frames to export (lot V5): in the interaction layer, a grey outline and
+   its name above it; the name moves the frame, the handles of a selected
+   frame resize it. */
+.se-layout-canvas #se-frames .se-frame-box {
+  fill: none;
+  stroke: var(--se-frame);
+  stroke-width: 1px;
+  shape-rendering: crispEdges;
+}
+
+.se-layout-canvas #se-frames .se-frame-label {
+  fill: var(--se-frame-label);
+  font-family: var(--se-font-ui);
+  font-size: var(--se-font-size-label);
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+
+.se-layout-canvas #se-frames .se-frame-hit {
+  fill: none;
+  pointer-events: all;
+  cursor: move;
+}
+
+.se-layout-canvas #se-frames .se-frame-selected .se-frame-box {
+  stroke: var(--se-selection);
+  stroke-width: 1.5px;
+}
+
+.se-layout-canvas #se-frames .se-frame-selected .se-frame-label {
+  fill: var(--se-accent);
+}
+
+.se-layout-canvas #se-frames .se-frame-handle {
+  fill: var(--se-text-on-accent);
+  stroke: var(--se-selection);
+  stroke-width: 1px;
+  pointer-events: all;
+}
+
+.se-layout-canvas [data-section="frame"] > .se-section-body,
+.se-layout-canvas [data-section="frames"] > .se-section-body {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.se-layout-canvas .se-field select {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-weight: normal;
+  outline: none;
+}
+
+.se-layout-canvas .se-field select option {
+  background: var(--se-surface-raised);
+  color: var(--se-text);
+}
+
+.se-layout-canvas .se-frame-list {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.se-layout-canvas .se-frame-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  min-height: var(--se-control-size);
+  padding: 0 var(--se-space-2);
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.se-layout-canvas .se-frame-row:hover {
+  background: var(--se-control-hover);
+}
+
+.se-layout-canvas .se-frame-row:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+}
+
+.se-layout-canvas .se-frame-size {
+  color: var(--se-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.se-layout-canvas .se-frame-empty {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--se-text-secondary);
+}

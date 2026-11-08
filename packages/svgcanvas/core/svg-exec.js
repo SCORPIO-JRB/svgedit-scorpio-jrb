@@ -233,10 +233,11 @@ const elementToString = (elem, indent) => {
       //   res.w += unit;
       //   res.h += unit;
       // }
+      const origin = svgCanvas.getPageOrigin?.() ?? { x: 0, y: 0 }
       if (curConfig.dynamicOutput) {
         vb = elem.getAttribute('viewBox')
-        if (!vb) {
-          vb = [0, 0, res.w, res.h].join(' ')
+        if (!vb || origin.x || origin.y) {
+          vb = [origin.x, origin.y, res.w, res.h].join(' ')
         }
         out.push(` viewBox="${vb}" xmlns="${NS.SVG}"`)
       } else {
@@ -250,7 +251,7 @@ const elementToString = (elem, indent) => {
             : ` width="${convertUnit(res.w, unit) + unit}" height="${convertUnit(res.h, unit) + unit}"`
         }
         if (declared?.viewBox) {
-          size += ` viewBox="0 0 ${res.w} ${res.h}"`
+          size += ` viewBox="${origin.x} ${origin.y} ${res.w} ${res.h}"`
         }
         out.push(`${size} xmlns="${NS.SVG}"`)
       }
@@ -707,6 +708,13 @@ const setSvgString = (xmlString, preventUndo) => {
       const vb = viBox.split(/[ ,]+/)
       const vbWidth = Number(vb[2])
       const vbHeight = Number(vb[3])
+      // The origin of the viewBox (lot V5): the page starts there, and the
+      // save writes it back. It was ignored, so the drawing moved.
+      const vbX = Number(vb[0])
+      const vbY = Number(vb[1])
+      if ((vbX || vbY) && Number.isFinite(vbX) && Number.isFinite(vbY)) {
+        dataStorage.put(content, 'viewBoxOrigin', { x: vbX, y: vbY })
+      }
       if (Number.isFinite(vbWidth)) {
         attrs.width = vbWidth
       }

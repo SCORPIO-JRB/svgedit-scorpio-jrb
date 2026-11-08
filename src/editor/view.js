@@ -209,6 +209,7 @@ export class ViewController {
       this.offset = place.offset
       // In the same frame as the drawing.
       this.editor.grid?.update()
+      this.editor.frames?.update()
     }
     this.slack = slack
     this.size = { width, height }

@@ -580,12 +580,14 @@ const alignSelectedElements = (type, relativeTo, { spacing, undoable = true } = 
         maxy = maxBbox.y + maxBbox.height
       }
       break
-    case 'page':
-      minx = 0
-      miny = 0
-      maxx = svgCanvas.getContentW()
-      maxy = svgCanvas.getContentH()
+    case 'page': {
+      const origin = svgCanvas.getPageOrigin?.() ?? { x: 0, y: 0 }
+      minx = origin.x
+      miny = origin.y
+      maxx = origin.x + svgCanvas.getContentW()
+      maxy = origin.y + svgCanvas.getContentH()
       break
+    }
     default:
       // 'selected'
       minx = Math.min(...bboxes.map(box => box.x))
@@ -639,7 +641,7 @@ const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes,
     .sort((firstBox, secondBox) => firstBox.x - secondBox.x)
 
   if (relativeTo === 'page') {
-    bboxesSortedClone.unshift({ x: 0, y: 0, width: 0, height: maxy }) // virtual left box
+    bboxesSortedClone.unshift({ x: minx, y: 0, width: 0, height: maxy }) // virtual left box
     bboxesSortedClone.push({ x: maxx, y: 0, width: 0, height: maxy }) // virtual right box
   }
 
@@ -697,7 +699,7 @@ const _getDistributeVerticalDistances = (relativeTo, selectedElements, bboxes, m
     .sort((firstBox, secondBox) => firstBox.y - secondBox.y)
 
   if (relativeTo === 'page') {
-    bboxesSortedClone.unshift({ x: 0, y: 0, width: maxx, height: 0 }) // virtual top box
+    bboxesSortedClone.unshift({ x: 0, y: miny, width: maxx, height: 0 }) // virtual top box
     bboxesSortedClone.push({ x: 0, y: maxy, width: maxx, height: 0 }) // virtual bottom box
   }
 
@@ -1737,11 +1739,13 @@ const updateCanvas = (w, h, offset) => {
     viewBox: `0 0 ${svgCanvas.contentW} ${svgCanvas.contentH}`
   })
 
+  // The page starts at the origin of the viewBox of the document (lot V5).
+  const origin = svgCanvas.getPageOrigin?.() ?? { x: 0, y: 0 }
   assignAttributes(bg, {
     width: svgCanvas.getSvgContent().getAttribute('width'),
     height: svgCanvas.getSvgContent().getAttribute('height'),
-    x,
-    y
+    x: x + origin.x * zoom,
+    y: y + origin.y * zoom
   })
 
   const bgImg = getElement('background_image')

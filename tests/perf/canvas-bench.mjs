@@ -18,8 +18,12 @@
  * of one drag move among the visible neighbours, averaged over 30 moves, the
  * index read once at the start of the gesture, and the hover.
  *
+ * So is the drag of a large selection (lot V5, S1): the script time of one
+ * move with everything selected, averaged over 10 moves, without the frame
+ * the browser then draws; and the same move with its frame.
+ *
  * Usage:
- *   node tests/perf/canvas-bench.mjs [--sizes=500,2000] [--snap-sizes=10000]
+ *   node tests/perf/canvas-bench.mjs [--sizes=500,2000] [--snap-sizes=10000] [--drag-sizes=5000]
  *                                    [--url=http://localhost:8000/index.html]
  *                                    [--out=results.json] [--budgets=tests/perf/budgets.json]
  *
@@ -41,6 +45,7 @@ const args = Object.fromEntries(process.argv.slice(2).map((arg) => {
 
 const sizes = (args.sizes || '500,2000').split(',').map(Number).filter(Boolean)
 const snapSizes = (args['snap-sizes'] || '').split(',').map(Number).filter(Boolean)
+const dragSizes = (args['drag-sizes'] || '').split(',').map(Number).filter(Boolean)
 const url = args.url || 'http://localhost:8000/index.html'
 
 const MEASURES = [
@@ -62,7 +67,9 @@ const MEASURES = [
   ['hover', 'Surbrillance au survol (un mouvement, sans attendre l\'image)'],
   ['snapSearch', 'Accroche : recherche d\'un mouvement (V2)'],
   ['snapIndex', 'Accroche : index au début du geste (V2)'],
-  ['snapDragMove', 'Un mouvement de glisser avec accroche (V2)']
+  ['snapDragMove', 'Un mouvement de glisser avec accroche (V2)'],
+  ['dragMoveScript', 'Glisser tout, calcul d\'un mouvement sans l\'image (V5)'],
+  ['dragMoveFrame', 'Glisser tout, un mouvement et son image (V5)']
 ]
 
 const launchOptions = process.env.PW_CHROMIUM_PATH
@@ -78,6 +85,9 @@ try {
   }
   for (const size of snapSizes) {
     results.sizes[size] = { ...results.sizes[size], ...await benchSnap(size) }
+  }
+  for (const size of dragSizes) {
+    results.sizes[size] = { ...results.sizes[size], ...await benchDrag(size) }
   }
 } finally {
   await browser.close()
@@ -341,6 +351,66 @@ async function benchSnap (size) {
     out.snapDragMove = move / moves
     out.snapBoxes = canvas.snapTiming?.boxes
     return out
+  }, size)
+  await page.close()
+  return Object.fromEntries(Object.entries(measures).map(([key, ms]) => [key, Math.round(ms * 100) / 100]))
+}
+
+/**
+ * The drag of `size` rectangles, all selected (lot V5, S1).
+ * @param {number} size
+ * @returns {Promise<object>}
+ */
+async function benchDrag (size) {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
+  page.setDefaultTimeout(15 * 60 * 1000)
+  await page.goto(url)
+  await page.waitForFunction(() => window.svgEditor?.svgCanvas &&
+    document.querySelector('se-storage-dialog')?.shadowRoot?.querySelector('#storage_ok'))
+  await page.evaluate(() => {
+    document.querySelector('se-storage-dialog').shadowRoot.querySelector('#storage_ok').click()
+  })
+  const measures = await page.evaluate(async (n) => {
+    const cols = Math.ceil(Math.sqrt(n))
+    const step = 1000 / cols
+    const side = (600 / cols).toFixed(1)
+    let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000"><g class="layer"><title>Layer 1</title>'
+    for (let i = 0; i < n; i++) {
+      const x = ((i % cols) * step).toFixed(1)
+      const y = (Math.floor(i / cols) * step).toFixed(1)
+      svg += `<rect id="r${i}" x="${x}" y="${y}" width="${side}" height="${side}" fill="#3a6" stroke="#000" stroke-width="1"/>`
+    }
+    svg += '</g></svg>'
+    const editor = window.svgEditor
+    editor.setConfig({ objectSnapping: false, gridSnapping: false })
+    editor.svgCanvas.setSvgString(svg)
+    editor.zoomChanged(window, 'canvas')
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+    const mouse = (type, target, x, y) => target.dispatchEvent(new MouseEvent(type, {
+      bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: type === 'mouseup' ? 0 : 1, view: window
+    }))
+    await frame()
+    const canvas = editor.svgCanvas
+    canvas.selectAllInCurrentLayer()
+    await frame()
+    const first = document.getElementById('r0')
+    const box = first.getBoundingClientRect()
+    const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+    mouse('mousedown', first, start.x, start.y)
+    mouse('mousemove', first, start.x + 10, start.y + 10)
+    await frame()
+    let script = 0
+    let withFrame = 0
+    const moves = 10
+    for (let i = 1; i <= moves; i++) {
+      const t = performance.now()
+      mouse('mousemove', first, start.x + 10 + i * 2, start.y + 10 + i * 1.5)
+      script += performance.now() - t
+      await frame()
+      withFrame += performance.now() - t
+    }
+    mouse('mouseup', first, start.x + 40, start.y + 30)
+    return { dragMoveScript: script / moves, dragMoveFrame: withFrame / moves }
   }, size)
   await page.close()
   return Object.fromEntries(Object.entries(measures).map(([key, ms]) => [key, Math.round(ms * 100) / 100]))

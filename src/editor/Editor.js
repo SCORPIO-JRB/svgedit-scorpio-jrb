@@ -86,6 +86,7 @@ class Editor extends EditorStartup {
       if (this.svgCanvas) this.svgCanvas.setConfig(this.configObj.curConfig)
       if (opts && ['showGrid', 'snappingStep', 'gridSubdivisions', 'gridColor'].some((key) => key in opts)) {
         this.grid?.update()
+        this.frames?.update()
       }
       return result
     }
@@ -893,6 +894,7 @@ class Editor extends EditorStartup {
     const newCanX = w / 2
     const offset = this.svgCanvas.updateCanvas(w, h)
     this.grid?.update()
+    this.frames?.update()
 
     const ratio = newCanX / oldCanX
 
@@ -1064,7 +1066,8 @@ class Editor extends EditorStartup {
         // This occurs for the text elements in Firefox. Not for a
         // multi-selection: the panel would show the last changed element alone
         // (and, in the angle field, its own angle).
-      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode) {
+      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode && !elem.closest?.('metadata')) {
+        // Not the frames to export, nor other data of the editor (lot V5).
         this.selectedElement = elem
       }
     })
@@ -1501,7 +1504,8 @@ class Editor extends EditorStartup {
         ? this.configObj.curConfig.snappingStep
         : 1
       const multi = this.svgCanvas.getZoom() * step
-      this.svgCanvas.moveSelectedElements(dx * multi, dy * multi)
+      // Nudges in a row are one undo step (lot V5).
+      this.svgCanvas.undoMgr.merging('nudge', () => this.svgCanvas.moveSelectedElements(dx * multi, dy * multi))
     }
   }
 

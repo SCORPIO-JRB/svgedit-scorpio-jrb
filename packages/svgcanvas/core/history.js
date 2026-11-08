@@ -116,10 +116,12 @@ export class Command {
   }
 
   /**
-    * @returns {string} String with element associated with this command
+    * @returns {string} Name of the class of this command
   */
   type () {
-    return this.constructor.name
+    // Written out: a minifier renames the classes, and the handlers of the
+    // history compare this name (lot V5).
+    return this.constructor.commandType ?? this.constructor.name
   }
 }
 
@@ -526,6 +528,37 @@ export class BatchCommand extends Command {
 /**
 *
 */
+for (const [cls, name] of [
+  [MoveElementCommand, 'MoveElementCommand'],
+  [InsertElementCommand, 'InsertElementCommand'],
+  [RemoveElementCommand, 'RemoveElementCommand'],
+  [ChangeElementCommand, 'ChangeElementCommand'],
+  [BatchCommand, 'BatchCommand']
+]) {
+  Object.defineProperty(cls, 'commandType', { value: name })
+}
+
+/**
+ * Two steps of the same kind on the same elements, added closer than this
+ * (in ms), form a single step: nudges with the arrows, characters typed in a
+ * text (lot V5, S4).
+ */
+export const MERGE_DELAY = 1000
+
+/** Steps kept by default; the oldest go first. */
+export const HISTORY_LIMIT = 1000
+
+/**
+ * @param {Element[]} a
+ * @param {Element[]} b
+ * @returns {boolean} The same elements, in any order
+ */
+const sameElements = (a, b) => {
+  if (!a || !b || a.length !== b.length) return false
+  const set = new Set(a)
+  return b.every((elem) => set.has(elem))
+}
+
 export class UndoManager {
   /**
   * @param {module:history.HistoryEventHandler} historyEventHandler
@@ -534,6 +567,12 @@ export class UndoManager {
     this.handler_ = historyEventHandler || null
     this.undoStackPointer = 0
     this.undoStack = []
+    /** Steps kept; 0 keeps them all. */
+    this.limit = HISTORY_LIMIT
+    /** Clock of the merges, replaceable in tests. */
+    this.now = () => Date.now()
+    this.mergeKey_ = null
+    this.mergeDelay_ = MERGE_DELAY
 
     // this is the stack that stores the original values, the elements and
     // the attribute name for begin/finish
@@ -624,8 +663,92 @@ export class UndoManager {
     if (this.undoStackPointer < this.undoStack.length && this.undoStack.length > 0) {
       this.undoStack = this.undoStack.splice(0, this.undoStackPointer)
     }
+    const now = this.now()
+    const key = this.mergeKey_
+    if (key) {
+      const elements = cmd.elements()
+      const last = this.undoStack[this.undoStack.length - 1]
+      if (last && last.mergeKey === key && now - last.addedAt <= this.mergeDelay_ &&
+        sameElements(last.mergeElements, elements)) {
+        let batch = last
+        if (!(last instanceof BatchCommand)) {
+          batch = new BatchCommand(last.text)
+          batch.addSubCommand(last)
+          batch.mergeKey = key
+          batch.mergeElements = last.mergeElements
+          this.undoStack[this.undoStack.length - 1] = batch
+        }
+        batch.addSubCommand(cmd)
+        batch.addedAt = now
+        this.undoStackPointer = this.undoStack.length
+        return
+      }
+      cmd.mergeKey = key
+      cmd.mergeElements = elements
+    }
+    cmd.addedAt = now
     this.undoStack.push(cmd)
+    if (this.limit > 0 && this.undoStack.length > this.limit) {
+      this.undoStack.splice(0, this.undoStack.length - this.limit)
+    }
     this.undoStackPointer = this.undoStack.length
+  }
+
+  /**
+  * Runs `fn`; each step it adds joins the previous step if that one was added
+  * under the same key, on the same elements, less than `MERGE_DELAY` ago.
+  * @param {string} key - Kind of step, such as "nudge" or "text"
+  * @param {() => any} fn
+  * @param {number} [delay=MERGE_DELAY] - In ms; Infinity joins the steps
+  *   until `endMerge()`
+  * @returns {any} What `fn` returns
+  */
+  merging (key, fn, delay = MERGE_DELAY) {
+    const previous = [this.mergeKey_, this.mergeDelay_]
+    this.mergeKey_ = key
+    this.mergeDelay_ = delay
+    try {
+      return fn()
+    } finally {
+      [this.mergeKey_, this.mergeDelay_] = previous
+    }
+  }
+
+  /**
+  * Puts `cmd` before the last step, the two forming one step: a creation
+  * recorded once what is typed in it already is (lot V5).
+  * @param {Command} cmd
+  * @returns {boolean} False when there is no last step, or it was undone
+  */
+  prependToLast (cmd) {
+    const last = this.undoStack[this.undoStack.length - 1]
+    if (!last || this.undoStackPointer !== this.undoStack.length) return false
+    const batch = new BatchCommand(cmd.text)
+    batch.addSubCommand(cmd)
+    batch.addSubCommand(last)
+    batch.mergeKey = last.mergeKey
+    batch.mergeElements = last.mergeElements
+    batch.addedAt = last.addedAt
+    this.undoStack[this.undoStack.length - 1] = batch
+    return true
+  }
+
+  /**
+  * The next step will not join the last one, whatever its key: the editing
+  * of a text ends, for instance.
+  * @returns {void}
+  */
+  endMerge () {
+    const last = this.undoStack[this.undoStack.length - 1]
+    if (last) last.mergeKey = null
+  }
+
+  /**
+  * @returns {Command[]} The steps, oldest first; those from
+  *   `getUndoStackSize()` on can be redone
+  */
+  getSteps () {
+    return [...this.undoStack]
   }
 
   /**
@@ -646,7 +769,7 @@ export class UndoManager {
       const elem = elems[i]
       if (!elem) { continue }
       elements[i] = elem
-      oldValues[i] = elem.getAttribute(attrName)
+      oldValues[i] = attrName === '#text' ? elem.textContent : elem.getAttribute(attrName)
     }
     this.undoableChangeStack[p] = {
       attrName,
@@ -672,7 +795,10 @@ export class UndoManager {
       if (!elem) { continue }
       const changes = {}
       changes[attrName] = changeset.oldValues[i]
-      if (changes[attrName] !== elem.getAttribute(attrName)) {
+      // The content of a text is not an attribute: typing it was never
+      // recorded (lot V5).
+      const current = attrName === '#text' ? elem.textContent : elem.getAttribute(attrName)
+      if (changes[attrName] !== current) {
         batchCmd.addSubCommand(new ChangeElementCommand(elem, changes, attrName))
       }
     }

@@ -12,7 +12,7 @@ couleur codée en dur, de `<style>` ni de script ; les tracés sont en `currentC
 - Material Symbols : 106 fichiers. Tracé et `viewBox="0 -960 960 960"` repris tels quels, avec
   `width="24" height="24"` et `fill="currentColor"` sur la racine. `flip_vertical.svg` est le
   tracé de `flip` pivoté de 90° (attribut `transform`).
-- Dessins propres : 50 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
+- Dessins propres : 51 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
   `currentColor` de 1,5 (l'épaisseur de Material Symbols en graisse 400 : 60/960 de 24 px),
   extrémités et jointures rondes. Exceptions voulues : les icônes de jointure et d'extrémité de
   trait montrent un trait épais, puisque c'est leur sujet.
@@ -76,6 +76,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `flip_vertical.svg` | `flip` pivoté de 90° | Retourner verticalement |
 | `fontsize.svg` | `format_size` | Taille de police (champ) |
 | `forwardslash.svg` | dessin propre | Marqueur : barre oblique « / » — *sans référence* |
+| `frame.svg` | dessin propre | Outil Cadre d'export (V5) |
 | `globe_link.svg` | `add_link` | Créer un lien hypertexte |
 | `go_down.svg` | `arrow_downward` | Descendre le calque |
 | `go_up.svg` | `arrow_upward` | Monter le calque |

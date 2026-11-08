@@ -11,6 +11,7 @@ import Rulers from './Rulers.js'
 import { ThemeController } from './theme.js'
 import { ViewController } from './view.js'
 import { GridLayer } from './grid.js'
+import { FrameLayer } from './frames.js'
 import { EditorLayout } from './layout.js'
 
 /**
@@ -161,6 +162,14 @@ class EditorStartup {
     this.topPanel.init()
     this.layersPanel.init()
     this.mainMenu.init()
+    // Frames to export, in the canvas layout (lot V5): their tool after
+    // Text, their sections in the inspector.
+    if (this.layout?.canvas) {
+      this.frames = new FrameLayer(this)
+      this.frames.addTool(this.layout.toolbar.bar)
+      this.frames.buildInspector((name) => this.layout.inspector.body(name))
+      this.frames.refreshInspector()
+    }
 
     const { undoMgr } = this.svgCanvas
     this.canvMenu = $id('se-cmenu_canvas')
@@ -306,7 +315,33 @@ class EditorStartup {
     }
 
     addListenerMulti($id('text'), 'keyup input', (evt) => {
-      this.svgCanvas.setTextContent(evt.currentTarget.value)
+      // What is typed in a text, until its editing ends, is one undo step
+      // (lot V5).
+      const { value } = evt.currentTarget
+      this.svgCanvas.undoMgr.merging('text', () => this.svgCanvas.setTextContent(value), Infinity)
+    })
+    // The field reads its own keys: no shortcut runs there. While a text is
+    // edited on the drawing, Escape ends the editing, and Undo and Redo are
+    // those of the drawing, not the field's own (lot V5).
+    $id('text').addEventListener('keydown', (evt) => {
+      const key = evt.key.toLowerCase()
+      const mod = evt.ctrlKey || evt.metaKey
+      const history = mod && !evt.altKey && (key === 'z' || key === 'y')
+      if (key !== 'escape' && !history) return
+      const editing = this.svgCanvas.getMode() === 'textedit'
+      if (!editing && !history) return
+      evt.preventDefault()
+      evt.stopPropagation()
+      if (editing) {
+        this.svgCanvas.textActions.toSelectMode(true)
+        evt.currentTarget.blur()
+      }
+      if (!history) return
+      if (key === 'y' || evt.shiftKey) {
+        this.topPanel.clickRedo()
+      } else {
+        this.topPanel.clickUndo()
+      }
     })
 
     $id('link_url').addEventListener('change', (evt) => {

@@ -254,7 +254,8 @@ test.describe('Toolbar (V3)', () => {
       .map((place) => `${place.dataset.place}: ${[...place.children].map((el) => el.id).filter(Boolean).join(' ')}`))
     expect(order).toEqual([
       'select: tool_select tool_scale ext-panning',
-      'create: tool_text tools_shapes tools_paths',
+      // The frame tool of lot V5 comes after Text.
+      'create: tool_text tool_frame tools_shapes tools_paths',
       'shapes: tool_rect tool_square tool_fhrect tool_ellipse tool_circle tool_fhellipse tool_line tool_star tool_polygon',
       'paths: tool_path tool_fhpath',
       'insert: tool_image tool_connect tool_shapelib',
@@ -320,7 +321,8 @@ test.describe('Inspector (V3)', () => {
 
   test('the sections at their place; a section where nothing applies is hidden', async ({ page }) => {
     await load(page)
-    expect(await sections(page)).toEqual(['appearance', 'fill', 'stroke', 'document'])
+    // With the frames to export of lot V5.
+    expect(await sections(page)).toEqual(['appearance', 'fill', 'stroke', 'document', 'frames'])
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('Document')
     await select(page, ['r1'])
     expect(await sections(page)).toEqual(['geometry', 'appearance', 'fill', 'stroke', 'effects', 'identity'])

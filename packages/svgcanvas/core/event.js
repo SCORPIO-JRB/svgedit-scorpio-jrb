@@ -22,6 +22,7 @@ import { findPos } from '../../svgcanvas/common/util.js'
 import { isMac } from '../common/browser.js'
 import { isDeepClick } from './selection-nav.js'
 import { SnapIndex, SNAP_THRESHOLD, measureGuides, snapMove, snapPoint, snapResize } from './snap.js'
+import { FRAME_PRESETS, DEFAULT_PRESET, frameSnapBoxes } from './frames.js'
 import {
   beginGroupResize,
   updateGroupResize,
@@ -293,6 +294,9 @@ const beginDragTransform = (svgRoot, selectedElements) => {
   svgCanvas.dragStartFrame = measure
     ? drawingBoxOf(dragged, dragged.map((elem) => svgCanvas.dragStartBBoxes.get(elem)))
     : null
+  // The translation of each element, kept to be set again on each move
+  // rather than replaced (lot V5).
+  svgCanvas.dragTransforms = new Map()
   for (const selectedElement of selectedElements) {
     if (!selectedElement) { continue }
     svgCanvas.dragStartTransforms.set(
@@ -308,8 +312,21 @@ const beginDragTransform = (svgRoot, selectedElements) => {
     } else {
       tlist.appendItem(xform)
     }
+    // The item of the list itself, which writes the attribute when it changes.
+    svgCanvas.dragTransforms.set(selectedElement, tlist.getItem(0))
   }
   svgCanvas.hasDragStartTransform = true
+}
+
+/**
+ * Ends the aggregated drag of the interaction layer (lot V5): the frames of
+ * the selection lose their common translation, and the translations of the
+ * elements are no longer kept.
+ * @returns {void}
+ */
+const endDragOffset = () => {
+  svgCanvas.selectorManager?.clearDragOffset?.()
+  svgCanvas.dragTransforms = null
 }
 
 /**
@@ -370,7 +387,10 @@ const snapTargets = (moving) => {
     boxes.push(box)
   }
   const res = svgCanvas.getResolution?.()
-  boxes.push({ x: 0, y: 0, width: res?.w ?? svgCanvas.contentW, height: res?.h ?? svgCanvas.contentH, page: true })
+  const origin = svgCanvas.getPageOrigin?.() ?? { x: 0, y: 0 }
+  boxes.push({ x: origin.x, y: origin.y, width: res?.w ?? svgCanvas.contentW, height: res?.h ?? svgCanvas.contentH, page: true })
+  // The frames to export, as the page (lot V5).
+  boxes.push(...frameSnapBoxes())
   return boxes
 }
 
@@ -555,6 +575,7 @@ const cancelGesture = () => {
   }
 
   svgCanvas.dragStartTransforms = null
+  endDragOffset()
   svgCanvas.dragStartBBoxes = null
   svgCanvas.dragParentMatrices = null
   svgCanvas.dragStartFrame = null
@@ -699,14 +720,28 @@ const mouseMoveEvent = (evt) => {
           } else {
             svgCanvas.selectorManager.hideGuides?.()
           }
+          // The interaction layer moves as one (lot V5, S1): the frames of
+          // the selection take a single translation, and each element its
+          // own, set again rather than replaced. 5 000 objects moved in
+          // 77 ms a move, mostly computing each frame again.
+          const manager = svgCanvas.selectorManager
+          const aggregated = typeof manager.setDragOffset === 'function'
           dragged.forEach((el) => {
-            if (el) {
+            if (!el) { return }
+            const xform = svgCanvas.dragTransforms?.get(el)
+            if (xform) {
+              const parent = svgCanvas.dragParentMatrices?.get(el)
+              const move = parent ? parentDelta(el, dx, dy, parent) : { dx, dy }
+              xform.setTranslate(move.dx, move.dy)
+            } else {
               updateTransformList(svgRoot, el, dx, dy)
-              // update our internal bbox that we're tracking while dragging
+            }
+            if (!aggregated) {
               const bbox = svgCanvas.dragStartBBoxes?.get(el)
-              svgCanvas.selectorManager.requestSelector(el).resize(bbox, Boolean(bbox))
+              manager.requestSelector(el).resize(bbox, Boolean(bbox))
             }
           })
+          if (aggregated) { manager.setDragOffset(dx * zoom, dy * zoom) }
           const frame = svgCanvas.dragStartFrame
           if (frame) {
             svgCanvas.selectorManager.showPosition?.(frame.x + dx, frame.y + dy)
@@ -894,7 +929,8 @@ const mouseMoveEvent = (evt) => {
 
       break
     }
-    case 'zoom': {
+    case 'zoom':
+    case 'frame': {
       realX *= zoom
       realY *= zoom
       assignAttributes(svgCanvas.getRubberBox(), {
@@ -1272,6 +1308,8 @@ const mouseUpEvent = (evt) => {
           }
           svgCanvas.selectorManager.requestSelector(selected).showGrips(true)
         }
+        // The frames are drawn again below, without the drag translation.
+        svgCanvas.selectorManager?.clearDragOffset?.()
         // if it was being dragged/resized
         const hasPointerDelta = realX !== svgCanvas.getRStartX() || realY !== svgCanvas.getRStartY()
         const shouldCommitTransform = mouseUpMode === 'select'
@@ -1352,6 +1390,7 @@ const mouseUpEvent = (evt) => {
 
           // Clear the stored transforms AND reset the flag together
           svgCanvas.dragStartTransforms = null
+          endDragOffset()
           svgCanvas.dragStartBBoxes = null
           svgCanvas.dragParentMatrices = null
           svgCanvas.hasDragStartTransform = false
@@ -1410,6 +1449,30 @@ const mouseUpEvent = (evt) => {
         height: Math.abs(realY - svgCanvas.getRStartY()),
         factor
       })
+      return
+    } case 'frame': {
+      // A frame to export (lot V5): the box drawn, or for a click a frame of
+      // the default format from that point; whole units.
+      svgCanvas.getRubberBox()?.setAttribute('display', 'none')
+      const x0 = svgCanvas.getRStartX()
+      const y0 = svgCanvas.getRStartY()
+      let box = {
+        x: Math.min(x0, realX),
+        y: Math.min(y0, realY),
+        width: Math.abs(realX - x0),
+        height: Math.abs(realY - y0)
+      }
+      if (box.width * zoom < 4 && box.height * zoom < 4) {
+        const [width, height] = FRAME_PRESETS[DEFAULT_PRESET]
+        box = { x: x0, y: y0, width, height }
+      }
+      const round = (value) => Math.round(value)
+      const x1 = round(box.x)
+      const y1 = round(box.y)
+      box = { x: x1, y: y1, width: Math.max(1, round(box.x + box.width) - x1), height: Math.max(1, round(box.y + box.height) - y1) }
+      svgCanvas.setMode('select')
+      const frame = svgCanvas.addFrame(box)
+      svgCanvas.call('frameCreated', frame)
       return
     } case 'fhpath': {
       // Check that the path contains at least 2 points; a degenerate one-point path
@@ -1524,6 +1587,7 @@ const mouseUpEvent = (evt) => {
     case 'rotate': {
       svgCanvas.hasDragStartTransform = false
       svgCanvas.dragStartTransforms = null
+      endDragOffset()
       keep = true
       element = null
       svgCanvas.setCurrentMode('select')
@@ -1539,11 +1603,13 @@ const mouseUpEvent = (evt) => {
       // This could occur in an extension
       svgCanvas.hasDragStartTransform = false
       svgCanvas.dragStartTransforms = null
+      endDragOffset()
       break
   }
   // Reset drag flag after any mouseUp
   svgCanvas.hasDragStartTransform = false
   svgCanvas.dragStartTransforms = null
+  endDragOffset()
   singleTextResize = null
   flushPendingClone()
 
@@ -1638,7 +1704,19 @@ const mouseUpEvent = (evt) => {
       }
       // we create the insert command that is stored on the stack
       // undo means to call cmd.unapply(), redo means to call cmd.apply()
-      svgCanvas.addCommandToHistory(new InsertElementCommand(element))
+      const insert = new InsertElementCommand(element)
+      const { undoMgr } = svgCanvas
+      const last = undoMgr.getSteps?.().at(-1)
+      if (element.tagName === 'text' && svgCanvas.getCurrentMode() === 'textedit') {
+        // The text typed into a new text is part of its creation (lot V5).
+        insert.mergeKey = 'text'
+        insert.mergeElements = [element]
+      }
+      // Typed before the end of the fade in, even if the editing ended: the
+      // creation goes first, in the same step.
+      const folded = element.tagName === 'text' && last?.mergeElements?.length === 1 &&
+        last.mergeElements[0] === element && undoMgr.prependToLast(insert)
+      if (!folded) { svgCanvas.addCommandToHistory(insert) }
       svgCanvas.call('changed', [element])
     }, aniDur * 1000)
   }
@@ -1864,6 +1942,8 @@ const mouseDownEvent = (evt) => {
       }
       break
     case 'zoom':
+    case 'frame':
+      // The frame tool draws its frame as the zoom tool its box (lot V5).
       svgCanvas.setStarted(true)
       if (!svgCanvas.getRubberBox()) {
         svgCanvas.setRubberBox(svgCanvas.selectorManager.getRubberBandBox())

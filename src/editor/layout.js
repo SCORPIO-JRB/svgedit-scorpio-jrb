@@ -27,6 +27,7 @@ import { ContextBar } from './panels/ContextBar.js'
 import { TextStyles } from './panels/TextStyles.js'
 import { PaintPicker } from './panels/PaintPicker.js'
 import { CommandPalette } from './panels/CommandPalette.js'
+import { HistoryMenu } from './panels/HistoryMenu.js'
 
 export const LAYOUTS = ['canvas', 'classic']
 export const PANEL_MIN_WIDTH = 240
@@ -130,6 +131,7 @@ export class EditorLayout {
 
     this.topBar = new TopBar(this.editor, this.$topbar)
     this.viewGroup = new ViewGroup(this.editor, this.$stage)
+    this.historyMenu = new HistoryMenu(this.editor, this.$stage)
     this.toolbar = new Toolbar(this.editor, this.$stage)
     this.inspector = new Inspector(this.editor, root.querySelector('#se-tabpanel-properties'))
     this.codePanel = new CodePanel(this.editor, root.querySelector('#se-tabpanel-code'))
@@ -387,6 +389,7 @@ export class EditorLayout {
     this.codePanel?.invalidate()
     this.contextBar?.refresh()
     this.paintPicker?.selectionChanged()
+    this.editor.frames?.selectionChanged()
   }
 
   /**
@@ -397,6 +400,9 @@ export class EditorLayout {
     this.layerTree?.invalidate()
     this.codePanel?.invalidate()
     this.contextBar?.refresh()
+    // The frames to export follow the document, and its undo steps (lot V5).
+    this.editor.frames?.update()
+    this.editor.frames?.refreshInspector()
   }
 
   /**

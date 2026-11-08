@@ -6,7 +6,8 @@
  * The zoom menu holds zoom in and out, fit all (Shift+1), the selection
  * (Shift+2) and the page (Shift+3), steps from 25 to 200 %, the view options
  * (rulers, grid, wireframe, and the buttons that extensions add to
- * #editor_panel), then Undo and Redo. Each entry runs a command of the
+ * #editor_panel), then Undo and Redo, which name their step (lot V5), and
+ * History ▸. Each entry runs a command of the
  * registry and shows its shortcut; an entry that does not apply is greyed and
  * keeps its shortcut shown.
  *
@@ -17,6 +18,7 @@
  * @module ViewGroup
  */
 import { escapeHtml } from './TopBar.js'
+import { actionLabel } from '../history-steps.js'
 
 /** Steps of the zoom menu, in per cent. */
 export const ZOOM_MENU_STEPS = [25, 50, 100, 200]
@@ -77,6 +79,7 @@ export class ViewGroup {
         <div role="separator"></div>
         ${entry('tool_undo', t('tools.undo'))}
         ${entry('tool_redo', t('tools.redo'), 'data-hint="redo_shift"')}
+        <div role="menuitem" data-command="show_history" aria-haspopup="menu"><span>${t('history.title')}</span><kbd></kbd>${icon('chevron_right.svg')}</div>
       </se-popover>`
     stage.append(template.content)
     this.$group = stage.querySelector('#se-viewgroup')
@@ -201,11 +204,19 @@ export class ViewGroup {
       editor.i18next.t('layout.zoom_current', { zoom: formatZoom(zoom, editor.i18next.language) })
     const hasSelection = svgCanvas.getSelectedElements().some(Boolean)
     const { undoMgr } = svgCanvas
+    const steps = undoMgr.getSteps()
+    const pointer = undoMgr.getUndoStackSize()
     const disabled = {
       zoom_fit_selection: !hasSelection,
-      tool_undo: undoMgr.getUndoStackSize() === 0,
-      tool_redo: undoMgr.getRedoStackSize() === 0
+      tool_undo: pointer === 0,
+      tool_redo: undoMgr.getRedoStackSize() === 0,
+      show_history: steps.length === 0
     }
+    // « Annuler : déplacer 3 objets » (lot V5).
+    const t = (key, options) => editor.i18next.t(key, options)
+    const lang = editor.i18next.language
+    this.$menu.querySelector('[data-command="tool_undo"] span').textContent = actionLabel('undo', steps[pointer - 1], t, lang)
+    this.$menu.querySelector('[data-command="tool_redo"] span').textContent = actionLabel('redo', steps[pointer], t, lang)
     const checked = {
       toggle_rulers: editor.rulersShown?.() ?? false,
       view_grid: editor.grid?.visible ?? false,
@@ -217,7 +228,8 @@ export class ViewGroup {
       if (item.dataset.mirror) continue
       const command = item.dataset.command
       const hint = commands.hint(item.dataset.hint || command)
-      item.querySelector('kbd').textContent = hint || ''
+      const kbd = item.querySelector('kbd')
+      if (kbd) kbd.textContent = hint || ''
       item.setAttribute('aria-disabled', String(Boolean(disabled[command]) || (command && !item.dataset.zoom && !commands.get(command))))
       if (item.getAttribute('role') === 'menuitemcheckbox') {
         item.setAttribute('aria-checked', String(Boolean(checked[command])))

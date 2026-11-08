@@ -487,6 +487,8 @@ class TextActions {
    */
   toSelectMode (selectElem) {
     svgCanvas.setCurrentMode('select')
+    // What is typed next is another step (lot V5).
+    svgCanvas.undoMgr?.endMerge?.()
     clearInterval(this.#blinker)
     this.#blinker = null
     if (this.#selblock) {

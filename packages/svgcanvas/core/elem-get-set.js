@@ -55,6 +55,8 @@ export const init = (canvas) => {
   svgCanvas.setSegType = setSegTypeMethod // Sets the new segment type to the selected segment(s).
   svgCanvas.setStrokeWidth = setStrokeWidthMethod // Sets the stroke width for the current selected elements.
   svgCanvas.getResolution = getResolutionMethod // The current dimensions and zoom level in an object
+  // Where the page starts: the origin of the viewBox of the opened file (lot V5)
+  svgCanvas.getPageOrigin = () => svgCanvas.getDataStorage().get(svgCanvas.getSvgContent(), 'viewBoxOrigin') ?? { x: 0, y: 0 }
   svgCanvas.getTitle = getTitleMethod // the current group/SVG's title contents or `undefined` if no element
   svgCanvas.setGroupTitle = setGroupTitleMethod // Sets the group/SVG's title content.
   svgCanvas.setStrokeAttr = setStrokeAttrMethod // Set the given stroke-related attribute the given value for selected elements.
@@ -256,6 +258,8 @@ const setResolutionMethod = (x, y) => {
 
       x = Math.round(bbox.width)
       y = Math.round(bbox.height)
+      // The content now starts at 0, 0: so does the page.
+      svgCanvas.getDataStorage().remove(svgCanvas.getSvgContent(), 'viewBoxOrigin')
     } else {
       return false
     }
@@ -357,8 +361,9 @@ const setBBoxZoomMethod = (val, editorW, editorH) => {
       break
     } case 'canvas': {
       const res = svgCanvas.getResolution()
+      const origin = svgCanvas.getPageOrigin()
       spacer = 0.95
-      bb = { width: res.w, height: res.h, x: 0, y: 0 }
+      bb = { width: res.w, height: res.h, x: origin.x, y: origin.y }
       break
     } case 'content':
       bb = getStrokedBBoxDefaultVisible()

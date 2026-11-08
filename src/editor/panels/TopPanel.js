@@ -5,6 +5,7 @@ import SvgCanvas from '@svgedit/svgcanvas'
 import topPanelHTML from './TopPanel.html'
 import { commonValueOf, roundForField } from './panelValues.js'
 import { askText } from '../components/askText.js'
+import { stepTargets } from '../history-steps.js'
 
 const { $qa, $id, $click, isValidUnit, getTypeMap, convertUnit } = SvgCanvas
 
@@ -610,13 +611,9 @@ class TopPanel {
    * @returns {void}
    */
   clickUndo () {
-    const { undoMgr, textActions } = this.editor.svgCanvas
+    const { undoMgr } = this.editor.svgCanvas
     if (undoMgr.getUndoStackSize() > 0) {
-      undoMgr.undo()
-      this.editor.layersPanel.populateLayers()
-      if (this.editor.svgCanvas.getMode() === 'textedit') {
-        textActions.clear()
-      }
+      this.goToHistory(undoMgr.getUndoStackSize() - 1)
     }
   }
 
@@ -627,8 +624,39 @@ class TopPanel {
   clickRedo () {
     const { undoMgr } = this.editor.svgCanvas
     if (undoMgr.getRedoStackSize() > 0) {
+      this.goToHistory(undoMgr.getUndoStackSize() + 1)
+    }
+  }
+
+  /**
+   * Undoes or redoes steps until `index` of them are applied (the History
+   * menu of lot V5). In the canvas layout, the objects of the last step
+   * undone or redone that are still in the drawing are then selected.
+   * @param {number} index - 0 for the document as opened
+   * @returns {void}
+   */
+  goToHistory (index) {
+    const { svgCanvas } = this.editor
+    const { undoMgr, textActions } = svgCanvas
+    const steps = undoMgr.getSteps()
+    const target = Math.max(0, Math.min(index, steps.length))
+    let last = null
+    while (undoMgr.getUndoStackSize() > target) {
+      last = steps[undoMgr.getUndoStackSize() - 1]
+      undoMgr.undo()
+    }
+    while (undoMgr.getUndoStackSize() < target) {
+      last = steps[undoMgr.getUndoStackSize()]
       undoMgr.redo()
-      this.editor.layersPanel.populateLayers()
+    }
+    if (!last) return
+    this.editor.layersPanel.populateLayers()
+    if (svgCanvas.getMode() === 'textedit') {
+      textActions.clear()
+    }
+    if (this.editor.layout?.canvas) {
+      const targets = stepTargets(last)
+      if (targets.length) svgCanvas.selectElements(targets)
     }
   }
 

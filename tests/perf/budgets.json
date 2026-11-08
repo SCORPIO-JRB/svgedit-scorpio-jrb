@@ -21,5 +21,8 @@
   },
   "10000": {
     "snapSearch": 2
+  },
+  "5000": {
+    "dragMoveScript": 16
   }
 }
