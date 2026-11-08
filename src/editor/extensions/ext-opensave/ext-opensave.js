@@ -82,12 +82,21 @@ export default {
         reader.onloadend = (ev) => {
           // imgImport.shiftKey (shift key pressed or not) will determine if import should preserve dimension)
           const newElement = this.svgCanvas.importSvgString(ev.target.result, imgImport.shiftKey)
+          $id('se-prompt-dialog').setAttribute('close', true)
+          resetFileInput()
+          if (!newElement) {
+            // Nothing was imported: the selection is still the user's own,
+            // so it must not be centered on the page.
+            seAlert(this.i18next.t('notification.importFailed', {
+              defaultValue: 'This file could not be imported, the drawing is unchanged: {{name}}',
+              name: file.name
+            }))
+            return
+          }
           this.svgCanvas.alignSelectedElements('m', 'page')
           this.svgCanvas.alignSelectedElements('c', 'page')
           // highlight imported element, otherwise we get strange empty selectbox
           this.svgCanvas.selectOnly([newElement])
-          $id('se-prompt-dialog').setAttribute('close', true)
-          resetFileInput()
         }
         reader.readAsText(file)
       } else {

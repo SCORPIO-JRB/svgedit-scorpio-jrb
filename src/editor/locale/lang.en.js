@@ -339,6 +339,7 @@ export default {
     unsavedChanges: 'There are unsaved changes.',
     enterNewLinkURL: 'Enter the new hyperlink URL',
     errorLoadingSVG: 'Error: Unable to load SVG data',
+    importFailed: 'This file could not be imported, the drawing is unchanged: {{name}}',
     URLLoadFail: 'Unable to load from URL',
     retrieving: "Retrieving '%s' ...",
     popupWindowBlocked: 'Popup window may be blocked by browser',

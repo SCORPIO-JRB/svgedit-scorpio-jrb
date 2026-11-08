@@ -118,7 +118,9 @@ const addToSelectionMethod = (elemsToAdd, showGrips) => {
   let i = elemsToAdd.length
   while (i--) {
     let elem = elemsToAdd[i]
-    if (!elem || !elem.getBBox) {
+    // A <defs> is never drawn: selected by "select all", it would take the
+    // moves of the selection as transforms that do nothing.
+    if (!elem || !elem.getBBox || elem.tagName === 'defs') {
       continue
     }
 

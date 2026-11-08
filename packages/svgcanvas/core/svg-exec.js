@@ -20,8 +20,7 @@ import {
   getStrokedBBoxDefaultVisible,
   walkTree,
   getBBox as utilsGetBBox,
-  hashCode,
-  escapeCssIdent
+  hashCode
 } from './utilities.js'
 import {
   transformPoint,
@@ -345,8 +344,8 @@ const svgToString = (elem, indent) => {
           case 3: {
             // text node
             let str = child.nodeValue
-            // Do not trim values of <text> tags.
-            if (child.parentElement?.nodeName !== 'text') {
+            // Do not trim the text of a <text>, nor of its <tspan> and <textPath>.
+            if (!child.parentElement?.closest('text')) {
               str = child.nodeValue.replace(/^\s+|\s+$/g, '')
             }
             if (str !== '') {
@@ -387,6 +386,66 @@ const svgToString = (elem, indent) => {
   }
   return out.join('')
 } // end svgToString()
+
+/**
+ * Points the references of a subtree to an element that changed identifier:
+ * `url(#old)` in any attribute, and `href="#old"`.
+ * @param {Element} root
+ * @param {string} oldId
+ * @param {string} newId
+ * @returns {void}
+ */
+const remapReferences = (root, oldId, newId) => {
+  const escaped = oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const urlRef = new RegExp(`url\\(\\s*(['"]?)#${escaped}\\1\\s*\\)`, 'g')
+  ;[root, ...root.querySelectorAll('*')].forEach((elem) => {
+    for (const attr of [...elem.attributes]) {
+      if (attr.localName === 'href') {
+        if (attr.value === `#${oldId}`) attr.value = `#${newId}`
+      } else if (attr.value.includes('url(')) {
+        const value = attr.value.replace(urlRef, `url(#${newId})`)
+        if (value !== attr.value) attr.value = value
+      }
+    }
+  })
+}
+
+/**
+ * Gives a new identifier to the duplicates of an identifier, in a document
+ * being opened. A reference made inside a `<symbol>` means the element of that
+ * same symbol: a representation inserted several times carries the same
+ * identifiers in each copy. So the occurrence that keeps the identifier is
+ * the one outside any symbol when there is one, and each renamed occurrence
+ * takes along the references of its own symbol. The references were left
+ * unchanged before: a `<use>` could end up pointing to a `<clipPath>` of
+ * another symbol, and draw nothing.
+ * @param {Element} content - The `<svg>` being opened
+ * @returns {void}
+ */
+const renameDuplicateIds = (content) => {
+  const byId = new Map()
+  content.querySelectorAll('[id]').forEach((elem) => {
+    if (!elem.id) return
+    const list = byId.get(elem.id)
+    if (list) list.push(elem)
+    else byId.set(elem.id, [elem])
+  })
+  const scopeOf = (elem) => elem.parentNode.closest('symbol')
+  byId.forEach((elems, id) => {
+    if (elems.length < 2) return
+    const keeper = elems.find((elem) => !scopeOf(elem)) || elems[0]
+    elems.forEach((elem) => {
+      if (elem === keeper) return
+      const scope = scopeOf(elem)
+      elem.id = svgCanvas.getNextId()
+      // Only the first occurrence of a symbol takes its references along:
+      // a second one in the same symbol was already a duplicate there.
+      if (scope && scope !== scopeOf(keeper) && elem === elems.find((other) => scopeOf(other) === scope)) {
+        remapReferences(scope, id, elem.id)
+      }
+    })
+  })
+}
 
 /**
  * This function sets the current drawing as the input SVG XML.
@@ -480,27 +539,7 @@ const setSvgString = (xmlString, preventUndo) => {
         svgCanvas.embedImage(val)
       }
     })
-    // Duplicate id replace changes
-    const nodes = content.querySelectorAll('[id]')
-    const ids = {}
-    const totalNodes = nodes.length
-
-    for (let i = 0; i < totalNodes; i++) {
-      const currentId = nodes[i].id ? nodes[i].id : 'undefined'
-      if (isNaN(ids[currentId])) {
-        ids[currentId] = 0
-      }
-      ids[currentId]++
-    }
-
-    Object.entries(ids).forEach(([key, value]) => {
-      if (value > 1) {
-        const nodes = content.querySelectorAll(`#${escapeCssIdent(key)}`)
-        for (let i = 1; i < nodes.length; i++) {
-          nodes[i].setAttribute('id', svgCanvas.getNextId())
-        }
-      }
-    })
+    renameDuplicateIds(content)
 
     // Wrap child SVGs in group elements
     const svgElements = content.querySelectorAll('svg')

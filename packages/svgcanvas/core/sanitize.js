@@ -7,7 +7,7 @@
  */
 
 import { getReverseNS, NS } from './namespaces.js'
-import { getHref, getRefElem, setHref, getUrlFromAttr } from './utilities.js'
+import { getHref, setHref, getUrlFromAttr } from './utilities.js'
 import { warn } from '../common/logger.js'
 
 const REVERSE_NS = getReverseNS()
@@ -20,7 +20,17 @@ const FONT_ATTRIBUTES = ['font-family', 'font-size', 'font-stretch', 'font-style
  * @type {PlainObject}
  */
 /* eslint-disable max-len */
-const svgGenericWhiteList = ['class', 'id', 'display', 'transform', 'style']
+const svgGenericWhiteList = ['class', 'id', 'display', 'transform', 'style', 'visibility']
+
+/**
+ * Attributes by which SCorp-io binds a drawing to its real-time data
+ * (`scorp_id`, `scorp_name`, `instanceId`, `representationId`...). They only
+ * hold identifiers and names, so they are kept on every element the filter keeps.
+ * @param {string} name - Attribute name, without namespace
+ * @returns {boolean}
+ */
+const isScorpioAttribute = (name) => name.startsWith('scorp_') || name === 'instanceId' || name === 'representationId'
+
 const svgWhiteList_ = {
   // SVG Elements
   a: ['clip-path', 'clip-rule', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'href', 'mask', 'opacity', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'xlink:href', 'xlink:title'],
@@ -224,9 +234,9 @@ export const sanitizeCss = (css) => {
 export const sanitizeSvg = (node) => {
   // Cleanup text nodes
   if (node.nodeType === 3) { // 3 === TEXT_NODE
-    // Trim whitespace
-    // Do not trim values of <text> tags.
-    if (node.parentElement?.nodeName !== 'text') {
+    // Trim whitespace, except inside a <text>: the spaces of its <tspan> and
+    // <textPath> are part of the text ("Hello <tspan>world</tspan>").
+    if (!node.parentElement?.closest('text')) {
       node.nodeValue = node.nodeValue.trim()
     }
     // Remove if empty
@@ -265,9 +275,10 @@ export const sanitizeSvg = (node) => {
       // our whitelist or is a namespace declaration for one of our allowed namespaces
       if (attrNsURI !== allowedAttrsNS[attrLocalName] && attrNsURI !== NS.XMLNS &&
        !(attrNsURI === NS.XMLNS && REVERSE_NS[attr.value])) {
-        // Special case: allow href attribute even without namespace if it's in the whitelist
+        // Special cases: href without namespace when it is in the whitelist,
+        // and the SCorp-io binding attributes
         const isHrefAttribute = (attrLocalName === 'href' && allowedAttrs.includes('href'))
-        if (!isHrefAttribute) {
+        if (!isHrefAttribute && !(!attrNsURI && isScorpioAttribute(attrName))) {
           // Bypassing the whitelist to allow se: and oi: prefixes
           // We can add specific namepaces on demand for now.
           // Is there a more appropriate way to do this?
@@ -346,24 +357,6 @@ export const sanitizeSvg = (node) => {
       warn(`element ${node.nodeName} without a xlink:href or href is removed: ${node.outerHTML}`, null, 'sanitize')
       node.remove()
       return
-    }
-    // For <use> elements with missing width/height, derive defaults from referenced viewBox/size for proper sizing/selection
-    if (node.nodeName === 'use') {
-      const ref = getRefElem(getHref(node))
-      if (ref) {
-        const refViewBox = ref.getAttribute('viewBox')
-        const viewBoxParts = refViewBox ? refViewBox.split(/[\s,]+/).map(Number) : null
-        const refWidth = Number(ref.getAttribute('width'))
-        const refHeight = Number(ref.getAttribute('height'))
-        if (!node.hasAttribute('width')) {
-          const width = viewBoxParts?.[2] || refWidth
-          if (width) node.setAttribute('width', width)
-        }
-        if (!node.hasAttribute('height')) {
-          const height = viewBoxParts?.[3] || refHeight
-          if (height) node.setAttribute('height', height)
-        }
-      }
     }
     // if the element has attributes pointing to a non-local reference,
     // need to remove the attribute
