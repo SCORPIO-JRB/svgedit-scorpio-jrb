@@ -311,6 +311,15 @@ export class SeCMenuDialog extends HTMLElement {
       current.$dialog.style.left = x + 'px'
       current.refreshShortcuts()
       current.$dialog.style.display = 'block'
+      // Inside the window, which may be smaller than the screen.
+      const box = current.$dialog.getBoundingClientRect()
+      const margin = 8
+      if (box.right > window.innerWidth - margin) {
+        current.$dialog.style.left = Math.max(margin, x - (box.right - window.innerWidth + margin)) + 'px'
+      }
+      if (box.bottom > window.innerHeight - margin) {
+        current.$dialog.style.top = Math.max(margin, y - (box.bottom - window.innerHeight + margin)) + 'px'
+      }
     }
     const onMenuCloseHandler = (e) => {
       if (e.button !== 2) {

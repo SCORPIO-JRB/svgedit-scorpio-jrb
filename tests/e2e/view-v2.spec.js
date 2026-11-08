@@ -47,6 +47,9 @@ const box = async (page, selector) => {
   const b = await page.locator(selector).boundingBox()
   return { x: b.x, y: b.y, width: b.width, height: b.height }
 }
+// Where a point of the drawing is on the screen, by the view: Firefox
+// measures the boxes of SVG shapes a little larger than their geometry.
+const onScreen = (page, x, y) => page.evaluate(({ x, y }) => window.svgEditor.view.docToScreen(x, y), { x, y })
 const viewArea = (page) => page.evaluate(() => {
   const area = document.getElementById('workarea')
   const rect = area.getBoundingClientRect()
@@ -65,9 +68,15 @@ test('the view has no scroll bar and the page starts in the middle', async ({ pa
     }
   })
   expect(layout).toEqual({ mode: 'borderless', overflow: 'hidden', bars: 0 })
-  const pageBox = await box(page, '#canvasBackground')
-  expect(Math.abs(pageBox.x + pageBox.width / 2 - (area.x + area.width / 2))).toBeLessThan(1)
-  expect(Math.abs(pageBox.y + pageBox.height / 2 - (area.y + area.height / 2))).toBeLessThan(1)
+  // The middle of the page (320, 240) in the middle of the view, and the
+  // drawing where the view says.
+  const middle = await onScreen(page, 320, 240)
+  expect(Math.abs(middle.x - (area.x + area.width / 2))).toBeLessThan(1)
+  expect(Math.abs(middle.y - (area.y + area.height / 2))).toBeLessThan(1)
+  const r1 = await box(page, '#r1')
+  const corner = await onScreen(page, 100, 100)
+  expect(Math.abs(r1.x - corner.x)).toBeLessThan(1)
+  expect(Math.abs(r1.y - corner.y)).toBeLessThan(1)
 })
 
 test('the wheel scrolls the view, Shift+wheel sideways, and the file does not change', async ({ page }) => {
@@ -98,7 +107,10 @@ test('Ctrl+wheel zooms around the pointer, from 1 % to 6 400 %', async ({ page }
   const after = await box(page, '#r1')
   expect(Math.abs(after.x - pointer.x)).toBeLessThan(1)
   expect(Math.abs(after.y - pointer.y)).toBeLessThan(1)
-  expect(after.width).toBeCloseTo(80 * zoom, 0)
+  // The view and the drawing agree: the corner is still under the pointer.
+  const corner = await onScreen(page, 100, 100)
+  expect(Math.abs(corner.x - pointer.x)).toBeLessThan(1)
+  expect(Math.abs(after.width - 80 * zoom)).toBeLessThanOrEqual(zoom + 0.5)
 
   const bounds = await page.evaluate(() => {
     const editor = window.svgEditor
@@ -156,12 +168,14 @@ for (const zoom of [0.25, 1, 16]) {
     await load(page, DRAWING, { zoom })
     await page.evaluate(() => window.svgEditor.view.centerOn(140, 130))
     const r1 = await box(page, '#r1')
-    expect(r1.width).toBeCloseTo(80 * zoom, 0)
-    const from = { x: r1.x + r1.width / 2, y: r1.y + r1.height / 2 }
+    expect(Math.abs(r1.width - 80 * zoom)).toBeLessThanOrEqual(zoom + 0.5)
+    const from = await onScreen(page, 140, 130)
     await page.mouse.click(from.x, from.y)
+    // The grip on the corner of the object, at every zoom.
     const grip = await box(page, '#selectorGrip_resize_se')
-    expect(Math.abs(grip.x + grip.width / 2 - (r1.x + r1.width))).toBeLessThan(1.5)
-    expect(Math.abs(grip.y + grip.height / 2 - (r1.y + r1.height))).toBeLessThan(1.5)
+    const corner = await onScreen(page, 180, 160)
+    expect(Math.abs(grip.x + grip.width / 2 - corner.x)).toBeLessThan(1.5)
+    expect(Math.abs(grip.y + grip.height / 2 - corner.y)).toBeLessThan(1.5)
     await page.mouse.move(from.x, from.y)
     await page.mouse.down()
     await page.mouse.move(from.x + 40, from.y + 20, { steps: 5 })
