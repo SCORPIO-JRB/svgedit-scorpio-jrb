@@ -283,7 +283,8 @@ test.describe('"Mixed" values and expressions (M4)', () => {
     await typeField(page, 'angle', '0')
     expect(await angleOf(page, 'r1')).toBe(0)
     expect(await angleOf(page, 'rr')).toBe(0)
-    expect(await attr(page, 'rr', 'x')).toBe('400')
+    // Firefox computes the turn back in single precision: 399.99998.
+    expect(Number(await attr(page, 'rr', 'x'))).toBeCloseTo(400, 4)
     expect(await field(page, 'angle')).toBe('0')
     // Now shared, the angle turns the whole selection about its center (M3).
     await typeField(page, 'angle', '90')
@@ -355,7 +356,7 @@ test.describe('Commands of a multi-selection, W and H of an element alone (M4)',
     expect(await undoSize(page)).toBe(1)
     // Typing X moves the box without the stroke to that value.
     await typeField(page, 'selected_x', '320')
-    expect(await attr(page, 'p1', 'd')).toBe('M320,300 L480,320 L400,400 L320,300 z')
+    expect(canonical(await attr(page, 'p1', 'd'))).toBe(canonical('M320,300 L480,320 L400,400 L320,300 z'))
     expect(await field(page, 'selected_x')).toBe('320')
     expect(await undoSize(page)).toBe(2)
   })

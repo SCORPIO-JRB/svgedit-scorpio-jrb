@@ -329,6 +329,6 @@ test.describe('SVG core recalculate extra cases', () => {
     expect(result.rect.y).toBe('10')
     expect(result.rect.transform).toBeNull()
     expect(result.use.hasCommand).toBe(true)
-    expect(result.use.transform).toBe('matrix(1 0 0 1 3 4)')
+    expect(canonical(result.use.transform)).toBe('matrix(1 0 0 1 3 4)')
   })
 })

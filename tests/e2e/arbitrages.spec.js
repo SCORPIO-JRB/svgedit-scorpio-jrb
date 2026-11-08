@@ -364,10 +364,13 @@ test.describe('Objects that look the same, in the whole page (decision 5)', () =
     await selectPumps(page)
     const start = await screenBoxes(page, PUMPS)
     await page.evaluate(() => window.svgEditor.svgCanvas.cloneSelectedElements(0, 50))
-    const copies = await page.evaluate(() => window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => {
-      const { x, y, width } = el.getBoundingClientRect()
-      return { parent: el.parentNode.id || el.parentNode.querySelector('title')?.textContent, x, y, width }
-    }))
+    const copies = await page.evaluate((source) => {
+      const screenBox = new Function(`return ${source}`)() // eslint-disable-line no-new-func
+      return window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => {
+        const { x, y, width } = screenBox(el)
+        return { parent: el.parentNode.id || el.parentNode.querySelector('title')?.textContent, x, y, width }
+      })
+    }, SCREEN_BOX)
     expect(copies.map((c) => c.parent).sort()).toEqual(['G', 'Layer 1', 'Layer 2', 'R'])
     // Each copy is its original moved 50 down, at the same size.
     copies.forEach((copy) => {
