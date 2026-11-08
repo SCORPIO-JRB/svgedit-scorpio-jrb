@@ -11,9 +11,13 @@
  * The groups of fields are those of TopPanel and BottomPanel, with their ids
  * and classes: TopPanel.js still shows and hides them and fills their values,
  * and the extensions that add a panel to #tools_top (markers, polystar) find
- * it, here, in its section. The verbs (clone, delete, order, flip, group,
- * align…) stay at the top of the tab until V4 moves them into the contextual
- * bar.
+ * it, here, in its section. The fields look as in the mockups: grey boxes
+ * with their label inside, two per row.
+ *
+ * The verbs (clone, delete, order, flip, group, align…) are in the "…" menu
+ * of the head of the tab, each with its name and shortcut, until V4 moves
+ * them into the contextual bar. The menu stays inside #tools_top, where
+ * TopPanel finds them.
  * @module Inspector
  */
 import SvgCanvas from '@svgedit/svgcanvas'
@@ -131,8 +135,11 @@ export class Inspector {
     this.editor = editor
     this.tab = tab
     const t = (key) => escapeHtml(editor.i18next.t(key))
+    const imgPath = escapeHtml(editor.configObj.curConfig.imgPath)
     const section = (name) => name === 'actions'
-      ? '<div class="se-section se-actions" data-section="actions"><div class="se-section-body"></div></div>'
+      ? `<se-popover id="se-actions-menu" placement="bottom-end" role="dialog" aria-label="${t('layout.actions')}">
+          <div class="se-section se-actions" data-section="actions"><div class="se-section-body"></div></div>
+        </se-popover>`
       : `<section class="se-section" data-section="${name}" aria-labelledby="se-section-${name}">
           <h3 id="se-section-${name}" class="se-section-title">${t(`layout.section_${name}`)}</h3>
           <div class="se-section-body"></div>
@@ -141,9 +148,13 @@ export class Inspector {
       <div class="se-inspector-head">
         <span class="se-inspector-type"></span>
         <span class="se-inspector-id"></span>
+        <button type="button" id="se-actions-button" class="se-icon-button" hidden aria-haspopup="dialog"
+          aria-expanded="false" aria-controls="se-actions-menu" aria-label="${t('layout.actions')}"
+          ><se-icon src="${imgPath}/more_horiz.svg"></se-icon></button>
       </div>
       <div id="tools_top" class="se-inspector">${SECTIONS.map(section).join('')}</div>`
     this.root = tab.querySelector('#tools_top')
+    this.initActions()
     this.buildDocumentSection()
     // The panels that extensions append to #tools_top go to their section,
     // and a section shows as soon as one of its groups does, whoever shows
@@ -153,6 +164,46 @@ export class Inspector {
       if (records.some((record) => record.type === 'attributes')) this.refreshSections()
     })
     this.observer.observe(this.root, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'hidden'] })
+  }
+
+  /**
+   * The "…" menu of the head: the verbs on the selection.
+   * @returns {void}
+   */
+  initActions () {
+    this.$actionsButton = this.tab.querySelector('#se-actions-button')
+    this.$actionsMenu = this.tab.querySelector('#se-actions-menu')
+    const button = this.$actionsButton
+    const menu = this.$actionsMenu
+    button.addEventListener('click', () => {
+      if (menu.opened) menu.close()
+      else menu.open(button)
+    })
+    menu.addEventListener('se-popover-open', () => button.setAttribute('aria-expanded', 'true'))
+    menu.addEventListener('se-popover-close', () => button.setAttribute('aria-expanded', 'false'))
+    // The alignment panel opens inside the menu, which grows: it is placed
+    // again, so as to stay in the window.
+    new MutationObserver(() => {
+      if (menu.opened) requestAnimationFrame(() => menu.position())
+    }).observe(menu, { subtree: true, attributes: true, attributeFilter: ['hidden'] })
+    // A verb closes the menu; the alignment keeps it open, with its own
+    // panel of buttons and fields.
+    menu.addEventListener('click', (e) => {
+      const verb = e.target.closest?.('se-button')
+      if (!verb || verb.id === 'tool_align_menu' || verb.closest('#tool_align_popup')) return
+      queueMicrotask(() => menu.close({ restoreFocus: true }))
+    })
+  }
+
+  /**
+   * The buttons of a group of verbs show their name and shortcut, as the
+   * entries of a menu; the buttons of the alignment panel stay icons.
+   * @param {Element} el
+   * @returns {void}
+   */
+  labelVerbs (el) {
+    const buttons = [...el.querySelectorAll('se-button')].filter((button) => !button.closest('#tool_align_popup'))
+    for (const button of buttons) button.setAttribute('labelled', '')
   }
 
   /**
@@ -172,6 +223,7 @@ export class Inspector {
    */
   put (el, name) {
     const body = this.body(name)
+    if (name === 'actions') this.labelVerbs(el)
     if (name === 'geometry') {
       const order = orderOf(el)
       const next = [...body.children].find((child) => child !== el && orderOf(child) > order)
@@ -199,7 +251,10 @@ export class Inspector {
       if (el.querySelector?.('#blur') && el.querySelector('#tool_position')) {
         const wrapper = document.createElement('div')
         wrapper.className = el.className
-        wrapper.append(el.querySelector('#tool_position'))
+        const position = el.querySelector('#tool_position')
+        // In the menu of verbs, the list says what it does.
+        position.setAttribute('label', 'tools.align_to_page')
+        wrapper.append(position)
         this.put(wrapper, 'actions')
       }
       const section = sectionOfTopGroup(el)
@@ -221,6 +276,9 @@ export class Inspector {
       const section = BOTTOM_CONTROLS[el.id]
       if (section) this.put(el, section)
     }
+    // The width of the stroke has no label in the bottom bar; here it has a
+    // field of its own, named as in the mockups.
+    this.root.querySelector('#stroke_width')?.setAttribute('label', 'layout.stroke_width')
   }
 
   /**
@@ -229,7 +287,7 @@ export class Inspector {
    */
   place () {
     for (const el of [...this.root.children]) {
-      if (el.classList.contains('se-section')) continue
+      if (el.classList.contains('se-section') || el === this.$actionsMenu) continue
       const section = sectionOfTopGroup(el)
       this.put(el, section && this.body(section) ? section : 'extensions')
     }
@@ -246,8 +304,8 @@ export class Inspector {
     const body = this.body('document')
     body.innerHTML = `
       <label class="se-field se-field-wide">${t('layout.doc_title')}<input type="text" id="se-doc-title"></label>
-      <label class="se-field">${t('properties.w_label')}<input type="text" id="se-doc-width" inputmode="decimal" size="5"></label>
-      <label class="se-field">${t('properties.h_label')}<input type="text" id="se-doc-height" inputmode="decimal" size="5"></label>
+      <label class="se-field se-field-short">${t('properties.w_label')}<input type="text" id="se-doc-width" inputmode="decimal" size="5"></label>
+      <label class="se-field se-field-short">${t('properties.h_label')}<input type="text" id="se-doc-height" inputmode="decimal" size="5"></label>
       <label class="se-check"><input type="checkbox" id="se-doc-grid">${t('layout.grid')}</label>
       <label class="se-check"><input type="checkbox" id="se-doc-gridsnap">${t('layout.grid_snapping')}</label>
       <label class="se-check"><input type="checkbox" id="se-doc-objectsnap">${t('layout.object_snapping')}</label>
@@ -324,6 +382,12 @@ export class Inspector {
       if (name === 'document') shown = none
       else if (['fill', 'stroke', 'appearance'].includes(name)) shown = true
       else shown = [...section.querySelector('.se-section-body').children].some(isShown)
+      if (name === 'actions') {
+        // The verbs are in the "…" menu: its button shows when one applies.
+        if (this.$actionsButton.hidden === shown) this.$actionsButton.hidden = !shown
+        if (!shown && this.$actionsMenu.opened) this.$actionsMenu.close()
+        continue
+      }
       if (section.hidden === shown) section.hidden = !shown
     }
     return none

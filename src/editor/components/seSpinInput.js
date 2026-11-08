@@ -57,10 +57,10 @@ template.innerHTML = `
     font-variant-numeric: tabular-nums;
   }
   </style>
-  <div>
-  <se-icon></se-icon>
-  <span id="label"></span>
-  <elix-number-spin-box min="1" step="1"></elix-number-spin-box>
+  <div part="field">
+  <se-icon part="icon"></se-icon>
+  <span id="label" part="label"></span>
+  <elix-number-spin-box min="1" step="1" part="box" exportparts="input, spin-button"></elix-number-spin-box>
   </div>
 `
 

@@ -37,6 +37,12 @@ export default {
     storage_prefs: 'Stockage des préférences'
   },
   layout: {
+    actions: 'Actions',
+    stroke_width: 'Épaisseur',
+    paint_none: 'Aucun',
+    paint_linear: 'Dégradé linéaire',
+    paint_radial: 'Dégradé radial',
+    tree_help: "Glisser une ligne pour changer l'ordre ou le groupe ; double-clic pour renommer.",
     panel: 'Panneau de droite',
     panel_width: 'Largeur du panneau',
     tab_properties: 'Propriétés',
@@ -100,7 +106,7 @@ export default {
     type_image: 'Image',
     type_foreign: 'Objet étranger',
     type_link: 'Lien',
-    search_layers: 'Rechercher un calque ou un objet',
+    search_layers: 'Rechercher un nom ou un identifiant',
     no_match: 'Aucun calque ni objet ne correspond.',
     show: 'Afficher',
     hide: 'Masquer',
@@ -202,10 +208,10 @@ export default {
     ry_label: 'ry',
     cx_label: 'cx',
     cy_label: 'cy',
-    w_label: 'w',
+    w_label: 'l',
     h_label: 'h',
-    id_label: 'identifiant',
-    class_label: 'classe',
+    id_label: 'id',
+    class_label: 'class',
     label: 'étiquette'
   },
   tools: {

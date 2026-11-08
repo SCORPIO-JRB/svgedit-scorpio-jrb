@@ -200,6 +200,10 @@ export class EditorLayout {
     else sidepanels.querySelector('#layerpanel')?.append(wrap)
     tab.append(sidepanels)
     this.layerTree = new LayerTree(this.editor, wrap)
+    const help = document.createElement('p')
+    help.className = 'se-tree-help'
+    help.textContent = this.editor.i18next.t('layout.tree_help')
+    wrap.after(help)
   }
 
   /**

@@ -48,8 +48,8 @@ label {
   color: var(--se-text-label);
 }
 </style>
-  <label></label>
-  <div id="select-container" tabindex="0">
+  <label part="label"></label>
+  <div id="select-container" tabindex="0" part="select">
     <div id="selected-value"></div>
     <div id="options-container">
       <slot></slot>

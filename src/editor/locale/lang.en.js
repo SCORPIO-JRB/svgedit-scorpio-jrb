@@ -37,6 +37,12 @@ export default {
     storage_prefs: 'Storage of preferences'
   },
   layout: {
+    actions: 'Actions',
+    stroke_width: 'Width',
+    paint_none: 'None',
+    paint_linear: 'Linear gradient',
+    paint_radial: 'Radial gradient',
+    tree_help: 'Drag a row to change its order or its group; double-click to rename.',
     panel: 'Right panel',
     panel_width: 'Width of the panel',
     tab_properties: 'Properties',
@@ -100,7 +106,7 @@ export default {
     type_image: 'Image',
     type_foreign: 'Foreign object',
     type_link: 'Link',
-    search_layers: 'Search layers and objects',
+    search_layers: 'Search by name or id',
     no_match: 'No layer or object matches.',
     show: 'Show',
     hide: 'Hide',

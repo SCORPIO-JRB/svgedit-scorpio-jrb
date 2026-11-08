@@ -232,17 +232,34 @@ export class Toolbar {
       item.textContent = name
       items.push(item)
     }
-    const separator = document.createElement('div')
-    separator.setAttribute('role', 'separator')
-    const add = document.createElement('div')
-    add.setAttribute('role', 'menuitem')
-    add.dataset.action = 'new'
-    add.textContent = editor.i18next.t('layers.new')
-    const show = document.createElement('div')
-    show.setAttribute('role', 'menuitem')
-    show.dataset.action = 'show'
-    show.textContent = editor.i18next.t('layout.show_layers')
-    this.$layerMenu.replaceChildren(...items, separator, add, show)
+    const separator = () => {
+      const el = document.createElement('div')
+      el.setAttribute('role', 'separator')
+      return el
+    }
+    // The commands of the layer, as in the bar of the classic Layers panel.
+    const count = drawing.getNumLayers()
+    const index = editor.svgCanvas.indexCurrentLayer()
+    const action = (name, label, disabled = false) => {
+      const el = document.createElement('div')
+      el.setAttribute('role', 'menuitem')
+      el.dataset.action = name
+      el.textContent = editor.i18next.t(label)
+      el.setAttribute('aria-disabled', String(disabled))
+      return el
+    }
+    this.$layerMenu.replaceChildren(
+      ...items,
+      separator(),
+      action('new', 'layers.new'),
+      action('dupe', 'layers.dupe'),
+      action('rename', 'layers.rename'),
+      action('delete', 'layers.del', count < 2),
+      action('up', 'layers.move_up', index >= count - 1),
+      action('down', 'layers.move_down', index <= 0),
+      separator(),
+      action('show', 'layout.show_layers')
+    )
   }
 
   /**
@@ -250,7 +267,7 @@ export class Toolbar {
    * @returns {void}
    */
   chooseLayer (item) {
-    if (!item) return
+    if (!item || item.getAttribute('aria-disabled') === 'true') return
     const { editor } = this
     if (item.dataset.layer !== undefined) {
       editor.svgCanvas.setCurrentLayer(item.dataset.layer)
@@ -259,6 +276,16 @@ export class Toolbar {
       editor.layersPanel.populateLayers()
     } else if (item.dataset.action === 'new') {
       editor.layersPanel.newLayer(this.$layerButton)
+    } else if (item.dataset.action === 'dupe') {
+      editor.layersPanel.cloneLayer(this.$layerButton)
+    } else if (item.dataset.action === 'rename') {
+      editor.layersPanel.layerRename(this.$layerButton)
+    } else if (item.dataset.action === 'delete') {
+      editor.layersPanel.deleteLayer()
+    } else if (item.dataset.action === 'up') {
+      editor.layersPanel.moveLayer(-1)
+    } else if (item.dataset.action === 'down') {
+      editor.layersPanel.moveLayer(1)
     } else if (item.dataset.action === 'show') {
       editor.layout.setPanelOpen(true)
       editor.layout.selectTab('layers', { focus: true })

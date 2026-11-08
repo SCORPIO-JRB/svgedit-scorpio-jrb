@@ -31,6 +31,13 @@
   --se-surface-raised: #303030;
   --se-surface-overlay: #3b3b3b;
   --se-surface-tab-active: #404040;
+
+  /* Source of the Code tab, as in the mockups. */
+  --se-code-bg: #191919;
+  --se-code-tag: #6aabf1;
+  --se-code-attr: #c9a0ff;
+  --se-code-value: #a8d8a0;
+  --se-code-comment: #8c8c8c;
   --se-control: #2a2a2a;
   --se-control-hover: #2a2a2a;
   --se-backdrop: rgb(0 0 0 / 55%);
@@ -114,6 +121,8 @@
   --se-line-height-label: 14px;
   --se-font-size-title: 13px;
   --se-line-height-title: 18px;
+  /* The name of the document in the top bar (mockups: Space Grotesk 14/600). */
+  --se-font-size-doc: 14px;
 
   /* Spacing, on a 4 px base. */
   --se-space-1: 4px;
@@ -167,6 +176,12 @@
   --se-surface-raised: #fff;
   --se-surface-overlay: #fff;
   --se-surface-tab-active: #ebebeb;
+
+  --se-code-bg: #f7f7f7;
+  --se-code-tag: #1e66b6;
+  --se-code-attr: #7b3fb8;
+  --se-code-value: #2d6e35;
+  --se-code-comment: #6b6b6b;
   --se-control: #f2f2f2;
   --se-control-hover: #ebebeb;
   --se-backdrop: rgb(0 0 0 / 30%);

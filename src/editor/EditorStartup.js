@@ -673,6 +673,12 @@ class EditorStartup {
         $id('tool_wireframe').click()
       }
 
+      // Without a value, the rulers follow the layout; from the URL the value
+      // is a string ("false" hides them).
+      const { showRulers } = this.configObj.curConfig
+      this.configObj.curConfig.showRulers = showRulers === undefined
+        ? this.layout?.mode === 'classic'
+        : showRulers !== false && showRulers !== 'false'
       this.setRulersShown(this.configObj.curConfig.showRulers)
 
       if (this.configObj.curConfig.showRulers) {

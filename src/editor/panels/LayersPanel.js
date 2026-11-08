@@ -175,13 +175,13 @@ class LayersPanel {
    *
    * @returns {void}
    */
-  async cloneLayer () {
+  async cloneLayer (anchor) {
     const name =
       this.editor.svgCanvas.getCurrentDrawing().getCurrentLayerName() + ' copy'
     const newName = await this.askLayerName(
       this.editor.i18next.t('notification.enterUniqueLayerName'),
       this.uniqueLayerName(name),
-      $id('layer_moreopts')
+      anchor instanceof Element ? anchor : $id('layer_moreopts')
     )
     if (!newName) {
       return
@@ -225,9 +225,10 @@ class LayersPanel {
   }
 
   /**
-   * @returns {void}
+   * @param {Element} [anchor] The control that asked
+   * @returns {Promise<void>}
    */
-  async layerRename () {
+  async layerRename (anchor) {
     // In the canvas layout, the name is edited in its row of the tree.
     const tree = this.editor.layout?.layerTree
     if (tree?.renameCurrent()) return
@@ -235,7 +236,7 @@ class LayersPanel {
     const newName = (await askText(this.editor, {
       label: this.editor.i18next.t('notification.enterNewLayerName'),
       value: oldName,
-      anchor: $id('layer_rename')
+      anchor: anchor instanceof Element ? anchor : $id('layer_rename')
     }))?.trim()
     if (!newName || newName === oldName) {
       return

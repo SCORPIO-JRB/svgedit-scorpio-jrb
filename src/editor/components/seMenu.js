@@ -61,7 +61,7 @@ export class SeMenu extends HTMLElement {
    * @returns {any} observed
    */
   static get observedAttributes () {
-    return ['label', 'src']
+    return ['label', 'src', 'chevron']
   }
 
   /**
@@ -93,6 +93,20 @@ export class SeMenu extends HTMLElement {
           this.$label.prepend(this.$text)
         }
         this.$text.textContent = newValue ?? ''
+        break
+      case 'chevron':
+        // A chevron icon in place of the triangle of the toggle (the
+        // document menu of the canvas layout, as in the mockups).
+        if (!this.$chevron) {
+          const style = document.createElement('style')
+          style.textContent = `
+            #downIcon, #upIcon { display: none !important; }
+            .se-menu-chevron { width: 14px; height: 14px; margin-left: 4px; }`
+          this.$chevron = document.createElement('se-icon')
+          this.$chevron.className = 'se-menu-chevron'
+          this.$label.append(style, this.$chevron)
+        }
+        this.$chevron.setAttribute('src', this.imgPath + '/' + newValue)
         break
       default:
         console.error(`unknown attribute: ${name}`)

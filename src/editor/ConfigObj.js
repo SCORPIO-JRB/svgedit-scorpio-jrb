@@ -141,7 +141,7 @@ export default class ConfigObj {
       * @property {Float} [snappingStep=10] The step of the grid: where its lines are and where the drawing snaps. Set in Editor Options.
       * @property {Integer} [gridSubdivisions=10] A major line of the grid every so many steps (lot V2). Set in Editor Options.
       * @property {boolean} [objectSnapping=true] Snap to the edges and middles of the visible objects and of the page, to equal spacings and to equal sizes, with guides (lot V2). Holding Ctrl suspends every snapping. Set in Editor Options.
-      * @property {boolean} [showRulers=true] Initial state of ruler display (v2.6). Set in Editor Options.
+      * @property {boolean} [showRulers] Initial state of ruler display (v2.6). Set in Editor Options. Without a value: shown in the classic layout, hidden in the canvas layout, as in the mockups (Shift+R or the zoom menu shows them).
       * @property {string} [initTool="select"] The initially selected tool. Must be either the ID of the button for the tool, or the ID without `tool_` prefix (e.g., "select").
       * @property {boolean} [wireframe=false] Start in wireframe mode
       * @property {boolean} [showlayers=false] Open the layers side-panel by default.
@@ -202,7 +202,9 @@ export default class ConfigObj {
       snappingStep: 10,
       gridSubdivisions: 10,
       objectSnapping: true,
-      showRulers: true,
+      // Shown in the classic layout, hidden in the canvas layout (see
+      // EditorStartup) unless the host or the URL sets it.
+      showRulers: undefined,
       // The editor zooms with Ctrl/Cmd + wheel and pinch; Shift + wheel scrolls
       // horizontally instead of zooming (canvas default: true).
       shiftWheelZoom: false,

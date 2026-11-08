@@ -36,8 +36,8 @@ label {
   width:100%;
 }
 </style>
-  <label></label>
-  <select>
+  <label part="label"></label>
+  <select part="select">
   </select>
 
 `

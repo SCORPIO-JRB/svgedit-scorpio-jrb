@@ -204,9 +204,11 @@ group goes into More ▾, ordered by id. A group of tools brought as a
 
 The panels that extensions add to `#tools_top` go into the Properties tab:
 `#marker_panel` with the stroke, `#star_panel` and `#polygon_panel` with the
-geometry, any other in an Extensions section. The buttons added to
-`#editor_panel` go into the view group, and the entries added to
-`#main_button` into the document menu.
+geometry, any other in an Extensions section. A button added to
+`#editor_panel` keeps its id, its shortcut and its state, out of sight: the
+zoom menu shows an entry for it, with its title, its shortcut and a check
+when the button is pressed, and choosing the entry clicks the button. The
+entries added to `#main_button` go into the document menu.
 
 ## Creating SVG icons
 

@@ -7,8 +7,9 @@
  *   which opens the document menu (#main_button: new, open, save, import,
  *   export, document properties, preferences).
  * - Middle: the save state.
- * - Right: undo and redo, Export ▾ and Save. Below 1 024 px, Export is only in
- *   the document menu.
+ * - Right: Export ▾ and Save. Below 1 024 px, Export is only in the document
+ *   menu. Undo and Redo are in the zoom menu, as in the mockups: their
+ *   buttons stay in the bar, out of sight, for their shortcuts and state.
  * @module TopBar
  */
 
@@ -143,13 +144,14 @@ export class TopBar {
     }
     menu.removeAttribute('src')
     menu.setAttribute('label', this.editor.title || this.editor.i18next.t('layout.untitled'))
+    menu.setAttribute('chevron', 'chevron_down.svg')
     menu.classList.add('se-doc-menu')
     this.root.querySelector('.se-doc-slot').replaceWith(menu)
     menu.$menu?.setAttribute('aria-label', this.editor.i18next.t('layout.document_menu'))
   }
 
   /**
-   * Undo and redo, on the right of the bar.
+   * Undo and redo, kept in the bar out of sight (see the module).
    * @param {HTMLElement} panel #history_panel
    * @returns {void}
    */

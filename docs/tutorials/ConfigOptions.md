@@ -260,15 +260,22 @@ The canvas takes the whole editor under a top bar of 40 px (lot V3):
 - the top bar holds the home of the host application and its breadcrumb,
   then the name of the document, which opens the document menu; in the
   middle the save state ("Unsaved changes", then "Saved"); on the right,
-  undo and redo, Export and Save;
-- the tools float over the canvas at the top left: current layer, Select,
-  Scale, Hand, Text, Shapes ▾, Paths ▾, Image, Connector, Library and
-  More ▾;
-- the view group floats at the top right: the view buttons, the right
-  panel (Ctrl+\) and the zoom menu;
+  Export and Save;
+- the tools float over the canvas at the top left: current layer ▾ (which
+  also holds the layer commands: new, duplicate, rename, delete, move up and
+  down), Select, Scale, Hand, Text, Shapes ▾, Paths ▾, Image, Connector,
+  Library and More ▾;
+- the view group floats at the top right: the right panel (Ctrl+\) and the
+  zoom menu, which also holds the view options (rulers, grid, wireframe and
+  the buttons of the extensions), Undo and Redo;
 - the right panel has three tabs: Properties (one inspector, with sections
-  at fixed places), Layers (the tree of the layers and their objects) and
-  Code (the SVG source of the selection, or of the document, editable).
+  at fixed places, and the verbs on the selection in its "…" menu), Layers
+  (the search and the tree of the layers and their objects) and Code (the
+  SVG source of the selection, or of the document, coloured and editable).
+
+The rulers are hidden at first, as in the mockups: Shift+R or the zoom menu
+shows them. `showRulers: true`, or `?showRulers=true`, shows them at start;
+in the classic layout they are shown unless `showRulers` is false.
 
 Its width goes from 240 to 420 px, with the handle on its left edge, and is
 kept with the preferences. Below 1 280 px wide the panel becomes a drawer

@@ -64,6 +64,7 @@ class PaintBox {
 
     this.rect.setAttribute('fill', fillAttr)
     this.rect.setAttribute('opacity', opac)
+    this.onchange?.()
   }
 
   /**
@@ -100,6 +101,7 @@ class PaintBox {
     this.mixed = true
     this.rect.setAttribute('fill', this.mixedFill)
     this.rect.setAttribute('opacity', 1)
+    this.onchange?.()
   }
 
   /**

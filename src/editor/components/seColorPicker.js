@@ -648,12 +648,18 @@ div.jGraduate_Slider img {
     z-index: 1000;
     bottom: 0;
   }
+  /* The value of the paint: shown by the inspector of the canvas layout. */
+  #value, #alpha {
+    display: none;
+  }
   </style>
-  <div id="picker">
-      <se-icon id="logo"></se-icon>
+  <div id="picker" part="picker">
+      <se-icon id="logo" part="logo"></se-icon>
       <label for="color" title="" id="label"></label>
-      <div id="block">
+      <div id="block" part="swatch">
       </div>
+      <span id="value" part="value"></span>
+      <span id="alpha" part="alpha"></span>
   </div>
   <!-- hidden div -->
   <div id="color_picker"></div>
@@ -673,6 +679,8 @@ export class SeColorPicker extends HTMLElement {
     this.$logo = this._shadowRoot.getElementById('logo')
     this.$label = this._shadowRoot.getElementById('label')
     this.$block = this._shadowRoot.getElementById('block')
+    this.$value = this._shadowRoot.getElementById('value')
+    this.$alpha = this._shadowRoot.getElementById('alpha')
     this.paintBox = null
     this.i18next = null
     this.$picker = this._shadowRoot.getElementById('picker')
@@ -861,8 +869,32 @@ export class SeColorPicker extends HTMLElement {
    * @function connectedCallback
    * @returns {void}
    */
+  /**
+   * The paint in words: its colour in hexadecimal, none, a gradient or
+   * mixed, then its opacity.
+   * @returns {void}
+   */
+  showValue () {
+    const { paint, mixed } = this.paintBox ?? {}
+    let text = ''
+    let alpha = ''
+    if (mixed) {
+      text = t('properties.mixed')
+    } else if (paint) {
+      const none = paint.type === 'none' || (paint.type === 'solidColor' && paint.solidColor === 'none')
+      if (none) text = t('layout.paint_none')
+      else if (paint.type === 'solidColor') text = String(paint.solidColor).toUpperCase()
+      else if (paint.type === 'linearGradient') text = t('layout.paint_linear')
+      else if (paint.type === 'radialGradient') text = t('layout.paint_radial')
+      if (!none && Number.isFinite(Number(paint.alpha))) alpha = `${Math.round(Number(paint.alpha))}\u202f%`
+    }
+    this.$value.textContent = text
+    this.$alpha.textContent = alpha
+  }
+
   connectedCallback () {
     this.paintBox = new PaintBox(this.$block, this.type)
+    this.paintBox.onchange = () => this.showValue()
     svgEditor.$click(this.$picker, () => {
       this.setJGraduateMethod()
     })

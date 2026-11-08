@@ -574,6 +574,9 @@ class Editor extends EditorStartup {
     const success = this.svgCanvas.setSvgString(str) !== false
     if (success) {
       this.updateCanvas()
+      // The layers of the new document: list, tree and the layer menu of the
+      // toolbar, which kept the name of the previous document's layer.
+      this.layersPanel?.populateLayers()
       return
     }
     if (!noAlert) seAlert(this.i18next.t('notification.errorLoadingSVG'))

@@ -41,10 +41,10 @@ template.innerHTML = `
     outline-offset: 1px;
   }
   </style>
-  <div>
-  <se-icon size="14"></se-icon>
-  <span id="label"></span>
-  <elix-input></elix-input>
+  <div part="field">
+  <se-icon size="14" part="icon"></se-icon>
+  <span id="label" part="label"></span>
+  <elix-input part="box" exportparts="input"></elix-input>
   </div>
 `
 

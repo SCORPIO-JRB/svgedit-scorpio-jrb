@@ -8,6 +8,12 @@
  * with its line and nothing is applied. Escape gives back the source of the
  * drawing. While the text is being edited it does not follow the canvas, and
  * Apply changes what was shown when the editing began.
+ *
+ * As in the mockups, a tag with several attributes has one attribute per line
+ * (x and y, x1 and y1… share one), and the source is coloured: a layer under
+ * the text field draws the colours of what is typed. Only the spaces between
+ * attributes change: the text of the drawing and every value stay as they
+ * are written.
  * @module CodePanel
  */
 import { escapeHtml } from './TopBar.js'
@@ -47,6 +53,75 @@ export const parseSvgSource = (source, { fragment = false } = {}) => {
   return { nodes, doc, error: null }
 }
 
+/** Attributes that share the line of the one before them. */
+const PAIRS = { y: 'x', y1: 'x1', y2: 'x2', cy: 'cx', ry: 'rx', dy: 'dx' }
+
+/** Above this length the source is not coloured (5 000 objects and more). */
+const HIGHLIGHT_LIMIT = 300000
+
+// A comment, a CDATA section, a processing instruction, a doctype, or a start
+// tag with its attributes (a value may hold ">" between its quotes).
+const MARKUP = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>|<\/[^>]*>|<([A-Za-z_][\w:.-]*)((?:\s+[^\s=/>]+(?:\s*=\s*(?:"[^"]*"|'[^']*'))?)*)\s*(\/?)>/g
+const ATTRIBUTE = /([^\s=/>]+)(?:\s*=\s*("[^"]*"|'[^']*'))?/g
+
+/**
+ * One attribute per line in the start tags that have three or more and begin
+ * a line, indented under their tag; the rest of the source is kept as it is.
+ * @param {string} source
+ * @returns {string}
+ */
+export const formatSvgSource = (source) => String(source).replace(MARKUP, (match, name, attrs, slash, offset, whole) => {
+  if (!name) return match
+  const list = [...(attrs ?? '').matchAll(ATTRIBUTE)].map((m) => ({ name: m[1], text: m[0] }))
+  if (list.length < 3) return match
+  const lineStart = whole.lastIndexOf('\n', offset - 1) + 1
+  const before = whole.slice(lineStart, offset)
+  // A tag inside a line of text (a tspan) stays on its line.
+  if (before.trim()) return match
+  const indent = before + '  '
+  let out = `<${name}`
+  list.forEach((attr, i) => {
+    const pair = PAIRS[attr.name]
+    out += pair && list[i - 1]?.name === pair ? ` ${attr.text}` : `\n${indent}${attr.text}`
+  })
+  return `${out}${slash ? '/>' : '>'}`
+})
+
+/**
+ * The source as HTML, coloured: tags, attribute names, values, comments.
+ * @param {string} source
+ * @returns {string}
+ */
+export const highlightSvg = (source) => {
+  const text = String(source)
+  let html = ''
+  let last = 0
+  const span = (kind, value) => `<span class="se-code-${kind}">${escapeHtml(value)}</span>`
+  for (const match of text.matchAll(MARKUP)) {
+    html += escapeHtml(text.slice(last, match.index))
+    last = match.index + match[0].length
+    const [whole, name, attrs] = match
+    if (!name) {
+      html += span(whole.startsWith('</') ? 'tag' : 'comment', whole)
+      continue
+    }
+    html += span('tag', `<${name}`)
+    let rest = attrs ?? ''
+    let at = 0
+    for (const attr of rest.matchAll(ATTRIBUTE)) {
+      html += escapeHtml(rest.slice(at, attr.index))
+      at = attr.index + attr[0].length
+      const equals = attr[0].slice(attr[1].length, attr[2] ? attr[0].length - attr[2].length : undefined)
+      html += span('attr', attr[1]) + escapeHtml(equals) + (attr[2] ? span('value', attr[2]) : '')
+    }
+    rest = rest.slice(at)
+    // What stands between the last attribute and the end of the tag.
+    const end = whole.slice(1 + name.length + (attrs ?? '').length)
+    html += escapeHtml(rest) + span('tag', end)
+  }
+  return html + escapeHtml(text.slice(last))
+}
+
 export class CodePanel {
   /**
    * @param {import('../Editor.js').default} editor
@@ -65,8 +140,11 @@ export class CodePanel {
         <span class="se-inspector-id"></span>
       </div>
       <div class="se-code">
-        <textarea id="se-code-text" class="se-code-text" spellcheck="false" autocomplete="off"
-          autocapitalize="off" wrap="soft" aria-label="${t('layout.code_label')}" aria-describedby="se-code-status"></textarea>
+        <div class="se-code-editor">
+          <pre class="se-code-highlight" aria-hidden="true"></pre>
+          <textarea id="se-code-text" class="se-code-text" spellcheck="false" autocomplete="off"
+            autocapitalize="off" wrap="soft" aria-label="${t('layout.code_label')}" aria-describedby="se-code-status"></textarea>
+        </div>
         <p id="se-code-status" class="se-code-status" role="status"></p>
         <p class="se-code-help">${t('layout.code_help')}</p>
         <div class="se-code-actions">
@@ -75,13 +153,18 @@ export class CodePanel {
         </div>
       </div>`
     this.$text = tab.querySelector('#se-code-text')
+    this.$highlight = tab.querySelector('.se-code-highlight')
     this.$status = tab.querySelector('#se-code-status')
     this.$apply = tab.querySelector('#se-code-apply')
     this.$text.addEventListener('input', () => {
       this.dirty = this.$text.value !== this.shown
       this.$apply.disabled = !this.dirty
       this.setStatus('')
+      this.highlight()
     })
+    this.$text.addEventListener('scroll', () => this.syncScroll())
+    // The field can be resized: the coloured layer keeps its size.
+    new ResizeObserver(() => this.syncScroll()).observe(this.$text)
     this.$text.addEventListener('keydown', (e) => {
       // The shortcuts of the editor do not apply while typing code.
       e.stopPropagation()
@@ -97,6 +180,32 @@ export class CodePanel {
     this.$apply.addEventListener('click', () => this.apply())
     editor.$svgEditor.addEventListener('se-paneltab', () => this.refresh())
     editor.$svgEditor.addEventListener('se-panelchange', () => this.refresh())
+  }
+
+  /**
+   * Colours the text of the field, at the next frame.
+   * @returns {void}
+   */
+  highlight () {
+    if (this.highlightFrame) return
+    this.highlightFrame = requestAnimationFrame(() => {
+      this.highlightFrame = null
+      const value = this.$text.value
+      const plain = value.length > HIGHLIGHT_LIMIT
+      this.$text.classList.toggle('se-code-plain', plain)
+      // The last line break needs a character after it to take its height.
+      this.$highlight.innerHTML = plain ? '' : `${highlightSvg(value)}\n`
+      this.syncScroll()
+    })
+  }
+
+  /**
+   * @returns {void}
+   */
+  syncScroll () {
+    this.$highlight.style.height = `${this.$text.offsetHeight}px`
+    this.$highlight.scrollTop = this.$text.scrollTop
+    this.$highlight.scrollLeft = this.$text.scrollLeft
   }
 
   /**
@@ -129,10 +238,11 @@ export class CodePanel {
     if (!svgCanvas) return
     const selected = svgCanvas.getSelectedElements().filter(Boolean)
     this.target = selected.length ? selected : null
-    this.shown = selected.length
+    this.shown = formatSvgSource(selected.length
       ? selected.map((el) => svgCanvas.svgToString(el, 0)).join('\n')
-      : svgCanvas.getSvgString()
+      : svgCanvas.getSvgString())
     this.$text.value = this.shown
+    this.highlight()
     this.$apply.disabled = true
     this.setStatus('')
     const type = this.tab.querySelector('.se-inspector-type')

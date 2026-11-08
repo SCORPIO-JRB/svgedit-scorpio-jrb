@@ -1,20 +1,31 @@
 /**
  * View group of the canvas layout (lot V3; plan v2, section 4.1), floating
- * at the top right of the canvas: the view buttons (#editor_panel: source,
- * wireframe and those of the extensions, grid and layer view), the button of
- * the right panel (Ctrl+\) and the zoom ▾ menu.
+ * at the top right of the canvas, as in the mockups: the button of the right
+ * panel (Ctrl+\) and the zoom ▾ menu.
  *
  * The zoom menu holds zoom in and out, fit all (Shift+1), the selection
- * (Shift+2) and the page (Shift+3), steps from 25 to 200 %, rulers, grid and
- * wireframe, then Undo and Redo. Each entry runs a command of the registry
- * and shows its shortcut; an entry that does not apply is greyed and keeps
- * its shortcut shown.
+ * (Shift+2) and the page (Shift+3), steps from 25 to 200 %, the view options
+ * (rulers, grid, wireframe, and the buttons that extensions add to
+ * #editor_panel), then Undo and Redo. Each entry runs a command of the
+ * registry and shows its shortcut; an entry that does not apply is greyed and
+ * keeps its shortcut shown.
+ *
+ * #editor_panel stays in the page, out of sight: its buttons keep their ids,
+ * their shortcuts and the state the extensions give them, and the menu shows
+ * one entry for each. The source button gives way to the Code tab; Ctrl+U
+ * still opens the source.
  * @module ViewGroup
  */
 import { escapeHtml } from './TopBar.js'
 
 /** Steps of the zoom menu, in per cent. */
 export const ZOOM_MENU_STEPS = [25, 50, 100, 200]
+
+/**
+ * Buttons of #editor_panel that have their own entry, or none, in the menu.
+ * The others (those of the extensions) each get an entry.
+ */
+const OWN_ENTRIES = new Set(['tool_source', 'tool_wireframe', 'view_grid'])
 
 /**
  * @param {number} zoom 1 for 100 %
@@ -107,13 +118,50 @@ export class ViewGroup {
   }
 
   /**
-   * #editor_panel of TopPanel, with the buttons the extensions add to it.
+   * #editor_panel of TopPanel, with the buttons the extensions add to it:
+   * kept in the group, out of sight (see the module).
    * @param {HTMLElement} panel
    * @returns {void}
    */
   attachEditorPanel (panel) {
     panel.querySelector('.tool_sep')?.remove()
     this.$group.querySelector('.se-editor-panel-slot').replaceWith(panel)
+    this.$editorPanel = panel
+  }
+
+  /**
+   * One entry for each button that an extension adds to #editor_panel: its
+   * label, its shortcut, pressed or not, enabled or not; choosing the entry
+   * clicks the button.
+   * @returns {void}
+   */
+  refreshMirrors () {
+    const { editor } = this
+    const buttons = [...(this.$editorPanel?.children ?? [])]
+      .filter((el) => el.id && !OWN_ENTRIES.has(el.id) && el.localName === 'se-button')
+    const ids = buttons.map((el) => el.id)
+    for (const item of [...this.$menu.querySelectorAll('[data-mirror]')]) {
+      if (!ids.includes(item.dataset.mirror)) item.remove()
+    }
+    // After the wireframe entry, in the order of the buttons (the entries are
+    // children of the menu itself, which styles and navigates them).
+    let anchor = this.$menu.querySelector('[data-command="tool_wireframe"]')
+    for (const button of buttons) {
+      let item = this.$menu.querySelector(`[data-mirror="${CSS.escape(button.id)}"]`)
+      if (!item) {
+        item = document.createElement('div')
+        item.setAttribute('role', 'menuitemcheckbox')
+        item.dataset.mirror = button.id
+        item.innerHTML = '<span></span><kbd></kbd>'
+      }
+      anchor.after(item)
+      anchor = item
+      const title = button.getAttribute('title')
+      item.querySelector('span').textContent = title ? editor.i18next.t(title) : button.id
+      item.querySelector('kbd').textContent = editor.commands.hint(button.id) || ''
+      item.setAttribute('aria-checked', String(Boolean(button.pressed)))
+      item.setAttribute('aria-disabled', String(button.hasAttribute('disabled')))
+    }
   }
 
   /**
@@ -162,7 +210,9 @@ export class ViewGroup {
       view_grid: editor.grid?.visible ?? false,
       tool_wireframe: editor.workarea.classList.contains('wireframe')
     }
+    this.refreshMirrors()
     for (const item of this.$menu.querySelectorAll('[role^="menuitem"]')) {
+      if (item.dataset.mirror) continue
       const command = item.dataset.command
       const hint = commands.hint(item.dataset.hint || command)
       item.querySelector('kbd').textContent = hint || ''
@@ -189,8 +239,13 @@ export class ViewGroup {
       editor.zoomAt(Number(item.dataset.zoom) / 100)
       return
     }
+    if (item.dataset.mirror) {
+      editor.$container.querySelector(`#${CSS.escape(item.dataset.mirror)}`)?.click()
+      return
+    }
     const command = item.dataset.command
     if (command === 'view_grid' && !editor.commands.get(command)) {
+      // Without the grid extension, the grid of the interaction layer.
       editor.grid?.setVisible(!editor.grid.visible)
       return
     }
