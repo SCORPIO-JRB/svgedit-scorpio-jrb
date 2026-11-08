@@ -86,7 +86,9 @@ export default class ConfigObj {
       // (240 to 420), and the tab open.
       panel_open: 'true',
       panel_width: '280',
-      panel_tab: 'properties'
+      panel_tab: 'properties',
+      // Contextual bar above the selection (lot V4), on unless turned off.
+      context_bar: 'true'
     }
     /**
       * @tutorial ConfigOptions

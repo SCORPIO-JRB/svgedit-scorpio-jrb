@@ -8,6 +8,7 @@
  *   which becomes a drawer over the canvas below 1 280 px.
  * - "classic": the layout of SVG-Edit, kept behind this option until the
  *   end of V4 (`layout: 'classic'`, or `?layout=classic`). Read at start.
+ *   It has no contextual bar (lot V4).
  *
  * The panels build their controls as before and hand them to `attach`, which
  * puts each one in its zone. Ids and classes do not change: the code that
@@ -22,6 +23,7 @@ import { TopBar } from './panels/TopBar.js'
 import { ViewGroup } from './panels/ViewGroup.js'
 import { LayerTree } from './panels/LayerTree.js'
 import { CodePanel } from './panels/CodePanel.js'
+import { ContextBar } from './panels/ContextBar.js'
 
 export const LAYOUTS = ['canvas', 'classic']
 export const PANEL_MIN_WIDTH = 240
@@ -128,6 +130,8 @@ export class EditorLayout {
     this.toolbar = new Toolbar(this.editor, this.$stage)
     this.inspector = new Inspector(this.editor, root.querySelector('#se-tabpanel-properties'))
     this.codePanel = new CodePanel(this.editor, root.querySelector('#se-tabpanel-code'))
+    // Over the canvas, above the selection (lot V4).
+    this.contextBar = new ContextBar(this.editor, this.$stage)
 
     this.initPanel()
     this.observeSize()
@@ -374,6 +378,7 @@ export class EditorLayout {
     this.inspector?.refresh()
     this.layerTree?.selectionChanged(this.editor.svgCanvas?.getSelectedElements() ?? [])
     this.codePanel?.invalidate()
+    this.contextBar?.refresh()
   }
 
   /**
@@ -383,6 +388,7 @@ export class EditorLayout {
   documentChanged () {
     this.layerTree?.invalidate()
     this.codePanel?.invalidate()
+    this.contextBar?.refresh()
   }
 
   /**
@@ -415,6 +421,9 @@ export class EditorLayout {
    */
   zoomChanged (zoom) {
     this.viewGroup?.setZoom(zoom)
+    // The frame moved: the bar comes back once the zoom stops.
+    this.contextBar?.hide()
+    this.contextBar?.scheduleShow()
   }
 
   /**

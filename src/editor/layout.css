@@ -1282,3 +1282,155 @@
   color: var(--se-action-text);
   font-weight: 600;
 }
+
+/* Contextual bar (lot V4)
+—————————————————————————————*/
+
+/* Above the selection; its empty parts let the click through to the canvas. */
+#se-context-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 0 4px;
+  background: var(--se-surface-raised);
+  box-shadow: var(--se-shadow-menu);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity var(--se-duration-state) var(--se-ease-out);
+}
+
+#se-context-bar[hidden],
+#se-context-bar.se-ctx-hiding,
+#se-context-bar.se-ctx-offscreen {
+  display: none;
+}
+
+#se-context-bar > :not(.se-sep) {
+  pointer-events: auto;
+}
+
+/* Over an object it covers: faded, the click goes through its empty parts. */
+#se-context-bar.se-ctx-faded {
+  opacity: 0.3;
+}
+
+#se-context-bar [hidden] {
+  display: none;
+}
+
+#se-context-bar .se-text-button[aria-pressed="true"] {
+  background: var(--se-accent-bg);
+  color: var(--se-accent);
+}
+
+#se-context-bar .se-text-button:disabled,
+#se-context-bar .se-icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Fill and stroke: the swatch of the inspector's colour picker, and a name. */
+#se-context-bar .se-ctx-paint {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--se-control-size);
+  padding-right: 6px;
+  border-radius: var(--se-radius-control);
+  cursor: pointer;
+}
+
+#se-context-bar .se-ctx-paint:hover {
+  background: var(--se-control-hover);
+}
+
+#se-context-bar se-colorpicker::part(picker) {
+  width: 24px;
+  height: var(--se-control-size);
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+#se-context-bar se-colorpicker::part(logo),
+#se-context-bar se-colorpicker::part(value),
+#se-context-bar se-colorpicker::part(alpha) {
+  display: none;
+}
+
+#se-context-bar se-colorpicker:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--se-radius-control);
+}
+
+#se-context-bar .se-ctx-paint-name {
+  color: var(--se-text);
+}
+
+/* Fields: as in the inspector, narrower. */
+#se-context-bar se-spin-input {
+  display: block;
+  width: 64px;
+}
+
+#se-context-bar se-spin-input::part(field) {
+  box-sizing: border-box;
+  gap: 4px;
+  width: 100%;
+  height: var(--se-control-size);
+  margin: 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+#se-context-bar se-spin-input::part(field):focus-within {
+  border-color: var(--se-focus-ring);
+}
+
+#se-context-bar se-spin-input::part(icon) {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--se-text-label);
+}
+
+#se-context-bar se-spin-input::part(label) {
+  display: none;
+}
+
+#se-context-bar se-spin-input::part(box),
+#se-context-bar se-spin-input::part(input) {
+  flex: 1;
+  width: 100% !important;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  text-align: left;
+}
+
+#se-context-bar se-spin-input::part(spin-button) {
+  display: none;
+}
+
+#se-context-bar .se-ctx-list-value {
+  display: inline-flex;
+  align-items: center;
+}
+
+#se-ctx-list [role="menuitemradio"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

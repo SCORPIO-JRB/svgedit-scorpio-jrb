@@ -58,6 +58,7 @@ export const init = canvas => {
   svgCanvas = canvas
   svgCanvas.setSvgString = setSvgString
   svgCanvas.importSvgString = importSvgString
+  svgCanvas.replaceUseSymbol = replaceUseSymbol
   svgCanvas.uniquifyElems = uniquifyElemsMethod
   svgCanvas.setUseData = setUseDataMethod
   svgCanvas.convertGradients = convertGradientsMethod
@@ -838,6 +839,120 @@ const cancelGroupTransform = (parent, layer) => {
 }
 
 /**
+ * Builds the <symbol> of an imported SVG in the <defs> of the drawing (see
+ * importSvgString), its changes added to a batch command.
+ * @param {string} xmlString
+ * @param {BatchCommand} batchCmd
+ * @returns {{symbol: Element, width: number|null, height: number|null, removed: string[]}}
+ * @throws {Error} When the text is not an SVG document
+ */
+const buildImportedSymbol = (xmlString, batchCmd) => {
+  // Checked before anything changes in the drawing
+  const newDoc = parseSvgText(xmlString)
+  if (!newDoc) {
+    throw new Error('Not an SVG document')
+  }
+  const removed = svgCanvas.prepareSvg(newDoc)
+
+  // import new svg document into our document
+  // If DOM3 adoptNode() available, use it. Otherwise fall back to DOM2 importNode()
+  const svg = svgCanvas.getDOMDocument().adoptNode
+    ? svgCanvas.getDOMDocument().adoptNode(newDoc.documentElement)
+    : svgCanvas.getDOMDocument().importNode(newDoc.documentElement, true)
+
+  svgCanvas.uniquifyElems(svg)
+  removed.push(...removeOutsideAnimations(svg))
+  const { width, height } = getDeclaredSize(svg)
+
+  const symbol = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'symbol')
+  const hadDefs = svgCanvas.getSvgContent().getElementsByTagNameNS(NS.SVG, 'defs').length > 0
+  const defs = findDefs()
+  if (!hadDefs) {
+    // A <defs> made for the import goes with it
+    batchCmd.addSubCommand(new InsertElementCommand(defs))
+  }
+
+  if (isGecko()) {
+    // Move all gradients into root for Firefox, workaround for this bug:
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=353575
+    const elements = svg.querySelectorAll(
+      'linearGradient, radialGradient, pattern'
+    )
+    Array.prototype.forEach.call(elements, el => {
+      defs.appendChild(el)
+      batchCmd.addSubCommand(new InsertElementCommand(el))
+    })
+  }
+
+  while (svg.firstChild) {
+    const first = svg.firstChild
+    symbol.append(first)
+  }
+  // The size of the root goes to the <use>: the <symbol> keeps its view
+  // box, which scales the file to that size. The namespaces are declared
+  // on the root of the drawing when it is saved.
+  for (const attr of svg.attributes) {
+    if (attr.namespaceURI === NS.XMLNS) continue
+    if (!attr.namespaceURI && ['x', 'y', 'width', 'height'].includes(attr.localName)) continue
+    symbol.setAttributeNS(attr.namespaceURI, attr.nodeName, attr.value)
+  }
+  // In the drawing before any new identifier is chosen: the identifiers of
+  // the file are kept, so a new one must not take one of them.
+  defs.append(symbol)
+  batchCmd.addSubCommand(new InsertElementCommand(symbol))
+  if (!symbol.id) symbol.id = svgCanvas.getNextId()
+  removed.push(...scopeImportedStyles(symbol))
+  return { symbol, width, height, removed }
+}
+
+/**
+ * Remplacer (lot V4): the symbol of a <use> becomes that of another SVG
+ * file. The <use> keeps its identifier, its place and its scale, and takes
+ * the size the new file declares. One undo step; the old symbol stays in the
+ * <defs>, where other <use> may show it.
+ * @function module:svgcanvas.SvgCanvas#replaceUseSymbol
+ * @param {SVGUseElement} useEl
+ * @param {string} xmlString
+ * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @fires module:svgcanvas.SvgCanvas#event:contentRemoved
+ * @returns {boolean} Whether the symbol was replaced
+ */
+const replaceUseSymbol = (useEl, xmlString) => {
+  const dataStorage = svgCanvas.getDataStorage()
+  const batchCmd = new BatchCommand('Replace symbol')
+  let removed
+  try {
+    const built = buildImportedSymbol(xmlString, batchCmd)
+    removed = built.removed
+    const { symbol, width, height } = built
+    const old = {
+      '#href': svgCanvas.getHref(useEl),
+      width: useEl.getAttribute('width'),
+      height: useEl.getAttribute('height')
+    }
+    svgCanvas.setHref(useEl, '#' + symbol.id)
+    if (width !== null) useEl.setAttribute('width', shortFloat(width))
+    else useEl.removeAttribute('width')
+    if (height !== null) useEl.setAttribute('height', shortFloat(height))
+    else useEl.removeAttribute('height')
+    batchCmd.addSubCommand(new ChangeElementCommand(useEl, old))
+    dataStorage.put(useEl, 'symbol', symbol)
+    dataStorage.put(useEl, 'ref', symbol)
+  } catch (e) {
+    batchCmd.unapply()
+    error('Error replacing a symbol', e, 'svg-exec')
+    return false
+  }
+  svgCanvas.addCommandToHistory(batchCmd)
+  svgCanvas.selectorManager.requestSelector(useEl)?.resize()
+  svgCanvas.call('changed', [useEl])
+  if (removed.length) {
+    svgCanvas.call('contentRemoved', { action: 'import', items: removed })
+  }
+  return true
+}
+
+/**
  * This function imports the input SVG XML as a `<symbol>` in the `<defs>`, then adds a
  * `<use>` to the current layer, at the size the file declares. The stylesheets
  * and the animations of the file apply only to it. The import is one undo
@@ -860,61 +975,9 @@ const importSvgString = (xmlString, _preserveDimension, _doNotUseExisting) => {
   let useEl
   let removed
   try {
-    // Checked before anything changes in the drawing
-    const newDoc = parseSvgText(xmlString)
-    if (!newDoc) {
-      throw new Error('Not an SVG document')
-    }
-    removed = svgCanvas.prepareSvg(newDoc)
-
-    // import new svg document into our document
-    // If DOM3 adoptNode() available, use it. Otherwise fall back to DOM2 importNode()
-    const svg = svgCanvas.getDOMDocument().adoptNode
-      ? svgCanvas.getDOMDocument().adoptNode(newDoc.documentElement)
-      : svgCanvas.getDOMDocument().importNode(newDoc.documentElement, true)
-
-    svgCanvas.uniquifyElems(svg)
-    removed.push(...removeOutsideAnimations(svg))
-    const { width, height } = getDeclaredSize(svg)
-
-    const symbol = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'symbol')
-    const hadDefs = svgCanvas.getSvgContent().getElementsByTagNameNS(NS.SVG, 'defs').length > 0
-    const defs = findDefs()
-    if (!hadDefs) {
-      // A <defs> made for the import goes with it
-      batchCmd.addSubCommand(new InsertElementCommand(defs))
-    }
-
-    if (isGecko()) {
-      // Move all gradients into root for Firefox, workaround for this bug:
-      // https://bugzilla.mozilla.org/show_bug.cgi?id=353575
-      const elements = svg.querySelectorAll(
-        'linearGradient, radialGradient, pattern'
-      )
-      Array.prototype.forEach.call(elements, el => {
-        defs.appendChild(el)
-        batchCmd.addSubCommand(new InsertElementCommand(el))
-      })
-    }
-
-    while (svg.firstChild) {
-      const first = svg.firstChild
-      symbol.append(first)
-    }
-    // The size of the root goes to the <use>: the <symbol> keeps its view
-    // box, which scales the file to that size. The namespaces are declared
-    // on the root of the drawing when it is saved.
-    for (const attr of svg.attributes) {
-      if (attr.namespaceURI === NS.XMLNS) continue
-      if (!attr.namespaceURI && ['x', 'y', 'width', 'height'].includes(attr.localName)) continue
-      symbol.setAttributeNS(attr.namespaceURI, attr.nodeName, attr.value)
-    }
-    // In the drawing before any new identifier is chosen: the identifiers of
-    // the file are kept, so a new one must not take one of them.
-    defs.append(symbol)
-    batchCmd.addSubCommand(new InsertElementCommand(symbol))
-    if (!symbol.id) symbol.id = svgCanvas.getNextId()
-    removed.push(...scopeImportedStyles(symbol))
+    const built = buildImportedSymbol(xmlString, batchCmd)
+    removed = built.removed
+    const { symbol, width, height } = built
 
     useEl = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'use')
     useEl.id = svgCanvas.getNextId()

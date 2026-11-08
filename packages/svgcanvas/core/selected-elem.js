@@ -1392,10 +1392,12 @@ const viewBoxTransform = (use, symbol) => {
  * Converts selected/given `<use>` or child SVG element to a group.
  * @function module:selected-elem.SvgCanvas#convertToGroup
  * @param {Element} elem
+ * @param {BatchCommand} [outerBatch] Takes the changes, instead of a step of
+ *   its own in the history (an ungroup that converts first)
  * @fires module:selected-elem.SvgCanvas#event:selected
  * @returns {void}
  */
-const convertToGroup = elem => {
+const convertToGroup = (elem, outerBatch = null) => {
   const selectedElements = svgCanvas.getSelectedElements()
   if (!elem) {
     elem = selectedElements[0]
@@ -1404,6 +1406,15 @@ const convertToGroup = elem => {
   const batchCmd = new BatchCommand()
   let ts
   const dataStorage = svgCanvas.getDataStorage()
+  if ($elem?.tagName === 'use') {
+    // The symbol the <use> shows now: its reference may have changed since
+    // it was read (Remplacer, then its undo).
+    const ref = svgCanvas.getElement(svgCanvas.getHref($elem).replace(/^#/, ''))
+    if (ref && (ref.tagName === 'symbol' || ref.tagName === 'svg')) {
+      dataStorage.put($elem, 'symbol', ref)
+      dataStorage.put($elem, 'ref', ref)
+    }
+  }
   if (dataStorage.has($elem, 'gsvg')) {
     // Use the gsvg as the new group
     const svg = elem.firstChild
@@ -1558,7 +1569,8 @@ const convertToGroup = elem => {
       batchCmd.addSubCommand(cm)
     }
 
-    svgCanvas.addCommandToHistory(batchCmd)
+    if (outerBatch) outerBatch.addSubCommand(batchCmd)
+    else svgCanvas.addCommandToHistory(batchCmd)
     return g
   } else {
     warn('Unexpected element to ungroup:', elem, 'selected-elem')
@@ -1612,13 +1624,15 @@ const ungroupSelectedElement = () => {
   if (!g) {
     return
   }
+  // One undo step, a <use> converted on the way included.
+  const batchCmd = new BatchCommand('Ungroup Elements')
   if (dataStorage.has(g, 'gsvg') || dataStorage.has(g, 'symbol')) {
     // Is svg (e.g. imported content), so convert to a real group first, then
     // fall through below to actually ungroup/flatten that new group - a
     // single Ungroup action on imported content should ungroup it, not just
     // silently swap its <use>/gsvg wrapper for a <g> that still needs a
     // second Ungroup to do anything.
-    g = convertToGroup(g)
+    g = convertToGroup(g, batchCmd)
     if (!g) { return }
   } else if (g.tagName === 'use') {
     // Somehow doesn't have data set, so retrieve
@@ -1634,7 +1648,7 @@ const ungroupSelectedElement = () => {
     }
     dataStorage.put(g, 'symbol', symbol)
     dataStorage.put(g, 'ref', symbol)
-    g = convertToGroup(g)
+    g = convertToGroup(g, batchCmd)
     if (!g) { return }
   }
   const parentsA = getParents(g.parentNode, 'a')
@@ -1644,7 +1658,6 @@ const ungroupSelectedElement = () => {
 
   // Look for parent "a"
   if (g.tagName === 'g' || g.tagName === 'a') {
-    const batchCmd = new BatchCommand('Ungroup Elements')
     const cmd = pushGroupProperty(g, true)
     if (cmd) {
       batchCmd.addSubCommand(cmd)
@@ -1691,6 +1704,8 @@ const ungroupSelectedElement = () => {
 
     // update selection
     svgCanvas.addToSelection(children)
+  } else if (!batchCmd.isEmpty()) {
+    svgCanvas.addCommandToHistory(batchCmd)
   }
 }
 /**

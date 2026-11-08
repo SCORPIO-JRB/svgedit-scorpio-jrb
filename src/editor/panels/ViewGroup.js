@@ -73,6 +73,7 @@ export class ViewGroup {
         ${check('toggle_rulers', t('layout.rulers'))}
         ${check('view_grid', t('layout.grid'))}
         ${check('tool_wireframe', t('layout.wireframe'))}
+        ${check('toggle_context_bar', t('context.toggle'))}
         <div role="separator"></div>
         ${entry('tool_undo', t('tools.undo'))}
         ${entry('tool_redo', t('tools.redo'), 'data-hint="redo_shift"')}
@@ -208,7 +209,8 @@ export class ViewGroup {
     const checked = {
       toggle_rulers: editor.rulersShown?.() ?? false,
       view_grid: editor.grid?.visible ?? false,
-      tool_wireframe: editor.workarea.classList.contains('wireframe')
+      tool_wireframe: editor.workarea.classList.contains('wireframe'),
+      toggle_context_bar: editor.layout?.contextBar?.enabled ?? false
     }
     this.refreshMirrors()
     for (const item of this.$menu.querySelectorAll('[role^="menuitem"]')) {
