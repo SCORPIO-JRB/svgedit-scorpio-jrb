@@ -252,3 +252,55 @@ Alt+D takes the address bar of the browsers on Windows: Alt+A left, Alt+H
 horizontal centres, Alt+R right, Alt+W top, Alt+V vertical centres, Alt+S
 bottom, Alt+Shift+H and Alt+Shift+V distribute. A single object aligns on
 the page.
+
+## Layout
+
+The canvas takes the whole editor under a top bar of 40 px (lot V3):
+
+- the top bar holds the home of the host application and its breadcrumb,
+  then the name of the document, which opens the document menu; in the
+  middle the save state ("Unsaved changes", then "Saved"); on the right,
+  undo and redo, Export and Save;
+- the tools float over the canvas at the top left: current layer, Select,
+  Scale, Hand, Text, Shapes ▾, Paths ▾, Image, Connector, Library and
+  More ▾;
+- the view group floats at the top right: the view buttons, the right
+  panel (Ctrl+\) and the zoom menu;
+- the right panel has three tabs: Properties (one inspector, with sections
+  at fixed places), Layers (the tree of the layers and their objects) and
+  Code (the SVG source of the selection, or of the document, editable).
+
+Its width goes from 240 to 420 px, with the handle on its left edge, and is
+kept with the preferences. Below 1 280 px wide the panel becomes a drawer
+over the canvas; below 1 024 px the groups of tools fold into More ▾ and
+Export goes into the document menu.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `layout` | `"canvas"` | `"classic"` keeps the layout of SVG-Edit until the end of V4; read at start, also `?layout=classic` |
+| `homeUrl` | `""` | Link of the home button; http(s) only |
+| `breadcrumb` | `[]` | Breadcrumb before the name of the document: labels or `{label, href}` |
+
+`homeUrl` and `breadcrumb` are given by the host application and are never
+read from the URL:
+
+```js
+svgEditor.setConfig({
+  homeUrl: '/projets/le-perreux',
+  breadcrumb: ['Le Perreux', { label: 'Synoptiques', href: '/projets/le-perreux/synoptiques' }]
+})
+```
+
+A host that saves the document itself tells the editor so, and the top bar
+shows "Saved":
+
+```js
+svgEditor.showSaveWarning = false
+```
+
+Ctrl+\ is read by the key next to Enter, whatever character it types (on
+AZERTY, the key of "*").
+
+The questions the editor asks (name of a layer, address of an image or of a
+link) open in place under the control that asked, never in a window of the
+browser.
