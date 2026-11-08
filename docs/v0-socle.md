@@ -1,10 +1,16 @@
 # Plan v2 — lot V0 « Socle »
 
-Branche `v0-socle`, partie de `fusion-refonte-master` (fusion de la refonte dans `master`). V0 ouvre le plan « Interface et expérience (v2) » : il mesure et il protège, sans changer l'éditeur.
+Branche `v0-socle`, partie de `fusion-refonte-master` (fusion de la refonte dans `master`). V0 ouvre le plan « Interface et expérience (v2) » : il mesure et il protège. Il ne change l'éditeur que pour cinq défauts trouvés en mesurant (section 3).
 
 La branche contient aussi `b9ad875`, le dernier commit de `refonte-selection-corrections` (valeurs par défaut omises seulement sans effet), fusionné pour que le rapport le mesure. Il arrive dans `master` par la seconde demande de fusion (n° 2).
 
-État : en cours. Livré : le rapport de fidélité et les tests de survie des liaisons. Reste à faire : voir la section 5.
+État : en cours. Livré :
+- le rapport de fidélité ;
+- les tests de survie des liaisons ;
+- la suite E2E sous Firefox ;
+- les contrats des extensions.
+
+Reste à faire : voir la section 6.
 
 ## 1. Le rapport de fidélité
 
@@ -74,12 +80,56 @@ Deux lectures :
 - dégrouper un groupe lié supprime sa liaison sans prévenir ;
 - un identifiant en double dans un fichier ouvert est renommé.
 
-## 3. Ce qui ne change pas
+## 3. Firefox et les contrats des extensions
 
-- **Éditeur.** V0 ne modifie aucune ligne de `src/` ni de `packages/`. Seul `b9ad875`, fusionné depuis `refonte-selection-corrections` et décrit dans `docs/refonte-selection-corrections.md`, touche `packages/svgcanvas`.
-- **Sortie SVG.** Inchangée. La fixture s'ajoute aux allers-retours de `compare-output.mjs`, identiques entre deux versions tant que l'import ne change pas.
+### Firefox
 
-## 4. Tester en local (PowerShell)
+Le workflow `firefox.yml` lance toute la suite E2E sous Firefox à chaque push, avec `playwright.firefox.config.mjs`. Il est bloquant depuis que toute la suite y passe.
+
+Premier passage, sur `1057bf6` : 245 tests passent, 45 échouent. Une sonde lancée sous les deux navigateurs a séparé deux causes.
+
+**Ce qui venait des tests** (environ 40 échecs) : ils mesuraient avec ce qui diffère d'un navigateur à l'autre, pas avec l'éditeur.
+
+| Différence de Firefox | Correction dans les tests |
+| --- | --- |
+| Pas de permission presse-papiers à accorder, pas de `TouchEvent` hors écran tactile | Deux préférences dans la configuration Firefox |
+| Listes de transformations et tracés écrits avec virgules et espaces (`rotate(90, 210, 60)`, `M 300 300 L …`) | Comparaison sous une forme canonique (`canonical` dans `helpers.js`) |
+| Boîte à l'écran du `<svg>` du dessin, d'un `<use>`, d'une forme clippée | Mesure par la matrice du premier calque ou de la forme (`screenPoint`, `SCREEN_BOX`) |
+| Calcul en simple précision, souris au pixel entier, boîtes au 1/60 de pixel | 4 décimales après un glisser, 1° pour une rotation au pointeur, 1/30 px pour une boîte |
+
+**Ce qui venait de l'éditeur** (4 défauts, corrigés). Trois tiennent à la simple précision des matrices SVG de Firefox :
+- **Rectangle tourné.** Après une homothétie, il gardait `rotate(30) matrix(1.2, 2e-8, …)` au lieu d'une nouvelle largeur et hauteur : le bruit de 2e-8 passait pour un cisaillement.
+- **Épaisseur d'un groupe.** L'outil Échelle réécrivait celle d'un groupe qui garde sa matrice : `2` devenait `1.99999997737`.
+- **Rotation depuis un coin.** Elle laissait `matrix(1, -6.5e-9, 6.5e-9, 1, 3.6e-5, -2.6e-5)` derrière le `rotate`, et un second pas d'annulation.
+
+Le moteur tolère désormais ce bruit : 1e-6 sur la partie linéaire, 1e-3 unité sur une translation (`MATRIX_TOLERANCE` et `TRANSLATION_TOLERANCE` dans `math.js`).
+
+Le quatrième tient aux événements. Firefox ne déclenche pas l'événement `paste` pour Ctrl+Maj+V hors d'un champ, si bien qu'un SVG copié dans une autre application n'était pas collé sur place. Sans événement, l'éditeur lit maintenant le presse-papiers système comme le fait le menu contextuel.
+
+Reste une différence sans effet. Sous Firefox, le dessin ouvert peut contenir `x="399.99998"` là où Chromium écrit `400`. L'enregistrement arrondit à deux décimales, donc le fichier est le même.
+
+Les passages suivants :
+- **Sur `2f8605f`.** 284 tests passent et 6 échouent. Trois assertions étaient masquées par celles déjà corrigées, une mesure de copie de `<use>` restait à reprendre, et deux défauts de l'éditeur restaient à corriger (la rotation depuis un coin et le collage sur place).
+- **Sur `e30adb0`.** Les 306 tests passent, sous Firefox comme sous Chromium : le workflow Firefox devient bloquant.
+
+### Contrats des extensions
+
+`tests/e2e/extensions-v0.spec.js` décrit ce que les dix extensions chargées par défaut attendent de l'éditeur, avant que V1 à V4 reconstruisent l'interface autour d'elles (13 tests) :
+- **Chargement.** Chacune se charge avec les événements qu'elle écoute.
+- **Emplacements.** Chacune trouve la place où elle range ses boutons.
+- **Événements.** Pendant une séquence d'édition ordinaire, l'éditeur envoie tous ces événements : sélection, changement, souris, zoom, collage avec nouveaux identifiants, calques.
+- **Boutons.** Chaque bouton fait ce qu'il annonce : connecteur, pipette, grille, marqueurs, main, bibliothèque de formes, étoile et polygone, menu Fichier, stockage, vue du calque.
+
+Deux constats :
+- **Bibliothèque de formes (défaut corrigé).** Son bouton choisit l'outil avant qu'une forme soit choisie dans le menu. Un glisser levait alors cinq exceptions (`setScale` avec une échelle infinie). Il ne dessine plus rien tant qu'aucune forme n'est choisie.
+- **Pas de `mouseUp` en mode sélection.** Un glisser en mode sélection ne transmet pas `mouseUp` aux extensions. C'était déjà le cas dans SVG-Edit d'origine ; le contrat le constate.
+
+## 4. Ce qui ne change pas
+
+- **Éditeur.** V0 ne corrige que les cinq défauts trouvés en mesurant (section 3), dans `math.js`, `recalculate.js`, `scale-tool.js`, `SystemClipboard.js` et `ext-shapes.js`. Sous Chromium, la suite complète donne les mêmes résultats. Seul `b9ad875`, fusionné depuis `refonte-selection-corrections` et décrit dans `docs/refonte-selection-corrections.md`, touche aussi `packages/svgcanvas`.
+- **Sortie SVG.** V0 ne la change pas. `b9ad875` la change pour les valeurs par défaut (section 1). La fixture s'ajoute aux allers-retours de `compare-output.mjs`, identiques entre deux versions tant que l'import ne change pas.
+
+## 5. Tester en local (PowerShell)
 
 ```powershell
 cd svgedit-scorpio-jrb
@@ -100,12 +150,13 @@ Dans un second terminal :
 ```powershell
 npm run fidelity -- --out=fidelite.md
 npx vitest run tests/unit/fidelity-diff.test.js
-npx playwright test tests/e2e/liaisons-v0.spec.js
+npx playwright test tests/e2e/liaisons-v0.spec.js tests/e2e/extensions-v0.spec.js
+npx playwright test --config playwright.firefox.config.mjs
 ```
 
-## 5. Reste à faire dans V0
+La dernière commande demande Firefox pour Playwright : `npx playwright install firefox`.
+
+## 6. Reste à faire dans V0
 
 - **Corpus réel (D4).** 10 à 20 synoptiques SCorp-io, avec au moins un fichier lié, à passer au rapport par `--corpus`.
-- **Firefox.** Le workflow `firefox.yml` lance les 290 tests E2E sous Firefox à chaque push, avec `playwright.firefox.config.mjs`. Il reste informatif, comme le banc, jusqu'à ce que la suite y passe ; son premier résultat dira ce qu'il faut corriger.
-- **Contrats des extensions.** Un test par extension active : chargement, boutons, événements.
 - **Maquettes.** Publiées le 8 novembre, à valider avant V3 : [maquette éditeur SVG-Edit v2](https://claude.ai/artifact/1W7asSMbQuGhQCCsYNTuaz). Cinq plans de travail d'après les captures de Claude Design : texte sélectionné et styles, forme et onglet Code, multi-sélection et menu d'alignement, glissement avec guides, menu du zoom et deux cadres d'export.
