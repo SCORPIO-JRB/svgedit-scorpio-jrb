@@ -5,7 +5,7 @@
  *
  * @copyright 2010 Alexis Deveria, 2010 Jeff Schiller
  */
-import { getElement, assignAttributes, cleanupElement } from './utilities.js'
+import { getElement, assignAttributes, cleanupElements } from './utilities.js'
 import { NS } from './namespaces.js'
 
 let svgCanvas = null
@@ -81,6 +81,22 @@ export const getJsonFromSvgElements = (data) => {
 */
 
 export const addSVGElementsFromJson = (data) => {
+  const created = []
+  const shape = createFromJson(data, created)
+  // Once the whole tree is in place: what a group gives its children is then
+  // known. A child used to be cleaned up in the current layer, before it was
+  // moved into its group, losing a default value the group overrides.
+  cleanupElements(created)
+  return shape
+}
+
+/**
+ * addSVGElementsFromJson, without the clean-up.
+ * @param {module:json.ElementJSON|string|null} data
+ * @param {Element[]} created - Receives the elements made or updated
+ * @returns {Element|Text|null}
+ */
+const createFromJson = (data, created) => {
   if (!svgdoc_) { return null }
   if (data === null || data === undefined) return svgdoc_.createTextNode('')
   if (typeof data === 'string') return svgdoc_.createTextNode(data)
@@ -133,7 +149,7 @@ export const addSVGElementsFromJson = (data) => {
     }, 100)
   }
   assignAttributes(shape, attrs, 100)
-  cleanupElement(shape)
+  created.push(shape)
 
   // Children
   if (data.children) {
@@ -141,7 +157,7 @@ export const addSVGElementsFromJson = (data) => {
       shape.firstChild.remove()
     }
     data.children.forEach((child) => {
-      const childNode = addSVGElementsFromJson(child)
+      const childNode = createFromJson(child, created)
       if (childNode) {
         shape.append(childNode)
       }

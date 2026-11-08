@@ -11,7 +11,8 @@ import * as history from './history.js'
 import { error } from '../common/logger.js'
 import {
   text2xml,
-  cleanupElement,
+  getDefaultsContext,
+  isRemovableDefault,
   findDefs,
   setHref,
   getHref,
@@ -121,14 +122,38 @@ const svgCanvasToString = () => {
   return output
 }
 
+// What the outermost svgToString call learnt of the drawing (see
+// getDefaultsContext), for the elements it writes.
+let defaultsContext = null
+
 /**
  * Sub function ran on each SVG element to convert it to a string as desired.
+ * An attribute at its initial value is left out where that changes nothing
+ * (see isRemovableDefault). The element itself is not changed: the defaults
+ * used to be removed from the drawing at each save, so an element took the
+ * value its group gives.
  * @function module:svgcanvas.SvgCanvas#svgToString
  * @param {Element} elem - The SVG element to convert
  * @param {Integer} indent - Number of spaces to indent this tag
  * @returns {string} The given element as an SVG tag
  */
 const svgToString = (elem, indent) => {
+  if (defaultsContext || !elem) { return elementToString(elem, indent) }
+  defaultsContext = getDefaultsContext(elem)
+  try {
+    return elementToString(elem, indent)
+  } finally {
+    defaultsContext = null
+  }
+}
+
+/**
+ * svgToString, once the drawing is known.
+ * @param {Element} elem
+ * @param {Integer} indent
+ * @returns {string}
+ */
+const elementToString = (elem, indent) => {
   const curConfig = svgCanvas.getCurConfig()
   const nsMap = svgCanvas.getNsMap()
   const out = []
@@ -136,7 +161,6 @@ const svgToString = (elem, indent) => {
   const unitRe = new RegExp(`^-?[\\d\\.]+${unit}$`)
 
   if (elem) {
-    cleanupElement(elem)
     const attrs = [...elem.attributes]
     const childs = elem.childNodes
 
@@ -254,6 +278,9 @@ const svgToString = (elem, indent) => {
         let attrVal = toXml(attr.value)
         // remove bogus attributes added by Gecko
         if (mozAttrs.includes(attr.localName)) {
+          continue
+        }
+        if (!attr.namespaceURI && isRemovableDefault(elem, attr.localName, defaultsContext)) {
           continue
         }
         if (attrVal === 'null') {
@@ -386,7 +413,7 @@ const svgToString = (elem, indent) => {
     }
   }
   return out.join('')
-} // end svgToString()
+} // end elementToString()
 
 /**
  * This function sets the current drawing as the input SVG XML.

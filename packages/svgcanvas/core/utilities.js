@@ -1447,38 +1447,182 @@ export const assignAttributes = (elem, attrs, suspendLength, unitCheck) => {
   }
 }
 
+// Initial values that cleanupElement and the export leave out, as written.
+const DEFAULT_VALUES = {
+  'fill-opacity': '1',
+  'stop-opacity': '1',
+  opacity: '1',
+  stroke: 'none',
+  'stroke-dasharray': 'none',
+  'stroke-linejoin': 'miter',
+  'stroke-linecap': 'butt',
+  'stroke-opacity': '1',
+  'stroke-width': '1',
+  rx: '0',
+  ry: '0'
+}
+// The inherited ones: an element without its own value takes its parent's.
+const INHERITED_DEFAULTS = new Set([
+  'fill-opacity', 'stroke', 'stroke-dasharray', 'stroke-linejoin',
+  'stroke-linecap', 'stroke-opacity', 'stroke-width'
+])
+
 /**
- * Remove unneeded (default) attributes, making resulting SVG smaller.
+ * Whether a value an ancestor gives is the initial one ("1px" for a width).
+ * @param {string} name
+ * @param {string} value
+ * @returns {boolean}
+ */
+const isInitialValue = (name, value) => {
+  const initial = DEFAULT_VALUES[name]
+  const v = value.trim().toLowerCase()
+  if (v === initial) return true
+  if (!/^\d/.test(initial)) return false
+  const number = name === 'stroke-width' ? v.replace(/px$/, '') : v
+  return number !== '' && Number(number) === Number(initial)
+}
+
+/**
+ * What isRemovableDefault needs to know of the drawing of an element: the
+ * ids a `<use>` reuses, and the rules of its style sheets. The drawing is the
+ * canvas content, or the topmost ancestor of an element out of it (a copy).
+ * The style sheets of the editor itself, such as its wireframe view, are not
+ * part of it.
+ * It also keeps what each parent was found to give its children, for the
+ * other elements checked with the same context.
+ * @function module:utilities.getDefaultsContext
+ * @param {Element} elem
+ * @returns {{usedIds: Set<string>, rules: CSSStyleRule[], parents: Map<Element, Object<string, boolean>>}}
+ */
+export const getDefaultsContext = (elem) => {
+  let root = elem?.closest?.('#svgcontent')
+  if (!root) {
+    root = elem
+    while (root?.parentNode?.nodeType === 1) { root = root.parentNode }
+  }
+  const usedIds = new Set()
+  const rules = []
+  root?.querySelectorAll?.('use').forEach((use) => {
+    const href = getHref(use)
+    if (href?.startsWith('#')) { usedIds.add(href.slice(1)) }
+  })
+  root?.querySelectorAll?.('style').forEach((style) => {
+    try {
+      rules.push(...[...(style.sheet?.cssRules || [])].filter((rule) => rule.selectorText && rule.style))
+    } catch (e) {
+      // A sheet that cannot be read sets nothing we know of.
+    }
+  })
+  return { usedIds, rules, parents: new Map() }
+}
+
+/**
+ * Whether the parent of an element gives it the initial value of an
+ * inherited property: the nearest ancestor that sets it, by its style
+ * attribute, a rule of the drawing's style sheets or its own attribute,
+ * decides. With no ancestor setting it, the value is the initial one.
+ * @param {Element} elem
+ * @param {string} name
+ * @param {CSSStyleRule[]} rules
+ * @returns {boolean}
+ */
+const inheritsInitialValue = (elem, name, rules) => {
+  for (let el = elem.parentNode; el?.nodeType === 1; el = el.parentNode) {
+    const fromRules = rules.filter((rule) => {
+      try {
+        return rule.style.getPropertyValue(name) && el.matches(rule.selectorText)
+      } catch (e) {
+        return false
+      }
+    }).map((rule) => rule.style.getPropertyValue(name))
+    const value = el.style?.getPropertyValue?.(name) || fromRules.pop() || el.getAttribute(name)
+    if (value && value.trim() !== 'inherit') { return isInitialValue(name, value) }
+    if (el.id === 'svgcontent') { break }
+  }
+  return true
+}
+
+/**
+ * Whether an attribute of an element is at its initial value and can be left
+ * out without changing anything. An inherited property is kept when the
+ * element would otherwise take another value from its parent, or when a
+ * `<use>` reuses the element or one of its ancestors, as it then inherits
+ * from the `<use>` too. rx and ry are kept on an ellipse, and when the other
+ * one is not 0: an absent rx takes the value of ry, and the other way round.
+ * @function module:utilities.isRemovableDefault
+ * @param {Element} elem
+ * @param {string} name - Attribute name, without namespace
+ * @param {{usedIds: Set<string>, rules: CSSStyleRule[], parents: Map}} [context] - see getDefaultsContext
+ * @returns {boolean}
+ */
+export const isRemovableDefault = (elem, name, context) => {
+  if (!Object.prototype.hasOwnProperty.call(DEFAULT_VALUES, name) ||
+    elem.getAttribute(name) !== DEFAULT_VALUES[name]) {
+    return false
+  }
+  if (name === 'rx' || name === 'ry') {
+    if (elem.nodeName === 'ellipse') { return false }
+    const other = elem.getAttribute(name === 'rx' ? 'ry' : 'rx')
+    return other === null || other.trim() === 'auto' || parseFloat(other) === 0
+  }
+  if (!INHERITED_DEFAULTS.has(name)) { return true }
+  const { usedIds, rules, parents } = context || getDefaultsContext(elem)
+  if (elem.id && usedIds.has(elem.id)) { return false }
+  const parent = elem.parentNode
+  if (parent?.nodeType !== 1) { return true }
+  let known = parents.get(parent)
+  if (!known) {
+    let reused = false
+    for (let el = parent; el?.nodeType === 1 && !reused; el = el.parentNode) {
+      reused = Boolean(el.id && usedIds.has(el.id))
+    }
+    known = { reused }
+    parents.set(parent, known)
+  }
+  if (known.reused) { return false }
+  if (!(name in known)) { known[name] = inheritsInitialValue(elem, name, rules) }
+  return known[name]
+}
+
+/**
+ * cleanupElement, with the drawing's context got from getContext when needed.
+ * @param {Element} element
+ * @param {function(Element): Object} getContext - see getDefaultsContext
+ * @returns {void}
+ */
+const cleanup = (element, getContext) => {
+  if (element?.nodeType !== 1) { return }
+  const candidates = Object.keys(DEFAULT_VALUES).filter((name) => element.getAttribute(name) === DEFAULT_VALUES[name])
+  if (!candidates.length) { return }
+  const context = candidates.some((name) => INHERITED_DEFAULTS.has(name)) ? getContext(element) : undefined
+  candidates.forEach((name) => {
+    if (isRemovableDefault(element, name, context)) {
+      element.removeAttribute(name)
+    }
+  })
+}
+
+/**
+ * Remove unneeded (default) attributes, making resulting SVG smaller: those
+ * at their initial value that change nothing (see isRemovableDefault). A
+ * value a group would override is kept: it used to be removed, so the
+ * element took the value of its group.
  * @function module:utilities.cleanupElement
  * @param {Element} element - DOM element to clean up
  * @returns {void}
  */
-export const cleanupElement = element => {
-  const defaults = {
-    'fill-opacity': 1,
-    'stop-opacity': 1,
-    opacity: 1,
-    stroke: 'none',
-    'stroke-dasharray': 'none',
-    'stroke-linejoin': 'miter',
-    'stroke-linecap': 'butt',
-    'stroke-opacity': 1,
-    'stroke-width': 1,
-    rx: 0,
-    ry: 0
-  }
+export const cleanupElement = (element) => cleanup(element, getDefaultsContext)
 
-  if (element.nodeName === 'ellipse') {
-    // Ellipse elements require rx and ry attributes
-    delete defaults.rx
-    delete defaults.ry
-  }
-
-  Object.entries(defaults).forEach(([attr, val]) => {
-    if (element.getAttribute(attr) === String(val)) {
-      element.removeAttribute(attr)
-    }
-  })
+/**
+ * cleanupElement for several elements of one drawing, which learns about the
+ * drawing once.
+ * @function module:utilities.cleanupElements
+ * @param {Element[]} elements
+ * @returns {void}
+ */
+export const cleanupElements = (elements) => {
+  let context = null
+  elements.forEach((element) => cleanup(element, (el) => (context ??= getDefaultsContext(el))))
 }
 
 /**

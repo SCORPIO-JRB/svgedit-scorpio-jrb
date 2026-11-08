@@ -62,6 +62,10 @@ const SCENARIOS = {
   // Each shape keeps its own style and opacity (question 10; the export
   // already left out the "null" values the conversion wrote).
   'convert several to paths': `document.getElementById('r1').setAttribute('opacity', '0.5'); c.selectOnly(${byId(['r1', 'e1', 'l1'])}); c.convertSelectedToPaths()`,
+  // A default value is left out only where that changes nothing: a group
+  // with a wider stroke keeps the width of 1 of its child, and rx="0" stays
+  // with ry="10". opacity="1" is left out, as before.
+  'save keeps the defaults that matter': "document.getElementById('grp').setAttribute('stroke-width', '5'); document.getElementById('g1').setAttribute('stroke-width', '1'); const r = document.getElementById('r1'); r.setAttribute('rx', '0'); r.setAttribute('ry', '10'); document.getElementById('e1').setAttribute('opacity', '1')",
   // The path keeps everything the shape has but its geometry: fill-rule,
   // stroke-miterlimit, class, the title.
   'convert to path keeps all the shape has': `const e = document.getElementById('e1'); e.setAttribute('fill-rule', 'evenodd'); e.setAttribute('stroke-miterlimit', '2'); e.setAttribute('class', 'vanne'); const t = document.createElementNS('http://www.w3.org/2000/svg', 'title'); t.textContent = 'Vanne'; e.append(t); c.selectOnly(${byId(['e1'])}); c.convertToPath()`,
