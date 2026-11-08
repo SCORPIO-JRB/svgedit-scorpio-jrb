@@ -346,12 +346,18 @@ test.describe('Commands of a multi-selection, W and H of an element alone (M4)',
     expect(await shown(page, 'selected_w')).toBe(true)
     expect(await field(page, 'selected_w')).toBe('80')
     expect(await field(page, 'selected_h')).toBe('100')
-    // X and Y keep their meaning for a path: the box with its stroke.
-    expect(await field(page, 'selected_x')).toBe('298')
+    // X and Y describe the box without the stroke, as for a multi-selection
+    // (decision of 8 November: they used to include the stroke, 298).
+    expect(await field(page, 'selected_x')).toBe('300')
     await typeField(page, 'selected_w', '160')
     expect(await attr(page, 'p1', 'd')).toBe('M300,300 L460,320 L380,400 L300,300 z')
-    expect(await field(page, 'selected_x')).toBe('298')
+    expect(await field(page, 'selected_x')).toBe('300')
     expect(await undoSize(page)).toBe(1)
+    // Typing X moves the box without the stroke to that value.
+    await typeField(page, 'selected_x', '320')
+    expect(await attr(page, 'p1', 'd')).toBe('M320,300 L480,320 L400,400 L320,300 z')
+    expect(await field(page, 'selected_x')).toBe('320')
+    expect(await undoSize(page)).toBe(2)
   })
 
   test('a group alone gets W and H', async ({ page }) => {

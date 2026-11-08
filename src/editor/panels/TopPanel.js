@@ -12,6 +12,9 @@ const { $qa, $id, $click, isValidUnit, getTypeMap, convertUnit } = SvgCanvas
 /** Criteria of the "select same" entries of the context menu (M6). */
 const SIMILAR_CRITERIA = ['symbol', 'fill', 'stroke']
 const SIZED_ALONE = new Set(['path', 'polyline', 'g', 'text'])
+// Elements alone whose X and Y fields describe their box without the stroke,
+// as for a multi-selection and the dimension label: they have no x or y.
+const POSITIONED_BY_BOX = new Set(['path', 'polyline', 'g'])
 // Shapes that can be converted to a path.
 const CONVERTIBLE = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
 // Text fields of the panel, the attribute each one shows and its default.
@@ -246,6 +249,7 @@ class TopPanel {
     this.hideTool('selected_panel')
     this.hideTool('angle_panel')
     this.hideTool('multiselected_panel')
+    if (!this.multiselected) { this.setAlignMenu(false) }
     this.hideTool('g_panel')
     this.hideTool('rect_panel')
     this.hideTool('circle_panel')
@@ -283,20 +287,15 @@ class TopPanel {
         // Elements in this array already have coord fields
         if (['line', 'circle', 'ellipse', 'polygon'].includes(elname)) {
           this.hideTool('xy_panel')
+        } else if (POSITIONED_BY_BOX.has(elname)) {
+          // The box without the stroke, as for a multi-selection.
+          this.showSelectionPosition(this.editor.svgCanvas.getSelectionBox?.([elem]))
         } else {
           let x
           let y
 
-          // Get BBox vals for g, polyline and path
-          if (['g', 'polyline', 'path'].includes(elname)) {
-            const bb = this.editor.svgCanvas.getStrokedBBox([elem])
-            if (bb) {
-              ;({ x, y } = bb)
-            }
-          } else {
-            x = elem.getAttribute('x')
-            y = elem.getAttribute('y')
-          }
+          x = elem.getAttribute('x')
+          y = elem.getAttribute('y')
 
           if (unit) {
             x = convertUnit(x)
@@ -897,6 +896,71 @@ class TopPanel {
   }
 
   /**
+   * Opens or closes the alignment menu of a multi-selection.
+   * @param {boolean} open
+   * @param {PlainObject} [options]
+   * @param {boolean} [options.focus] - Moves the focus into the menu when it
+   *   opens, back to its button when it closes
+   * @returns {void}
+   */
+  setAlignMenu (open, { focus = false } = {}) {
+    const popup = $id('tool_align_popup')
+    const trigger = $id('tool_align_menu')
+    if (!popup || popup.hidden === !open) { return }
+    popup.hidden = !open
+    trigger.pressed = open
+    trigger.setAttribute('aria-expanded', String(open))
+    if (focus) {
+      if (open) {
+        $id('tool_align_left').focus()
+      } else {
+        trigger.focus()
+      }
+    }
+  }
+
+  /**
+   * Makes the alignment menu work with the keyboard: its button and its
+   * buttons take the focus, Enter and Space press them, Escape closes the
+   * menu; a click outside closes it too.
+   * @param {PlainObject} i18next
+   * @returns {void}
+   */
+  initAlignMenu (i18next) {
+    const menu = $id('align_menu')
+    const trigger = $id('tool_align_menu')
+    const popup = $id('tool_align_popup')
+    const press = (button) => (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') { return }
+      e.preventDefault()
+      button.click()
+    }
+    ;[trigger, ...popup.querySelectorAll('se-button')].forEach((button) => {
+      button.tabIndex = 0
+      button.setAttribute('role', 'button')
+      button.setAttribute('aria-label', i18next.t(button.getAttribute('title')))
+      button.addEventListener('keydown', press(button))
+    })
+    trigger.setAttribute('aria-haspopup', 'true')
+    trigger.setAttribute('aria-expanded', 'false')
+    trigger.setAttribute('aria-controls', 'tool_align_popup')
+    popup.setAttribute('aria-label', i18next.t('tools.align_menu'))
+    trigger.addEventListener('click', () => {
+      this.setAlignMenu(popup.hidden, { focus: document.activeElement === trigger })
+    })
+    document.addEventListener('pointerdown', (e) => {
+      if (!popup.hidden && !e.composedPath().includes(menu)) { this.setAlignMenu(false) }
+    }, true)
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || popup.hidden) { return }
+      // The first Escape closes the menu, before the editor's own uses.
+      e.stopPropagation()
+      e.preventDefault()
+      this.setAlignMenu(false, { focus: e.composedPath().includes(menu) })
+    }, true)
+  }
+
+  /**
    * Spacing typed for Distribute, in the drawing's units.
    * @returns {number|null} Null when the field is empty or not a number:
    *   Distribute then spaces the objects evenly.
@@ -943,13 +1007,15 @@ class TopPanel {
   }
 
   /**
-   * Moves a multi-selection by its X or Y field; an element alone keeps the
-   * field's own meaning.
+   * Moves a multi-selection, or a path, polyline or group alone, by its X or
+   * Y field, which describe its box without the stroke; another element
+   * alone keeps the field's own meaning (its x or y).
    * @param {Event} e
    * @returns {void}
    */
   changeSelectionPosition (e) {
-    if (!this.multiselected) {
+    const alone = this.editor.selectedElement
+    if (!this.multiselected && !POSITIONED_BY_BOX.has(alone?.tagName)) {
       this.attrChanger(e)
       return
     }
@@ -1505,6 +1571,7 @@ class TopPanel {
     $id('tool_position').addEventListener('change', evt =>
       this.clickAlignEle.bind(this)(evt)
     )
+    this.initAlignMenu(i18next)
     $click($id('tool_align_left'), () => this.clickAlign.bind(this)('left'))
     $click($id('tool_align_right'), () => this.clickAlign.bind(this)('right'))
     $click($id('tool_align_center'), () => this.clickAlign.bind(this)('center'))

@@ -77,6 +77,11 @@ const SCENARIOS = {
   // M9: ungrouping keeps stroke widths, and the children get the stroke the
   // group gave them; M7 lost it (expected difference against M7).
   'ungroup a scaled group with a stroke': `c.selectOnly(${byId(['r1', 'e1'])}); c.groupSelectedElements(); const g = c.getSelectedElements()[0]; g.setAttribute('stroke', '#00f'); g.setAttribute('stroke-width', '5'); g.setAttribute('transform', 'scale(1.5)'); c.ungroupSelectedElement()`,
+  // Decisions of 8 November (expected differences against M9): a clip path
+  // follows its object; objects with the same fill are taken in the whole
+  // page, inside groups too.
+  'clip path follows a move': `const cp = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath'); cp.id = 'cpx'; cp.innerHTML = '<circle cx="140" cy="130" r="30"/>'; document.querySelector('#svgcontent defs').append(cp); document.getElementById('r1').setAttribute('clip-path', 'url(#cpx)'); c.selectOnly(${byId(['r1'])}); c.moveSelectedElements(25, 15)`,
+  'same fill in the page then move': `c.selectOnly(${byId(['g1'])}); c.selectSimilar('fill'); c.moveSelectedElements(10, 10)`,
   'Mod+D twice, Alt+right arrow (keys)': `c.selectOnly(${byId(['r1', 'p1'])}); const key = (init) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })); key({ key: 'd', code: 'KeyD', ctrlKey: true }); key({ key: 'd', code: 'KeyD', ctrlKey: true }); key({ key: 'ArrowRight', code: 'ArrowRight', altKey: true })`
 }
 // Every element type alone: flip, rotation by the API, resize by a grip,

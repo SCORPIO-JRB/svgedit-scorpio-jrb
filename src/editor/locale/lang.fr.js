@@ -219,6 +219,7 @@ export default {
     anchor_s: 'En bas',
     anchor_se: 'En bas à droite',
     spacing: 'Espacement imposé à la distribution (vide : espaces égaux)',
+    align_menu: 'Aligner et distribuer',
     spacing_label: 'écart',
     tool_unlink_use: 'Break link to reference element (make unique)',
     ellipse_circle_tool: 'Outil Ellipse/Cercle',

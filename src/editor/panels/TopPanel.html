@@ -62,29 +62,42 @@
     <se-button id="tool_group_elements" title="tools.group_elements" shortcut="G" src="group_elements.svg">
     </se-button>
     <se-button id="tool_make_link_multi" title="tools.make_link" src="globe_link.svg"></se-button>
-    <se-button id="tool_align_left" title="tools.align_left" src="align_left.svg"></se-button>
-    <se-button id="tool_align_center" title="tools.align_center" src="align_center.svg"></se-button>
-    <se-button id="tool_align_right" title="tools.align_right" src="align_right.svg"></se-button>
-    <se-button id="tool_align_top" title="tools.align_top" src="align_top.svg"></se-button>
-    <se-button id="tool_align_middle" title="tools.align_middle" src="align_middle.svg"></se-button>
-    <se-button id="tool_align_bottom" title="tools.align_bottom" src="align_bottom.svg"></se-button>
-    <se-button id="tool_align_distrib_horiz" title="tools.align_distrib_horiz"
-      src="align_distrib_horiz.svg"></se-button>
-    <se-button id="tool_align_distrib_verti" title="tools.align_distrib_verti"
-      src="align_distrib_verti.svg"></se-button>
-    <!-- Spacing imposed on Distribute; an empty field distributes evenly. -->
-    <se-input id="tool_align_spacing" size="3" label="tools.spacing_label" title="tools.spacing"></se-input>
+    <!-- Alignment and distribution: one button opens them, with the spacing
+         and the reference, so that the bar fits one line (decision of
+         8 November). -->
+    <div id="align_menu">
+      <se-button id="tool_align_menu" title="tools.align_menu" src="align.svg"></se-button>
+      <div id="tool_align_popup" role="group" hidden>
+        <div class="align_row">
+          <se-button id="tool_align_left" title="tools.align_left" src="align_left.svg"></se-button>
+          <se-button id="tool_align_center" title="tools.align_center" src="align_center.svg"></se-button>
+          <se-button id="tool_align_right" title="tools.align_right" src="align_right.svg"></se-button>
+          <se-button id="tool_align_top" title="tools.align_top" src="align_top.svg"></se-button>
+          <se-button id="tool_align_middle" title="tools.align_middle" src="align_middle.svg"></se-button>
+          <se-button id="tool_align_bottom" title="tools.align_bottom" src="align_bottom.svg"></se-button>
+        </div>
+        <div class="align_row">
+          <se-button id="tool_align_distrib_horiz" title="tools.align_distrib_horiz"
+            src="align_distrib_horiz.svg"></se-button>
+          <se-button id="tool_align_distrib_verti" title="tools.align_distrib_verti"
+            src="align_distrib_verti.svg"></se-button>
+          <!-- Spacing imposed on Distribute; an empty field distributes evenly. -->
+          <se-input id="tool_align_spacing" size="3" label="tools.spacing_label" title="tools.spacing"></se-input>
+        </div>
+        <div class="align_row">
+          <se-select id="tool_align_relative" label="tools.relativeTo"
+            options="tools.selected_objects,tools.largest_object,tools.smallest_object,tools.page"
+            values="selected::largest::smallest::page">
+          </se-select>
+        </div>
+      </div>
+    </div>
     <!-- Shift+H and Shift+V are bound by tool_flip_h and tool_flip_v, which
          flip a multi-selection too: these buttons only show the hint. -->
     <se-button id="tool_flip_h_multi" title="tools.flip_horizontal" shortcut="Shift+H"
       shortcut-hint-only src="flip_horizontal.svg"></se-button>
     <se-button id="tool_flip_v_multi" title="tools.flip_vertical" shortcut="Shift+V"
       shortcut-hint-only src="flip_vertical.svg"></se-button>
-    <se-select id="tool_align_relative" label="tools.relativeTo"
-      options="tools.selected_objects,tools.largest_object,tools.smallest_object,tools.page"
-      values="selected::largest::smallest::page">
-      </se-list-item>
-    </se-select>
   </div> <!-- multiselected_panel -->
   <!-- The angle field also turns a multi-selection about its center. -->
   <div class="angle_panel">

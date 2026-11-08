@@ -323,25 +323,29 @@ test.describe('Objects that look the same (M6)', () => {
     await menuItem(page, 'select_same_fill').click()
     // red and #ff0000 are the same colour; #c00 is not.
     expect(await selection(page)).toEqual(['c1', 'e1'])
-    // Both are selected now: their strokes, black and blue, both count.
+    // Both are selected now: their strokes, black and blue, both count. i1,
+    // black too, is inside two groups: the whole page counts (decision of
+    // 8 November).
     await contextMenu(page, 'c1')
     await menuItem(page, 'select_same_stroke').click()
-    expect(await selection(page)).toEqual(['c1', 'e1', 'p1'])
+    expect(await selection(page)).toEqual(['c1', 'e1', 'i1', 'p1'])
     // A click on one of them keeps it alone, even right after a right click.
     await clickOn(page, 'c1')
     expect(await selection(page)).toEqual(['c1'])
     await contextMenu(page, 'c1')
     await menuItem(page, 'select_same_stroke').click()
-    expect(await selection(page)).toEqual(['c1', 'p1'])
+    expect(await selection(page)).toEqual(['c1', 'i1', 'p1'])
   })
 
-  test('the search stays in the open group, and nothing is written in the document', async ({ page }) => {
+  test('the search covers the whole page, even from an open group, and nothing is written', async ({ page }) => {
     await deepClick(page, 'o1')
     expect(await context(page)).toBe('outer')
     await contextMenu(page, 'o1')
     await menuItem(page, 'select_same_fill').click()
-    // top has the same fill, but it is outside the open group.
-    expect(await selection(page)).toEqual(['o1'])
+    // top has the same fill outside the open group: it is taken too
+    // (decision of 8 November), and the group closes.
+    expect(await selection(page)).toEqual(['o1', 'top'])
+    expect(await context(page)).toBe(null)
     expect(await undoSize(page)).toBe(0)
   })
 

@@ -216,6 +216,7 @@ export default {
     anchor_s: 'Bottom',
     anchor_se: 'Bottom right',
     spacing: 'Spacing imposed on Distribute (empty: even spacing)',
+    align_menu: 'Align and distribute',
     spacing_label: 'gap',
     tool_unlink_use: 'Bryt länk till referenselement (gör unik)',
     ellipse_circle_tool: 'Ellips/Cirkel Verktyg',

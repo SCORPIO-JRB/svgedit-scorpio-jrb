@@ -160,19 +160,21 @@ describe('Advanced selection (M6)', () => {
     expect(svgCanvas.canSelectSimilar('fill', [])).toBe(false)
   })
 
-  it('selects the objects of the open group, or of the layer, that look the same', () => {
+  it('selects the objects of the whole page that look the same, inside groups too', () => {
     svgCanvas.selectOnly([byId('u1')])
     expect(ids(svgCanvas.selectSimilar('symbol'))).toEqual(['u1', 'u2'])
     expect(selected()).toEqual(['u1', 'u2'])
-    // Fill: the red objects of the layer, not those inside the groups.
+    // Fill: the red objects of the page, inside the groups and the link too
+    // (decision of 8 November, as Figma does).
     svgCanvas.selectOnly([byId('top')])
-    expect(ids(svgCanvas.selectSimilar('fill'))).toEqual(['inlink', 'top'])
-    // In an open group, only its objects.
+    expect(ids(svgCanvas.selectSimilar('fill'))).toEqual(['i1', 'inlink', 'o1', 'top'])
+    // From an open group, the search covers the page too: the group closes,
+    // since the objects sit in several groups.
     svgCanvas.setContext(byId('inner'))
     svgCanvas.selectOnly([byId('i1')])
-    expect(ids(svgCanvas.selectSimilar('fill'))).toEqual(['i1'])
+    expect(ids(svgCanvas.selectSimilar('fill'))).toEqual(['i1', 'inlink', 'o1', 'top'])
+    expect(svgCanvas.getCurrentGroup()).toBe(null)
     // No reference: the selection is kept.
-    svgCanvas.leaveContext()
     svgCanvas.selectOnly([byId('outer')])
     expect(svgCanvas.selectSimilar('fill')).toEqual([])
     expect(selected()).toEqual(['outer'])

@@ -35,6 +35,8 @@ import { recalculateDimensions, withStartTransform } from './recalculate.js'
 import { isGecko } from '../common/browser.js'
 import { getParents } from '../common/util.js'
 import { createClipboardPayload } from './clipboard.js'
+import { drawingMatrixInParent, invert, multiply, parentBoxToDrawing, parentDelta, parentToDrawing } from './multi-transform.js'
+import { INHERITED_PROPERTIES, inheritedFromAncestors, ownPresentationValue } from './inherited.js'
 
 const {
   MoveElementCommand,
@@ -265,12 +267,12 @@ const moveSelectedElements = (dx, dy, undoable = true) => {
       const xform = svgCanvas.getSvgRoot().createSVGTransform()
       const tlist = getTransformList(selected)
 
-      // dx and dy could be arrays
-      if (Array.isArray(dx)) {
-        xform.setTranslate(dx[i], dy[i])
-      } else {
-        xform.setTranslate(dx, dy)
-      }
+      // dx and dy could be arrays. They are moves on the drawing: an element
+      // under a scaled or turned group takes them in its group's coordinates.
+      const move = Array.isArray(dx)
+        ? parentDelta(selected, dx[i], dy[i])
+        : parentDelta(selected, dx, dy)
+      xform.setTranslate(move.dx, move.dy)
 
       if (tlist.numberOfItems) {
         tlist.insertItemBefore(xform, 0)
@@ -367,10 +369,18 @@ const cloneSelectedElements = (x, y, { addToHistory = true } = {}) => {
   // to the selectedElements array (top-first)
   const drawing = svgCanvas.getDrawing()
   i = copiedElements.length
+  const context = currentGroup || drawing.getCurrentLayer()
   while (i--) {
     // clone each element and replace it within copiedElements
-    elem = copiedElements[i] = drawing.copyElem(copiedElements[i])
-    ;(currentGroup || drawing.getCurrentLayer()).append(elem)
+    const original = copiedElements[i]
+    elem = copiedElements[i] = drawing.copyElem(original)
+    // A copy of an object inside another group or layer (objects that look
+    // the same, taken in the whole page) stays there, so that it looks the
+    // same. A link around a single object is left out, as before.
+    const parent = original.parentNode !== context && original.parentNode?.tagName === 'g'
+      ? original.parentNode
+      : context
+    parent.append(elem)
     batchCmd.addSubCommand(new InsertElementCommand(elem))
   }
 
@@ -524,6 +534,14 @@ const alignSelectedElements = (type, relativeTo, { spacing } = {}) => {
     }
     const elem = selectedElements[i]
     bboxes[i] = getStrokedBBoxDefaultVisible([elem])
+  }
+  // Objects of several groups (objects that look the same, taken in the
+  // whole page): their boxes are compared on the drawing, and the moves are
+  // taken in each group's coordinates (see moveSelectedElements).
+  if (new Set(selectedElements.filter(Boolean).map((elem) => elem.parentNode)).size > 1) {
+    for (let i = 0; i < len && selectedElements[i]; ++i) {
+      bboxes[i] = parentBoxToDrawing(selectedElements[i], bboxes[i])
+    }
   }
 
   // distribute horizontal and vertical align is not support smallest and largest
@@ -821,9 +839,28 @@ const flipSelectedElements = (scaleX, scaleY) => {
   // common box is its own box, so the result is unchanged. The boxes are in
   // the parent's user space, which the elements of a selection share.
   const elements = selectedElements.filter(Boolean)
-  const commonBox = elements.length > 1
-    ? getStrokedBBoxDefaultVisible(elements)
-    : null
+  // Objects of several groups (objects that look the same, taken in the
+  // whole page) flip around the centre of their box on the drawing, each in
+  // its group's coordinates.
+  const severalParents = new Set(elements.map((elem) => elem.parentNode)).size > 1
+  let commonBox = null
+  if (severalParents) {
+    commonBox = elements.map((elem) => parentBoxToDrawing(elem, getStrokedBBoxDefaultVisible([elem])))
+      .filter(Boolean)
+      .reduce((union, box) => {
+        if (!union) { return { ...box } }
+        const x = Math.min(union.x, box.x)
+        const y = Math.min(union.y, box.y)
+        return {
+          x,
+          y,
+          width: Math.max(union.x + union.width, box.x + box.width) - x,
+          height: Math.max(union.y + union.height, box.y + box.height) - y
+        }
+      }, null)
+  } else if (elements.length > 1) {
+    commonBox = getStrokedBBoxDefaultVisible(elements)
+  }
 
   selectedElements.forEach(selected => {
     if (!selected) return
@@ -835,11 +872,16 @@ const flipSelectedElements = (scaleX, scaleY) => {
     const cy = bbox.y + bbox.height / 2
     const existingTransform = selected.getAttribute('transform') || ''
 
-    const flipMatrix = svgRoot
+    let flipMatrix = svgRoot
       .createSVGMatrix()
       .translate(cx, cy)
       .scaleNonUniform(scaleX, scaleY)
       .translate(-cx, -cy)
+    if (severalParents) {
+      const m = drawingMatrixInParent(selected, flipMatrix)
+      flipMatrix = svgRoot.createSVGMatrix()
+      Object.assign(flipMatrix, { a: m.a, b: m.b, c: m.c, d: m.d, e: m.e, f: m.f })
+    }
 
     const tlist = getTransformList(selected)
     const combinedMatrix = matrixMultiply(
@@ -960,10 +1002,14 @@ const groupSelectedElements = (type, urlArg) => {
 
     const oldNextSibling = elem.nextSibling
     const oldParent = elem.parentNode
+    // An object of another group (objects that look the same, taken in the
+    // whole page) keeps its place and its look in the new group.
+    const leaving = oldParent !== g.parentNode ? leaveGroups(elem, g) : null
     g.append(elem)
     batchCmd.addSubCommand(
       new MoveElementCommand(elem, oldNextSibling, oldParent)
     )
+    if (leaving) { leaving.finish(batchCmd) }
   }
   if (!batchCmd.isEmpty()) {
     svgCanvas.addCommandToHistory(batchCmd)
@@ -971,6 +1017,64 @@ const groupSelectedElements = (type, urlArg) => {
 
   // update selection
   svgCanvas.selectOnly([g], true)
+}
+
+/**
+ * Prepares an element to move into a group outside of its own groups: it
+ * takes the transform and the look (fill, stroke, font, opacity) that the
+ * groups it leaves gave it. Call `finish` once it has moved.
+ * @param {Element} elem
+ * @param {Element} target - The group it moves into, already in the drawing
+ * @returns {{finish: (batchCmd: BatchCommand) => void}}
+ */
+const leaveGroups = (elem, target) => {
+  const oldTransform = elem.getAttribute('transform') || ''
+  const from = parentToDrawing(elem)
+  const to = parentToDrawing(target)
+  const targetMatrix = target.transform?.baseVal?.numberOfItems
+    ? transformListToTransform(target.transform.baseVal).matrix
+    : null
+  const into = targetMatrix ? multiply(to, targetMatrix) : to
+  const rel = multiply(invert(into), from)
+  const moved = Math.abs(rel.a - 1) > 1e-12 || Math.abs(rel.b) > 1e-12 || Math.abs(rel.c) > 1e-12 ||
+    Math.abs(rel.d - 1) > 1e-12 || Math.abs(rel.e) > 1e-12 || Math.abs(rel.f) > 1e-12
+  // The groups that stay above the element keep giving it their values.
+  let stop = elem.parentNode
+  while (stop && stop.nodeType === 1 && !stop.contains(target)) { stop = stop.parentNode }
+  const { values, opacity } = inheritedFromAncestors(elem, stop)
+  return {
+    finish (batchCmd) {
+      const old = {}
+      Object.entries(values).forEach(([prop, value]) => {
+        old[prop] = elem.getAttribute(prop)
+        elem.setAttribute(prop, value)
+      })
+      if (opacity !== 1) {
+        const own = Number.parseFloat(ownPresentationValue(elem, 'opacity') ?? '1')
+        old.opacity = elem.getAttribute('opacity')
+        elem.setAttribute('opacity', Math.round((Number.isFinite(own) ? own : 1) * opacity * 1000) / 1000)
+      }
+      if (Object.keys(old).length) { batchCmd.addSubCommand(new ChangeElementCommand(elem, old)) }
+      if (!moved) { return }
+      const tlist = getTransformList(elem)
+      if (!tlist) { return }
+      const xform = svgCanvas.getSvgRoot().createSVGTransform()
+      const matrix = svgCanvas.getSvgRoot().createSVGMatrix()
+      Object.assign(matrix, rel)
+      xform.setMatrix(matrix)
+      if (tlist.numberOfItems) {
+        tlist.insertItemBefore(xform, 0)
+      } else {
+        tlist.appendItem(xform)
+      }
+      const cmd = withStartTransform(svgCanvas, oldTransform, () => recalculateDimensions(elem))
+      if (cmd) {
+        batchCmd.addSubCommand(cmd)
+      } else if ((elem.getAttribute('transform') || '') !== oldTransform) {
+        batchCmd.addSubCommand(new ChangeElementCommand(elem, { transform: oldTransform }))
+      }
+    }
+  }
 }
 
 /**
@@ -1409,39 +1513,11 @@ const convertToGroup = elem => {
   }
 }
 
-// Properties a group passes on to its children by inheritance: they would be
-// lost with the group.
-const INHERITED_PROPERTIES = [
-  'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-dasharray',
-  'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit',
-  'stroke-opacity', 'stroke-width', 'font-family', 'font-size', 'font-style',
-  'font-weight', 'text-anchor', 'color', 'visibility'
-]
-// Children that draw with these properties, or pass them on.
+// Children that draw with inherited properties, or pass them on.
 const INHERITING_CHILDREN = new Set([
   'a', 'circle', 'ellipse', 'g', 'line', 'path', 'polygon', 'polyline', 'rect',
   'switch', 'text', 'use'
 ])
-
-/**
- * An element's own value of a presentation property: its style first, then
- * its attribute; null when it inherits the value.
- * @param {Element} elem
- * @param {string} prop
- * @returns {string|null}
- */
-const ownPresentationValue = (elem, prop) => {
-  const style = elem.getAttribute('style') || ''
-  for (const declaration of style.split(';')) {
-    const i = declaration.indexOf(':')
-    if (i > 0 && declaration.slice(0, i).trim().toLowerCase() === prop) {
-      const value = declaration.slice(i + 1).trim()
-      if (value && value !== 'inherit') { return value }
-    }
-  }
-  const value = elem.getAttribute(prop)?.trim()
-  return value && value !== 'inherit' ? value : null
-}
 
 /**
  * Before a group is removed, gives each child the fill, stroke and font the

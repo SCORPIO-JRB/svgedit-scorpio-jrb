@@ -277,7 +277,9 @@ export default {
         svgCanvas.insertChildAtIndex($id('main_button'), buttonTemplate, 0)
         const openButtonTemplate = '<se-menu-item id="tool_open" label="opensave.open_image_doc" src="open.svg"></se-menu-item>'
         svgCanvas.insertChildAtIndex($id('main_button'), openButtonTemplate, 1)
-        const saveButtonTemplate = '<se-menu-item id="tool_save" label="opensave.save_doc" shortcut="S" src="saveImg.svg"></se-menu-item>'
+        // Ctrl+S (Cmd+S on macOS): the editor takes it before the browser's
+        // own "Save page". N keeps no modifier, since browsers keep Ctrl+N.
+        const saveButtonTemplate = '<se-menu-item id="tool_save" label="opensave.save_doc" shortcut="ctrl+S" src="saveImg.svg"></se-menu-item>'
         svgCanvas.insertChildAtIndex($id('main_button'), saveButtonTemplate, 2)
         const saveAsButtonTemplate = '<se-menu-item id="tool_save_as" label="opensave.save_as_doc" src="saveImg.svg"></se-menu-item>'
         svgCanvas.insertChildAtIndex($id('main_button'), saveAsButtonTemplate, 3)

@@ -221,10 +221,19 @@ const getMouseTargetMethod = (evt) => {
     return svgCanvas.selectorManager.selectorParentGroup
   }
 
+  // A selected object inside a group (objects that look the same, taken in
+  // the whole page) is the target of a click on it, so that it can be dragged
+  // with the rest of the selection.
+  const context = svgCanvas.getCurrentGroup() || currentLayer
+  const selected = svgCanvas.getSelectedElements()
+  if (selected.length) {
+    for (let node = mouseTarget; node && node !== context && node !== content; node = node.parentNode) {
+      if (node.parentNode !== context && selected.includes(node)) { return node }
+    }
+  }
+
   while (
-    !mouseTarget?.parentNode?.isSameNode(
-      svgCanvas.getCurrentGroup() || currentLayer
-    )
+    !mouseTarget?.parentNode?.isSameNode(context)
   ) {
     mouseTarget = mouseTarget.parentNode
   }

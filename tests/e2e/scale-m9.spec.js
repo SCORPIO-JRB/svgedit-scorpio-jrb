@@ -323,6 +323,8 @@ test.describe('Imposed spacing (M9)', () => {
     await select(page, ['e', 'f', 'g'])
     const xs = async () => [await num(page, 'e', 'x'), await num(page, 'f', 'x'), await num(page, 'g', 'x')]
     const spacing = page.locator('#tool_align_spacing').locator('input')
+    // The distribution is in the alignment menu (decision of 8 November).
+    await page.locator('#tool_align_menu').click()
     // Empty: even gaps between the outer objects, as before (30 and 30).
     await page.locator('#tool_align_distrib_horiz').click()
     expect(await xs()).toEqual([300, 350, 420])

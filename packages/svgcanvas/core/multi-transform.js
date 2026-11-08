@@ -21,7 +21,7 @@
 import { BatchCommand, ChangeElementCommand } from './history.js'
 import { getBBox, getRotationAngle, withBBoxCache } from './utilities.js'
 import { getTransformList, normalizeRotationAngle, transformListToTransform } from './math.js'
-import { recalculateDimensions, withStartTransform } from './recalculate.js'
+import { followCutReferences, readCutReferences, recalculateDimensions, withStartTransform } from './recalculate.js'
 import { hasGeometryChanged, rotateElementTo } from './selection.js'
 import { anchorOfGrip, boxPoint, dragFactor, readStrokeLengths, scaleStrokeLengths } from './scale-tool.js'
 
@@ -218,9 +218,9 @@ export const shearFreeMatrix = (m, angle, center) => {
  * @param {Element} elem
  * @returns {PlainObject}
  */
-const parentToDrawing = (elem) => {
+export const parentToDrawing = (elem) => {
   let m = identity()
-  const content = svgCanvas.getSvgContent()
+  const content = svgCanvas?.getSvgContent?.()
   let node = elem.parentNode
   while (node && node !== content && node.nodeType === 1) {
     const tlist = node.transform?.baseVal
@@ -230,6 +230,55 @@ const parentToDrawing = (elem) => {
     node = node.parentNode
   }
   return m
+}
+
+/**
+ * Expresses a move of the drawing in an element's parent coordinates: the
+ * translation that, put in its transform list, moves it by (dx, dy) on the
+ * drawing. Unchanged, to the bit, when no ancestor scales, turns or skews
+ * the element.
+ * @param {Element} elem
+ * @param {number} dx
+ * @param {number} dy
+ * @param {PlainObject} [P] - The element's parentToDrawing, when known
+ * @returns {{dx: number, dy: number}}
+ */
+export const parentDelta = (elem, dx, dy, P = parentToDrawing(elem)) => {
+  if (P.a === 1 && P.b === 0 && P.c === 0 && P.d === 1) { return { dx, dy } }
+  const det = P.a * P.d - P.b * P.c
+  if (Math.abs(det) < EPSILON) { return { dx, dy } }
+  return { dx: (P.d * dx - P.c * dy) / det, dy: (P.a * dy - P.b * dx) / det }
+}
+
+/**
+ * Axis-aligned box, in the drawing's coordinates, of a box given in an
+ * element's parent coordinates. The same box when no ancestor transforms the
+ * element.
+ * @param {Element} elem
+ * @param {module:utilities.BBoxObject} box
+ * @returns {module:utilities.BBoxObject}
+ */
+export const parentBoxToDrawing = (elem, box) => {
+  const P = parentToDrawing(elem)
+  if (!box || isIdentityMatrix(P)) { return box }
+  const corners = [[box.x, box.y], [box.x + box.width, box.y], [box.x, box.y + box.height],
+    [box.x + box.width, box.y + box.height]].map(([x, y]) => apply(P, x, y))
+  const xs = corners.map((p) => p.x)
+  const ys = corners.map((p) => p.y)
+  const x = Math.min(...xs)
+  const y = Math.min(...ys)
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
+}
+
+/**
+ * Expresses a matrix of the drawing in an element's parent coordinates.
+ * @param {Element} elem
+ * @param {PlainObject} M
+ * @returns {PlainObject}
+ */
+export const drawingMatrixInParent = (elem, M) => {
+  const P = parentToDrawing(elem)
+  return isIdentityMatrix(P) ? M : multiply(invert(P), M, P)
 }
 
 const singleRotation = (tlist) =>
@@ -421,7 +470,10 @@ export const commitSingleTextResize = (text, startTransform) => {
   } else {
     text.removeAttribute('transform')
   }
-  return scaleText(text, m, describeText(text), startTransform)
+  const info = describeText(text)
+  const cut = withDrawnChange(text, textPreviewMatrix(m, info))
+  const cmd = scaleText(text, m, info, startTransform)
+  return cmd && cut ? followCutReferences(text, cut, cmd) : cmd
 }
 
 /**
@@ -518,6 +570,23 @@ const previewMatrix = (Mp, info) => {
 }
 
 /**
+ * Reads the clip path or mask of an element that a rule rewrites without
+ * recalculateDimensions (the text rule): what is drawn before is the change
+ * shown by the preview on top of the element's current transform.
+ * @param {Element} elem
+ * @param {PlainObject} change - Matrix in the element's parent coordinates
+ * @returns {PlainObject|null} For followCutReferences
+ */
+const withDrawnChange = (elem, change) => {
+  const cut = readCutReferences(elem)
+  if (!cut) { return null }
+  const drawn = multiply(change, toPlain(cut.before))
+  cut.before = svgCanvas.getSvgRoot().createSVGMatrix()
+  Object.assign(cut.before, drawn)
+  return cut
+}
+
+/**
  * Writes a matrix into an element with the rules of its type.
  * @param {PlainObject} info
  * @param {PlainObject} Mp - Matrix in the parent's coordinates
@@ -526,8 +595,9 @@ const previewMatrix = (Mp, info) => {
 const commitElement = (info, Mp) => {
   const { elem, startTransform } = info
   if (info.kind === 'text') {
+    const cut = withDrawnChange(elem, textPreviewMatrix(Mp, info.text))
     const cmd = scaleText(elem, Mp, info.text, startTransform)
-    if (cmd) { return cmd }
+    if (cmd) { return cut ? followCutReferences(elem, cut, cmd) : cmd }
   }
   const matrix = (info.kind === 'rotated' && shearFreeMatrix(Mp, info.angle, info.center)) || Mp
   const tlist = getTransformList(elem)

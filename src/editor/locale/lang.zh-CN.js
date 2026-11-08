@@ -219,6 +219,7 @@ export default {
     anchor_s: 'Bottom',
     anchor_se: 'Bottom right',
     spacing: 'Spacing imposed on Distribute (empty: even spacing)',
+    align_menu: 'Align and distribute',
     spacing_label: 'gap',
     tool_unlink_use: '断开元素连接',
     ellipse_circle_tool: '椭圆/圆形工具',

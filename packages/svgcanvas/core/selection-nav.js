@@ -240,8 +240,39 @@ const canSelectSimilar = (criterion, elements = svgCanvas.getSelectedElements())
 }
 
 /**
- * Selects the objects of the open group, or of the current layer, that share
- * the symbol, the fill or the stroke of a selected object.
+ * Objects of the whole page that share a key, at any depth: inside groups
+ * and links, in every visible layer, as Figma looks for them (decision of
+ * 8 November). Hidden objects are left out.
+ * @param {Set<string>} keys
+ * @param {(elem: Element) => (string|null)} keyOf
+ * @returns {Element[]} In document order
+ */
+const findInPage = (keys, keyOf) => {
+  const drawing = svgCanvas.getCurrentDrawing()
+  const matches = []
+  const walk = (parent) => {
+    Array.from(parent.children).forEach((elem) => {
+      if (!isSelectable(elem) || elem.getAttribute('display') === 'none') { return }
+      if (isContainer(elem)) {
+        walk(elem)
+        return
+      }
+      if (keys.has(keyOf(elem))) { matches.push(elem) }
+    })
+  }
+  for (let i = 0; i < drawing.getNumLayers(); i++) {
+    const name = drawing.getLayerName(i)
+    if (drawing.getLayerVisibility(name)) { walk(drawing.getLayerByName(name)) }
+  }
+  return matches
+}
+
+/**
+ * Selects the objects of the whole page that share the symbol, the fill or
+ * the stroke of a selected object, inside groups and in every visible layer.
+ * The objects may then sit in several groups: no group stays open, and the
+ * commands of the selection (move, align, flip, group…) take each object in
+ * its group's coordinates.
  * @function module:selection-nav.SvgCanvas#selectSimilar
  * @param {"symbol"|"fill"|"stroke"} criterion
  * @returns {Element[]} The objects selected (none: the selection is kept)
@@ -255,9 +286,9 @@ const selectSimilar = (criterion) => {
     if (key !== null && key !== undefined) { keys.add(key) }
   })
   if (!keys.size) { return [] }
-  const context = svgCanvas.getCurrentGroup() || currentLayer()
-  const matches = selectableChildren(context).filter((elem) => keys.has(keyOf(elem)))
+  const matches = findInPage(keys, keyOf)
   if (matches.length) {
+    if (svgCanvas.getCurrentGroup()) { draw.leaveContext() }
     svgCanvas.selectOnly(matches, matches.length === 1)
   }
   return matches

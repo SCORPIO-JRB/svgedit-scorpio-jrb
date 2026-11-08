@@ -39,7 +39,9 @@ import {
   isScalableText,
   commitSingleTextResize,
   singleTextPreview,
-  drawingBoxOf
+  drawingBoxOf,
+  parentDelta,
+  parentToDrawing
 } from './multi-transform.js'
 
 const {
@@ -217,6 +219,15 @@ const getBsplinePoint = (t) => {
 
 const beginDragTransform = (svgRoot, selectedElements) => {
   svgCanvas.dragStartTransforms = new Map()
+  // Elements under a group that scales or turns them take the move in its
+  // coordinates: their group's matrix is read once, here.
+  svgCanvas.dragParentMatrices = new Map()
+  const layer = svgCanvas.getCurrentDrawing?.()?.getCurrentLayer?.()
+  for (const selectedElement of selectedElements) {
+    if (!selectedElement || selectedElement.parentNode === layer) { continue }
+    const P = parentToDrawing(selectedElement)
+    if (P.a !== 1 || P.b !== 0 || P.c !== 0 || P.d !== 1) { svgCanvas.dragParentMatrices.set(selectedElement, P) }
+  }
   // A translation does not change an element's own bounding box, so every
   // selection box is read once here, before any write, and reused on each
   // mousemove. Reading it inside the move loop forced one layout per element.
@@ -353,6 +364,7 @@ const cancelGesture = () => {
 
   svgCanvas.dragStartTransforms = null
   svgCanvas.dragStartBBoxes = null
+  svgCanvas.dragParentMatrices = null
   svgCanvas.dragStartFrame = null
   svgCanvas.hasDragStartTransform = false
   svgCanvas.selectorManager.hideDimension?.()
@@ -379,7 +391,11 @@ const cancelGesture = () => {
 // Update only the temporary drag transform inserted at index 0.
 const updateTransformList = (svgRoot, element, dx, dy) => {
   const xform = svgRoot.createSVGTransform()
-  xform.setTranslate(dx, dy)
+  // A move on the drawing, in the coordinates of the element's group (read
+  // once per drag, see beginDragTransform).
+  const parent = svgCanvas.dragParentMatrices?.get(element)
+  const move = parent ? parentDelta(element, dx, dy, parent) : { dx, dy }
+  xform.setTranslate(move.dx, move.dy)
   const tlist = getTransformList(element)
   if (!tlist) { return }
   if (tlist.numberOfItems) {
@@ -1140,6 +1156,7 @@ const mouseUpEvent = (evt) => {
           // Clear the stored transforms AND reset the flag together
           svgCanvas.dragStartTransforms = null
           svgCanvas.dragStartBBoxes = null
+          svgCanvas.dragParentMatrices = null
           svgCanvas.hasDragStartTransform = false
 
           resizeSelectors(selectedElements)
