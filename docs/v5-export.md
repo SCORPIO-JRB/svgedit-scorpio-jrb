@@ -59,7 +59,8 @@ Corrigés au passage :
 - la frappe dans un texte n'était pas annulable : `beginUndoableChange` lisait l'attribut `#text`, qui n'existe pas, au lieu du contenu ;
 - dans un texte en cours d'édition, Ctrl+Z annulait la saisie du champ caché au lieu de l'historique, et Échap ne terminait pas l'édition ;
 - dans la version compilée, `type()` des commandes rendait le nom raccourci de leur classe (« bv » au lieu de « InsertElementCommand ») : les réactions de l'historique à l'annulation (calques, symboles, références) ne se déclenchaient jamais. Chaque classe porte maintenant son nom en toutes lettres ;
-- depuis V3, les menus de la disposition canevas n'affichaient pas la coche de leurs entrées cochées (« Barre contextuelle » et les options de vue dans le menu du zoom, le choix courant d'une liste de la barre contextuelle). La règle qui laisse la place de la coche était plus spécifique que celle qui la dessine ; seul le niveau de zoom courant était coché. L'étape courante de l'Historique en dépendait aussi.
+- depuis V3, les menus de la disposition canevas n'affichaient pas la coche de leurs entrées cochées (« Barre contextuelle » et les options de vue dans le menu du zoom, le choix courant d'une liste de la barre contextuelle). La règle qui laisse la place de la coche était plus spécifique que celle qui la dessine ; seul le niveau de zoom courant était coché. L'étape courante de l'Historique en dépendait aussi ;
+- sous Firefox, l'ouverture d'un fichier créait un `<defs>` vide, même sans dégradé à y ranger. Écrit comme une ligne vide, il changeait de place d'un enregistrement à l'autre une fois un cadre posé. Il n'est plus créé que pour un dégradé ou un motif ; la sortie Firefox d'un fichier sans dégradé rejoint celle de Chromium.
 
 ## 5. Fichiers
 
@@ -75,7 +76,7 @@ Corrigés au passage :
 
 - **Lint** (`standard`, couleurs, libellés) : sans erreur.
 - **Tests unitaires** : 921 sur 921, dont 11 pour l'historique (`history-v5.test.js`) et 9 pour les cadres et l'origine (`frames-v5.test.js`).
-- **E2E Chromium** : 465 sur 465 en disposition canevas, dont 9 pour l'historique (`historique-v5.spec.js`) et 11 pour les cadres (`cadres-v5.spec.js`, axe compris dans les deux thèmes) ; 364 sur 364 en disposition classique.
+- **E2E Chromium** : 466 sur 466 en disposition canevas, dont 9 pour l'historique (`historique-v5.spec.js`) et 11 pour les cadres (`cadres-v5.spec.js`, axe compris dans les deux thèmes) ; 364 sur 364 en disposition classique.
 - **Corpus, comparé à `v4-couleurs`** : 73 scénarios sur 73 identiques ; 20 allers-retours sur 21 identiques. Le seul écart est voulu : `section-7.svg` garde maintenant `viewBox="-20 -10 400 300"`. Aucun fichier ne change tant qu'on ne pose pas de cadre.
 - **Banc** : glisser 5 000 objets, 2,6 ms de calcul par mouvement en local et 6,3 ms sur la CI (budget : 16). Le banc de la CI, informatif, ne dépasse plus qu'un budget, déjà dépassé avant ce lot : `selectAll` à 2 000 objets (177 ms pour 150). Sur `v4-couleurs`, il en dépassait trois (`selectAll` 220 ms, `undo` 55 ms, `marquee` 112 ms).
 - **Alt+glisser** : une étape, test E2E en place depuis M1.
