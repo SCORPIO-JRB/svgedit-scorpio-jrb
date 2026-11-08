@@ -25,6 +25,7 @@ import { LayerTree } from './panels/LayerTree.js'
 import { CodePanel } from './panels/CodePanel.js'
 import { ContextBar } from './panels/ContextBar.js'
 import { TextStyles } from './panels/TextStyles.js'
+import { CommandPalette } from './panels/CommandPalette.js'
 
 export const LAYOUTS = ['canvas', 'classic']
 export const PANEL_MIN_WIDTH = 240
@@ -134,6 +135,7 @@ export class EditorLayout {
     // Over the canvas, above the selection (lot V4).
     this.contextBar = new ContextBar(this.editor, this.$stage)
     this.editor.textStyles = new TextStyles(this.editor, this.$stage)
+    this.palette = new CommandPalette(this.editor, root)
 
     this.initPanel()
     this.observeSize()

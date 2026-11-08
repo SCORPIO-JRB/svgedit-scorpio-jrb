@@ -148,7 +148,15 @@ export default {
     align: 'Aligner et distribuer',
     more: "Plus d'actions",
     focus_next: 'Zone suivante',
+    open_menu: 'Ouvrir le menu contextuel',
     focus_previous: 'Zone précédente'
+  },
+  palette: {
+    open: 'Rechercher une action',
+    title: 'Actions',
+    shortcuts: 'Raccourcis clavier',
+    placeholder: 'Rechercher une action…',
+    empty: 'Aucune action ne correspond.'
   },
   textstyles: {
     title: 'Style',

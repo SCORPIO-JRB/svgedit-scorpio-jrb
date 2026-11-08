@@ -129,6 +129,29 @@ export const SHORTCUT_OF = {
  */
 export const hintOf = (commands, id) => commands.hint(SHORTCUT_OF[id] ?? id)
 
+/** Alignment and distribution: in the bar and in the context menu (4.4). */
+const ALIGN_COMMANDS = ['align_left', 'align_center', 'align_right', 'align_top', 'align_middle', 'align_bottom',
+  'align_distrib_horiz', 'align_distrib_verti']
+
+/**
+ * The entries of the context menu that depend on its target, before those
+ * every object has (cut, copy, order...).
+ * @param {string|null} kind See selectionKind
+ * @returns {string[]} Entries, as in barEntries
+ */
+export const menuEntries = (kind) => {
+  const own = {
+    text: ['command:edit_text'],
+    shape: ['text:tool_topath'],
+    path: ['command:edit_nodes'],
+    group: ['command:open_group', 'command:select_group_children'],
+    use: ['command:select_same', 'command:replace_symbol', 'text:tool_unlink_use'],
+    image: ['command:select_same', 'command:replace_image'],
+    multi: ALIGN_COMMANDS.map((id) => `command:${id}`)
+  }[kind] ?? []
+  return kind && kind !== 'nodes' ? [...own, 'command:hide_selection'] : own
+}
+
 /** The labels written out on the buttons of the bar. */
 const TEXT_LABELS = {
   tool_topath: 'context.to_path',
@@ -333,6 +356,13 @@ export class ContextBar {
         id: 'toggle_context_bar',
         label: 'context.toggle',
         run: () => this.setEnabled(!this.enabled)
+      },
+      {
+        // The context menu from the keyboard, as in the systems.
+        id: 'open_context_menu',
+        label: 'context.open_menu',
+        shortcuts: 'shift+f10',
+        run: () => this.openContextMenu()
       }
     ]
     commands.forEach((command) => editor.commands.register(command))
@@ -880,19 +910,60 @@ export class ContextBar {
   }
 
   /**
-   * "…": the context menu of the selection, under the button.
-   * @param {HTMLElement} button
+   * "…" or Shift+F10: the context menu of the selection, under the button,
+   * or at the selection; the focus goes to its first entry.
+   * @param {HTMLElement} [button]
    * @returns {void}
    */
   openContextMenu (button) {
-    const box = button.getBoundingClientRect()
+    let point
+    if (button) {
+      const box = button.getBoundingClientRect()
+      point = { x: box.left, y: box.bottom + 4 }
+    } else {
+      const frame = this.frameBox()?.frame
+      const area = this.editor.workarea.getBoundingClientRect()
+      point = frame
+        ? { x: Math.max(area.left, Math.min(area.right, frame.left)), y: Math.max(area.top, Math.min(area.bottom, frame.bottom)) }
+        : { x: area.left + area.width / 2, y: area.top + area.height / 2 }
+    }
+    this.menuOpener = button ?? document.activeElement
     this.editor.workarea.dispatchEvent(new MouseEvent('contextmenu', {
       bubbles: true,
       cancelable: true,
-      clientX: box.left,
-      clientY: box.bottom + 4,
+      clientX: point.x,
+      clientY: point.y,
       view: window
     }))
+  }
+
+  /**
+   * The entries of the context menu for the selection: label, shortcut, and
+   * what they do. Only those that apply.
+   * @returns {{id: string, label: string, hint: string, run: () => void}[]}
+   */
+  menuItems () {
+    const { svgCanvas, editor } = this
+    const elements = svgCanvas.getSelectedElements().filter(Boolean)
+    const kind = selectionKind({
+      elements,
+      mode: svgCanvas.getMode(),
+      isConnector: (elem) => elem.hasAttributeNS?.('http://svg-edit.googlecode.com', 'connector')
+    })
+    const items = []
+    for (const entry of menuEntries(kind)) {
+      const [type, id] = entry.split(':')
+      if (type === 'command') {
+        const command = editor.commands.get(id)
+        if (!command || !editor.commands.isEnabled(id)) continue
+        items.push({ id, label: this.t(command.label), hint: hintOf(editor.commands, id), run: () => editor.commands.execute(id) })
+      } else {
+        const original = this.original(id)
+        if (!this.applies(original) || original.hasAttribute('disabled')) continue
+        items.push({ id, label: this.t(TEXT_LABELS[id] ?? original.getAttribute('title')), hint: hintOf(editor.commands, id), run: () => original.click() })
+      }
+    }
+    return items
   }
 
   /**

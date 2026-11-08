@@ -210,6 +210,16 @@ zoom menu shows an entry for it, with its title, its shortcut and a check
 when the button is pressed, and choosing the entry clicks the button. The
 entries added to `#main_button` go into the document menu.
 
+### Contextual bar, context menu and palette
+
+The contextual bar of lot V4 mirrors controls of the inspector: an
+extension panel shown in the inspector (`#star_panel`, `#polygon_panel`,
+`#marker_panel`) gives its fields to the bar of the shapes and connectors
+without more code. The entries an extension adds with `contextmenu.add` stay
+at the bottom of the context menu, after those of the target. Every button
+with a `title` and every command of the registry appears in the command
+palette (Ctrl+K), with its shortcut.
+
 ## Creating SVG icons
 
 The SVG-Edit project uses icons created using basic SVG (generally

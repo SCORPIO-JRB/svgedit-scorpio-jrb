@@ -148,7 +148,15 @@ export default {
     align: 'Align and distribute',
     more: 'More actions',
     focus_next: 'Next region',
+    open_menu: 'Open the context menu',
     focus_previous: 'Previous region'
+  },
+  palette: {
+    open: 'Find an action',
+    title: 'Actions',
+    shortcuts: 'Keyboard shortcuts',
+    placeholder: 'Find an action…',
+    empty: 'No action matches.'
   },
   textstyles: {
     title: 'Style',

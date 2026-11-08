@@ -679,3 +679,99 @@ test.describe('Text styles (V4, N10)', () => {
     expect(await page.evaluate(() => String(document.getElementById('font_size').value))).toBe('26')
   })
 })
+
+const menuTargets = (page) => page.evaluate(() => {
+  const menu = document.getElementById('se-cmenu_canvas').shadowRoot
+  return {
+    shown: getComputedStyle(menu.querySelector('.contextMenu')).display === 'block',
+    targets: [...menu.querySelectorAll('li.se-target a')].map((a) => a.dataset.target),
+    focused: menu.activeElement?.getAttribute('href') ?? null
+  }
+})
+
+test.describe('Context menu by target, and command palette (V4)', () => {
+  test.beforeEach(async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await loadDrawing(page, BAR_DRAWING)
+  })
+
+  test('the menu starts with the verbs of its target', async ({ page }) => {
+    const expected = {
+      t: ['edit_text', 'hide_selection'],
+      r: ['tool_topath', 'hide_selection'],
+      p: ['edit_nodes', 'hide_selection'],
+      g: ['open_group', 'select_group_children', 'hide_selection'],
+      u1: ['select_same', 'replace_symbol', 'tool_unlink_use', 'hide_selection']
+    }
+    for (const [id, targets] of Object.entries(expected)) {
+      await selectIds(page, [id])
+      const box = await page.evaluate((id) => { const b = document.getElementById(id).getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }, id)
+      await page.mouse.click(box.x, box.y, { button: 'right' })
+      expect((await menuTargets(page)).targets).toEqual(targets)
+      await page.keyboard.press('Escape')
+    }
+    await selectIds(page, ['r', 'p'])
+    await page.keyboard.press('Shift+F10')
+    expect((await menuTargets(page)).targets).toEqual(['align_left', 'align_center', 'align_right', 'align_top',
+      'align_middle', 'align_bottom', 'align_distrib_horiz', 'align_distrib_verti', 'hide_selection'])
+  })
+
+  test('Shift+F10 opens it from the keyboard; the arrows and Enter choose, in one undo step', async ({ page }) => {
+    await selectIds(page, ['g'])
+    await page.evaluate(() => document.activeElement?.blur?.())
+    await page.keyboard.press('Shift+F10')
+    let menu = await menuTargets(page)
+    expect(menu).toMatchObject({ shown: true, focused: '#target-open_group' })
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    menu = await menuTargets(page)
+    expect(menu.focused).toBe('#target-hide_selection')
+    const before = await svgOf(page)
+    await page.keyboard.press('Enter')
+    expect((await menuTargets(page)).shown).toBe(false)
+    expect(await attrOf(page, 'g', 'display')).toBe('none')
+    await undo(page)
+    expect(await svgOf(page)).toBe(before)
+    // Escape closes it.
+    await selectIds(page, ['r'])
+    await page.keyboard.press('Shift+F10')
+    await page.keyboard.press('Escape')
+    expect((await menuTargets(page)).shown).toBe(false)
+  })
+
+  test('Ctrl+K finds an action by its name and runs it; Escape closes', async ({ page }) => {
+    await selectIds(page, ['g'])
+    await page.evaluate(() => document.activeElement?.blur?.())
+    await page.keyboard.press('Control+k')
+    await expect(page.locator('#se-palette')).toBeVisible()
+    await expect(page.locator('#se-palette-input')).toBeFocused()
+    await page.keyboard.type('ungr')
+    const first = page.locator('#se-palette [role="option"][aria-selected="true"]')
+    await expect(first).toHaveAttribute('data-command', /ungroup/)
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#se-palette')).toBeHidden()
+    expect(await page.evaluate(() => document.getElementById('g'))).toBeNull()
+
+    await page.keyboard.press('Control+k')
+    await page.keyboard.type('zzzz')
+    await expect(page.locator('#se-palette .se-palette-empty')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#se-palette')).toBeHidden()
+  })
+
+  test('an action that does not apply shows greyed after the others; ? lists the shortcuts', async ({ page }) => {
+    await page.evaluate(() => window.svgEditor.svgCanvas.clearSelection())
+    await page.evaluate(() => document.activeElement?.blur?.())
+    await page.keyboard.press('Control+k')
+    await page.keyboard.type('open group')
+    const option = page.locator('#se-palette [role="option"][data-command="open_group"]')
+    await expect(option).toHaveAttribute('aria-disabled', 'true')
+    await page.keyboard.press('Escape')
+
+    await page.keyboard.press('Shift+?')
+    await expect(page.locator('#se-palette-title')).toHaveText(await page.evaluate(() => window.svgEditor.i18next.t('palette.shortcuts')))
+    const hints = await page.locator('#se-palette [role="option"] kbd').allTextContents()
+    expect(hints.length).toBeGreaterThan(30)
+    expect(hints.every((hint) => hint.length > 0)).toBe(true)
+  })
+})

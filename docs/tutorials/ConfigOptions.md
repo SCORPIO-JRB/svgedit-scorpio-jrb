@@ -284,7 +284,7 @@ Export goes into the document menu.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `layout` | `"canvas"` | `"classic"` keeps the layout of SVG-Edit until the end of V4; read at start, also `?layout=classic` |
+| `layout` | `"canvas"` | `"classic"` keeps the layout of SVG-Edit, without contextual bar, until the user test of V4 has compared both; read at start, also `?layout=classic` |
 | `homeUrl` | `""` | Link of the home button; http(s) only |
 | `breadcrumb` | `[]` | Breadcrumb before the name of the document: labels or `{label, href}` |
 
@@ -311,3 +311,42 @@ AZERTY, the key of "*").
 The questions the editor asks (name of a layer, address of an image or of a
 link) open in place under the control that asked, never in a window of the
 browser.
+
+## Contextual editing
+
+Lot V4 adds, in the canvas layout:
+
+- a contextual bar above the selection, with the verbs that apply to it and
+  at most four frequent properties (fill, stroke and its width, corner
+  radius...). The exact values stay in the inspector. A property shown in
+  both places is the same control and the same command. "…" opens the
+  context menu. The bar hides during a gesture or a zoom and comes back
+  150 ms after; F6 and Shift+F6 move the focus from the canvas to the bar,
+  the inspector and the toolbar. "Contextual bar" in the zoom menu turns it
+  off; the choice is kept in the preference `context_bar`;
+- a context menu that starts with the verbs of its target (edit the text or
+  the nodes, open the group, select the same symbol, replace, detach, align
+  and distribute a multi-selection, hide). Shift+F10 opens it from the
+  keyboard; the arrows, Enter and Escape use it;
+- a command palette: Ctrl+K finds an action by its name, `?` lists the
+  shortcuts;
+- named text styles: Style ▾, first entry of the bar of a text. A style
+  writes only `font-family`, `font-size`, `font-weight` and `fill`, in one
+  undo step, and is recognised by these values: it adds nothing to the file.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `textStyles` | `null` | The named text styles; `null` for those of the SCorp-io synoptics. Never read from the URL |
+
+```js
+svgEditor.setConfig({
+  textStyles: [
+    { id: 'title', label: 'Titre', fontFamily: "'Space Grotesk', sans-serif", fontSize: 34, fontWeight: 500, fill: '#CEB8FF' },
+    { id: 'value', label: 'Valeur', fontFamily: "'Roboto Flex', sans-serif", fontSize: 20, fontWeight: 400, fill: '#C9C5D1' }
+  ]
+})
+```
+
+A label is a translation key or a text. The default list comes from the
+stylesheet of the reference synoptic of the corpus
+(`tests/fixtures/import/scorpio/synoptique-chaufferie.svg`).
