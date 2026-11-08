@@ -232,7 +232,9 @@ test.describe('Export frames (V5)', () => {
     expect(saved).toContain('x="150" y="80"')
     // The page is drawn where the file starts.
     const page0 = await page.evaluate(() => {
-      const bg = document.getElementById('canvasBackground').getBoundingClientRect()
+      // The rect of the page: under Firefox, the box of its <svg>, which lets
+      // its content overflow, takes in the grid.
+      const bg = document.querySelector('#canvasBackground > rect').getBoundingClientRect()
       const rect = document.getElementById('o1').getBoundingClientRect()
       return { dx: Math.round(rect.x - bg.x), dy: Math.round(rect.y - bg.y) }
     })

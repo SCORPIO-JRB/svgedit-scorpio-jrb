@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, screenPoint } from './helpers.js'
 
 // Lot V5, S4: the history is grouped and named. Undo and Redo name their
 // step, the History menu goes back to any step, the objects of the step undone
@@ -157,8 +157,10 @@ test.describe('History (V5)', () => {
 
   test('a text typed then undone goes in one step', async ({ page }) => {
     await page.locator('#tool_text').click()
-    const root = await page.locator('#svgcontent').boundingBox()
-    await page.mouse.click(root.x + 200, root.y + 300)
+    // A point of the drawing: under Firefox, the box of #svgcontent is not
+    // that of the page.
+    const at = await screenPoint(page, 200, 300)
+    await page.mouse.click(at.x, at.y)
     await page.keyboard.type('Pompe 12')
     const text = await page.evaluate(() => [...document.querySelectorAll('#svgcontent text')].map((el) => el.textContent))
     expect(text).toEqual(['Pompe 12'])

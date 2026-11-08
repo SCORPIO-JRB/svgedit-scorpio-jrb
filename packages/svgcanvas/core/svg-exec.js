@@ -669,15 +669,19 @@ const setSvgString = (xmlString, preventUndo) => {
       }
     })
 
-    // For Firefox: Put all paint elems in defs
+    // For Firefox: Put all paint elems in defs. A file without any gets no
+    // <defs>: an empty one is written as a blank line, which moved from one
+    // save to the next (V5).
     if (isGecko()) {
-      const svgDefs = findDefs()
       const findElems = content.querySelectorAll(
         'linearGradient, radialGradient, pattern'
       )
-      Array.prototype.forEach.call(findElems, ele => {
-        svgDefs.appendChild(ele)
-      })
+      if (findElems.length) {
+        const svgDefs = findDefs()
+        Array.prototype.forEach.call(findElems, ele => {
+          svgDefs.appendChild(ele)
+        })
+      }
     }
 
     // Set ref element for <use> elements
