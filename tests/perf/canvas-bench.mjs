@@ -14,8 +14,13 @@
  * `npm run start:e2e`) and dispatches synthetic mouse events, which keeps the
  * results deterministic.
  *
+ * The snapping (lot V2) is measured apart, on a larger drawing: the search
+ * of one drag move among the visible neighbours, averaged over 30 moves, the
+ * index read once at the start of the gesture, and the hover.
+ *
  * Usage:
- *   node tests/perf/canvas-bench.mjs [--sizes=500,2000] [--url=http://localhost:8000/index.html]
+ *   node tests/perf/canvas-bench.mjs [--sizes=500,2000] [--snap-sizes=10000]
+ *                                    [--url=http://localhost:8000/index.html]
  *                                    [--out=results.json] [--budgets=tests/perf/budgets.json]
  *
  * Environment:
@@ -35,6 +40,7 @@ const args = Object.fromEntries(process.argv.slice(2).map((arg) => {
 }))
 
 const sizes = (args.sizes || '500,2000').split(',').map(Number).filter(Boolean)
+const snapSizes = (args['snap-sizes'] || '').split(',').map(Number).filter(Boolean)
 const url = args.url || 'http://localhost:8000/index.html'
 
 const MEASURES = [
@@ -52,7 +58,10 @@ const MEASURES = [
   ['groupRotateRelease', 'Relâchement de la rotation collective'],
   ['scaleToolMove', 'Outil Échelle, un mouvement (traits compris)'],
   ['scaleToolRelease', 'Relâchement de l\'outil Échelle'],
-  ['hover', 'Surbrillance au survol (un mouvement, sans attendre l\'image)']
+  ['hover', 'Surbrillance au survol (un mouvement, sans attendre l\'image)'],
+  ['snapSearch', 'Accroche : recherche d\'un mouvement (V2)'],
+  ['snapIndex', 'Accroche : index au début du geste (V2)'],
+  ['snapDragMove', 'Un mouvement de glisser avec accroche (V2)']
 ]
 
 const launchOptions = process.env.PW_CHROMIUM_PATH
@@ -65,6 +74,9 @@ const results = { date: new Date().toISOString(), url, sizes: {} }
 try {
   for (const size of sizes) {
     results.sizes[size] = await benchSize(size)
+  }
+  for (const size of snapSizes) {
+    results.sizes[size] = { ...results.sizes[size], ...await benchSnap(size) }
   }
 } finally {
   await browser.close()
@@ -255,6 +267,70 @@ async function benchSize (size) {
 
   await page.close()
   return Object.fromEntries(Object.entries(measures).map(([key, ms]) => [key, Math.round(ms * 10) / 10]))
+}
+
+/**
+ * The snapping of a drag among `size` rectangles, all visible.
+ * @param {number} size
+ * @returns {Promise<object>}
+ */
+async function benchSnap (size) {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
+  page.setDefaultTimeout(15 * 60 * 1000)
+  await page.goto(url)
+  await page.waitForFunction(() => window.svgEditor?.svgCanvas &&
+    document.querySelector('se-storage-dialog')?.shadowRoot?.querySelector('#storage_ok'))
+  await page.evaluate(() => {
+    document.querySelector('se-storage-dialog').shadowRoot.querySelector('#storage_ok').click()
+  })
+  const measures = await page.evaluate(async (n) => {
+    const cols = Math.ceil(Math.sqrt(n))
+    const step = 1000 / cols
+    const side = (600 / cols).toFixed(1)
+    let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000"><g class="layer"><title>Layer 1</title>'
+    for (let i = 0; i < n; i++) {
+      // Shifted a little, so that not every line falls on another.
+      const x = ((i % cols) * step + (i % 7) * 0.13).toFixed(2)
+      const y = (Math.floor(i / cols) * step + (i % 5) * 0.11).toFixed(2)
+      svg += `<rect id="r${i}" x="${x}" y="${y}" width="${side}" height="${side}" fill="#3a6"/>`
+    }
+    svg += '</g></svg>'
+    const editor = window.svgEditor
+    editor.setConfig({ objectSnapping: true, gridSnapping: false })
+    editor.svgCanvas.setSvgString(svg)
+    editor.zoomChanged(window, 'canvas')
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+    await frame()
+    const canvas = editor.svgCanvas
+    const mouse = (type, target, x, y) => target.dispatchEvent(new MouseEvent(type, {
+      bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: type === 'mouseup' ? 0 : 1, view: window
+    }))
+    const target = document.getElementById(`r${Math.floor(n / 2) + Math.floor(cols / 2)}`)
+    const box = target.getBoundingClientRect()
+    const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+    mouse('mousedown', target, start.x, start.y)
+    const first = performance.now()
+    mouse('mousemove', target, start.x + 10, start.y + 10)
+    const firstMove = performance.now() - first
+    await frame()
+    const out = { snapIndex: canvas.snapTiming?.index ?? NaN, snapFirstMove: firstMove }
+    let search = 0
+    let move = 0
+    const moves = 30
+    for (let i = 1; i <= moves; i++) {
+      const t = performance.now()
+      mouse('mousemove', target, start.x + 10 + i * 1.7, start.y + 10 + i * 1.3)
+      move += performance.now() - t
+      search += canvas.snapTiming?.search ?? NaN
+    }
+    mouse('mouseup', target, start.x + 60, start.y + 50)
+    out.snapSearch = search / moves
+    out.snapDragMove = move / moves
+    out.snapBoxes = canvas.snapTiming?.boxes
+    return out
+  }, size)
+  await page.close()
+  return Object.fromEntries(Object.entries(measures).map(([key, ms]) => [key, Math.round(ms * 100) / 100]))
 }
 
 function printTable ({ sizes: bySize }) {

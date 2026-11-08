@@ -18,11 +18,11 @@ jobs:
         npm ci
         npm run build
         npx playwright install --with-deps chromium
-    - name: Bench at 500 and 2000 elements
+    - name: Bench at 500 and 2000 elements, snapping at 10 000
       run: |
         npx vite preview --port 8000 --strictPort --outDir dist/editor &
         for i in $(seq 1 60); do curl -sf http://localhost:8000/index.html > /dev/null && break; sleep 1; done
-        node tests/perf/canvas-bench.mjs --sizes=500,2000 --out=bench-results.json --budgets=tests/perf/budgets.json
+        node tests/perf/canvas-bench.mjs --sizes=500,2000 --snap-sizes=10000 --out=bench-results.json --budgets=tests/perf/budgets.json
     - name: Keep the results
       if: always()
       uses: actions/upload-artifact@v4

@@ -203,3 +203,52 @@ host can adjust them on that element, for instance:
 
 The fonts (Roboto Flex, Space Grotesk) and the icons ship with the editor:
 it loads nothing from another origin.
+
+## View, grid and snapping
+
+The drawing has no edge: the view scrolls with the wheel (Shift+wheel
+sideways), zooms around the pointer with Ctrl+wheel or a pinch, from 1 % to
+6 400 %, and moves with Space+drag or the middle button. Nothing bounds it,
+and none of it changes the document. The `view` option, read at start,
+keeps the canvas of SVG-Edit with its scroll bars until the end of V3:
+
+```js
+svgEditor.setConfig({ view: 'scroll' }) // or ?view=scroll in the URL
+```
+
+One controller, `svgEditor.view`, moves and zooms the view for every
+gesture; a host can use it too:
+
+```js
+svgEditor.view.centerOn(100000, 100000) // a point of the drawing in the middle
+svgEditor.view.zoomAt(4)                // 400 %, around the middle of the view
+svgEditor.view.visibleRect()            // the part of the drawing shown
+```
+
+The grid is drawn over the whole view, never in the document. Showing it and
+snapping to it are two settings, both in the editor preferences:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `showGrid` | `false` | Shows the grid (button of `ext-grid`, Ctrl+') |
+| `gridSnapping` | `false` | Snaps edges and middles to its lines |
+| `snappingStep` | `10` | Step of the grid, in the base unit |
+| `gridSubdivisions` | `10` | A major line every so many steps |
+| `gridColor` | `""` | Colour of the lines; empty, those of the theme |
+| `objectSnapping` | `true` | Snaps to the visible objects and the page |
+
+The minor lines hide when they would be closer than 8 pixels on the screen.
+
+What is moved, resized or drawn snaps within 6 pixels of the screen to the
+edges and middles of the visible objects and of the page, to equal spacings
+between neighbours, to equal sizes and to the grid, with guides during the
+gesture. Boxes are those of the X, Y, W and H fields, stroke excluded, so a
+drag gives the same SVG as a typed value. Holding Ctrl suspends every
+snapping. Holding Alt over an object, with a selection, shows the distances
+from the selection to it.
+
+Alignment shortcuts follow Figma, except Alt+R for the right edge, since
+Alt+D takes the address bar of the browsers on Windows: Alt+A left, Alt+H
+horizontal centres, Alt+R right, Alt+W top, Alt+V vertical centres, Alt+S
+bottom, Alt+Shift+H and Alt+Shift+V distribute. A single object aligns on
+the page.
