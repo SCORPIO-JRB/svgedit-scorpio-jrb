@@ -76,9 +76,7 @@ class BottomPanel {
           // In pathedit mode, use zoomImage to update path points correctly.
           this.editor.zoomImage(newZoom / zoom)
         } else {
-          const { workarea } = this.editor
-          // Use helper function to compute center only once.
-          const center = getWorkareaCenter(workarea, zoom)
+          const center = this.editor.view.center
           this.editor.zoomChanged(
             window,
             {
@@ -299,16 +297,6 @@ class BottomPanel {
       this.editor.selectedElement,
       apply
     )
-  }
-}
-
-// Helper function to get the center of the workarea
-const getWorkareaCenter = (workarea, zoom) => {
-  const width = parseFloat(getComputedStyle(workarea).width.replace('px', ''))
-  const height = parseFloat(getComputedStyle(workarea).height.replace('px', ''))
-  return {
-    x: (workarea.scrollLeft + width / 2) / zoom,
-    y: (workarea.scrollTop + height / 2) / zoom
   }
 }
 

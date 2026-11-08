@@ -29,11 +29,9 @@ import LayersPanel from './panels/LayersPanel.js'
 import MainMenu from './MainMenu.js'
 import SystemClipboard from './SystemClipboard.js'
 import { getParentsUntil } from '@svgedit/svgcanvas/common/util.js'
-
-// Zoom bounds and ladder shared by every zoom gesture (1 = 100 %).
-const ZOOM_MIN = 0.01
-const ZOOM_MAX = 10
-const ZOOM_STEPS = [0.01, 0.02, 0.03, 0.06, 0.12, 0.25, 0.5, 1, 2, 4, 8, 10]
+// Zoom bounds and ladder shared by every zoom gesture (1 = 100 %), from 1 %
+// to 6 400 % (lot V2).
+import { clampZoom, nextZoomStep } from './view.js'
 
 const { $id, $click, decode64 } = SvgCanvas
 
@@ -763,6 +761,11 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   updateCanvas (center, newCtr) {
+    if (this.view?.borderless) {
+      // The borderless view places the drawing itself (lot V2).
+      this.view.layout({ center, newCtr })
+      return
+    }
     const zoom = this.svgCanvas.getZoom()
     const { workarea } = this
     const cnvs = $id('svgcanvas')
@@ -1061,7 +1064,8 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   zoomChanged (win, bbox, autoCenter) {
-    const scrbar = 15
+    // The borderless view has no scroll bar.
+    const scrbar = this.view?.borderless ? 0 : 15
     const zInfo = this.svgCanvas.setBBoxZoom(
       bbox,
       parseFloat(
@@ -1073,6 +1077,11 @@ class Editor extends EditorStartup {
     )
     if (!zInfo) {
       return
+    }
+    // Fitting a tiny object asks for more than the view gives.
+    if (clampZoom(zInfo.zoom) !== zInfo.zoom) {
+      zInfo.zoom = clampZoom(zInfo.zoom)
+      this.svgCanvas.setZoom(zInfo.zoom)
     }
     const zoomlevel = zInfo.zoom
     const bb = zInfo.bbox
@@ -1212,8 +1221,15 @@ class Editor extends EditorStartup {
    */
   zoomAt (level, clientX, clientY) {
     const zoom = this.svgCanvas.getZoom()
-    const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, level))
+    const newZoom = clampZoom(level)
     if (!Number.isFinite(newZoom) || Math.abs(newZoom - zoom) < 1e-9) { return }
+    if (this.view?.borderless) {
+      this.view.zoomAt(newZoom, clientX, clientY)
+      $id('zoom').syncValue((newZoom * 100).toFixed(1))
+      this.zoomDone()
+      this.svgCanvas.runExtensions('zoomChanged', newZoom)
+      return
+    }
 
     const { workarea } = this
     const area = workarea.getBoundingClientRect()
@@ -1258,11 +1274,7 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   zoomStep (direction) {
-    const zoom = this.svgCanvas.getZoom()
-    const next = direction > 0
-      ? ZOOM_STEPS.find((step) => step > zoom * 1.001)
-      : [...ZOOM_STEPS].reverse().find((step) => step < zoom * 0.999)
-    this.zoomAt(next ?? (direction > 0 ? ZOOM_MAX : ZOOM_MIN))
+    this.zoomAt(nextZoomStep(this.svgCanvas.getZoom(), direction))
   }
 
   /**
@@ -1272,7 +1284,7 @@ class Editor extends EditorStartup {
   zoomImage (multiplier) {
     const resolution = this.svgCanvas.getResolution()
     multiplier = multiplier ? resolution.zoom * multiplier : 1
-    multiplier = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, multiplier))
+    multiplier = clampZoom(multiplier)
     // setResolution(res.w * multiplier, res.h * multiplier, true);
     $id('zoom').syncValue((multiplier * 100).toFixed(1))
     this.svgCanvas.setCurrentZoom(multiplier)
@@ -1315,21 +1327,7 @@ class Editor extends EditorStartup {
    * @returns {{x: number, y: number}}
    */
   getViewCenter () {
-    const { workarea } = this
-    const zoom = this.svgCanvas.getZoom()
-    const x =
-      (workarea.scrollLeft +
-        parseFloat(getComputedStyle(workarea, null).width.replace('px', '')) /
-          2) /
-        zoom -
-      this.svgCanvas.contentW
-    const y =
-      (workarea.scrollTop +
-        parseFloat(getComputedStyle(workarea, null).height.replace('px', '')) /
-          2) /
-        zoom -
-      this.svgCanvas.contentH
-    return { x, y }
+    return this.view.center
   }
 
   /**

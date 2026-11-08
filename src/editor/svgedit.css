@@ -78,6 +78,21 @@
   position: relative;
 }
 
+/* The borderless view (lot V2): no scroll bar, the view controller scrolls a
+   surface a little larger than the view and moves the drawing on it. */
+#workarea.se-view-borderless {
+  position: relative;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#workarea.se-view-borderless #svgcanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
 #sidepanels {
   grid-area: side;
 }

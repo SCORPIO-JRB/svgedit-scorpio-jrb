@@ -9,6 +9,7 @@ import editorTemplate from './templates/editorTemplate.html'
 import SvgCanvas from '@svgedit/svgcanvas'
 import Rulers from './Rulers.js'
 import { ThemeController } from './theme.js'
+import { ViewController } from './view.js'
 
 /**
    * @fires module:svgcanvas.SvgCanvas#event:svgEditorReady
@@ -132,6 +133,8 @@ class EditorStartup {
       $id('svgcanvas'),
       this.configObj.curConfig
     )
+    // One controller for every move and zoom of the view (lot V2).
+    this.view = new ViewController(this, { mode: this.configObj.curConfig.view })
 
     // once svgCanvas is init - adding listener to the changes of the current mode
     this.modeEvent = this.svgCanvas.modeEvent
@@ -313,8 +316,7 @@ class EditorStartup {
     $id('svgcanvas').addEventListener('mouseup', (evt) => {
       if (panning === false) { return true }
 
-      this.workarea.scrollLeft -= (evt.clientX - lastX)
-      this.workarea.scrollTop -= (evt.clientY - lastY)
+      this.view.panBy(evt.clientX - lastX, evt.clientY - lastY)
 
       lastX = evt.clientX
       lastY = evt.clientY
@@ -325,8 +327,7 @@ class EditorStartup {
     $id('svgcanvas').addEventListener('mousemove', (evt) => {
       if (panning === false) { return true }
 
-      this.workarea.scrollLeft -= (evt.clientX - lastX)
-      this.workarea.scrollTop -= (evt.clientY - lastY)
+      this.view.panBy(evt.clientX - lastX, evt.clientY - lastY)
 
       lastX = evt.clientX
       lastY = evt.clientY
@@ -397,16 +398,43 @@ class EditorStartup {
     // Zoom with Ctrl/Cmd + wheel and with a trackpad pinch (which browsers send
     // as a wheel event with ctrlKey), anchored on the cursor and proportional
     // to the gesture. Alt + wheel is kept as an alias. A plain wheel scrolls,
-    // and Shift + wheel scrolls horizontally (native behavior).
+    // and Shift + wheel scrolls horizontally: the view does it in the
+    // borderless view, which has no scroll bar (lot V2), the browser in the
+    // scroll view.
     this.workarea.addEventListener('wheel', (e) => {
-      if (!(e.ctrlKey || e.metaKey || e.altKey)) { return }
-      e.preventDefault()
       const unit = e.deltaMode === 1 ? 33 : (e.deltaMode === 2 ? 400 : 1)
+      if (!(e.ctrlKey || e.metaKey || e.altKey)) {
+        if (!this.view.borderless) { return }
+        e.preventDefault()
+        let dx = e.deltaX * unit
+        let dy = e.deltaY * unit
+        // A mouse wheel with Shift: the browser does not always turn it.
+        if (e.shiftKey && !dx) { [dx, dy] = [dy, 0] }
+        this.view.panBy(-dx, -dy)
+        return
+      }
+      e.preventDefault()
       const delta = e.deltaY * unit
       // Small pixel deltas come from trackpads: give them more weight per unit.
       const sensitivity = (e.deltaMode === 0 && Math.abs(e.deltaY) < 40) ? 0.01 : 0.002
       this.zoomAt(this.svgCanvas.getZoom() * Math.exp(-delta * sensitivity), e.clientX, e.clientY)
     }, { passive: false })
+
+    // Safari sends a trackpad pinch as gesture events, not as a wheel.
+    let gestureZoom = null
+    this.workarea.addEventListener('gesturestart', (e) => {
+      e.preventDefault()
+      gestureZoom = this.svgCanvas.getZoom()
+    })
+    this.workarea.addEventListener('gesturechange', (e) => {
+      if (gestureZoom === null) { return }
+      e.preventDefault()
+      this.zoomAt(gestureZoom * e.scale, e.clientX, e.clientY)
+    })
+    this.workarea.addEventListener('gestureend', (e) => {
+      e.preventDefault()
+      gestureZoom = null
+    })
 
     document.addEventListener('keyup', (e) => {
       if (e.target.nodeName !== 'BODY') return
@@ -480,6 +508,11 @@ class EditorStartup {
     }
 
     window.addEventListener('resize', () => {
+      if (this.view.borderless) {
+        // The point in the middle of the view stays there.
+        this.updateCanvas()
+        return
+      }
       Object.entries(winWh).forEach(([type, val]) => {
         const curval = (type === 'width') ? window.innerWidth - 15 : window.innerHeight
         this.workarea['scroll' + (type === 'width' ? 'Left' : 'Top')] -= (curval - val) / 2

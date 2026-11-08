@@ -110,7 +110,8 @@ export default class ConfigObj {
       *   Besides explicit domains, one might add '*' to allow all domains (not recommended for privacy/data integrity of your user's content!),
       *   `window.location.origin` for allowing the same origin (should be safe if you trust all apps on your domain), 'null' to allow `file:///` URL usage
       * @property {string} [paramurl] This was available via URL only. Allowed an un-encoded URL within the query string (use "url" or "source" with a data: URI instead)
-      * @property {Float} [canvas_expansion=3] The minimum area visible outside the canvas, as a multiple of the image dimensions. The larger the number, the more one can scroll outside the canvas.
+      * @property {Float} [canvas_expansion=3] The minimum area visible outside the canvas, as a multiple of the image dimensions. The larger the number, the more one can scroll outside the canvas. Scroll view only.
+      * @property {"borderless"|"scroll"} [view="borderless"] The view of the drawing (lot V2): "borderless" has no edge and no scroll bar, the wheel scrolls it and Ctrl+wheel zooms from 1 % to 6 400 %; "scroll" is the canvas of SVG-Edit with scroll bars, kept until the end of V3. Read at start.
       * @property {PlainObject} [initFill] Init fill properties
       * @property {string} [initFill.color="FF0000"] The initial fill color. Must be a hex code string. Defaults to solid red.
       * @property {Float} [initFill.opacity=1] The initial fill opacity. Must be a number between 0 and 1
@@ -149,6 +150,7 @@ export default class ConfigObj {
     this.defaultConfig = {
       canvasName: 'default',
       canvas_expansion: 3,
+      view: 'borderless',
       initFill: {
         color: 'FF0000', // solid red
         opacity: 1

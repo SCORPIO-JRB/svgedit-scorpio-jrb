@@ -26,10 +26,10 @@ const theme = (page) => page.evaluate(() => window.svgEditor.$container.dataset.
 const background = (page, selector) => page.evaluate((selector) =>
   getComputedStyle(document.querySelector(selector)).backgroundColor, selector)
 
-// Rules left to later lots, each for a reason:
-// - scrollable-region-focusable: #workarea is a scroll region today; the
-//   borderless view of V2 removes it.
-const LATER = ['scrollable-region-focusable']
+// Rules left to later lots, each for a reason. None since V2: the
+// borderless view removed the scroll region #workarea
+// (scrollable-region-focusable).
+const LATER = []
 
 for (const scheme of ['dark', 'light']) {
   test(`WCAG AA in the ${scheme} theme, contrast included`, async ({ page }) => {

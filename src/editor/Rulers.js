@@ -50,6 +50,9 @@ class Rulers {
    * @type {Module}
   */
   manageScroll () {
+    // The rulers of the borderless view are drawn for the view alone, and
+    // again at each move (see view.js).
+    if (this.editor.view?.borderless) return
     if (this.rulerX) this.rulerX.scrollLeft = this.editor.workarea.scrollLeft
     if (this.rulerY) this.rulerY.scrollTop = this.editor.workarea.scrollTop
   }
@@ -67,6 +70,9 @@ class Rulers {
     let d; let i
     const limit = 30000
     const contentElem = this.svgCanvas.getSvgContent()
+    // Borderless view: the rulers measure the view, from the origin of the
+    // drawing in it.
+    const view = this.editor.view?.borderless && this.editor.view.camera ? this.editor.view : null
     const units = getTypeMap()
     const unit = units[this.editor.configObj.curConfig.baseUnit] // 1 = 1px
 
@@ -75,7 +81,7 @@ class Rulers {
       const isX = (d === 0)
       const dim = isX ? 'x' : 'y'
       const lentype = isX ? 'width' : 'height'
-      const contentDim = Number(contentElem.getAttribute(dim))
+      const contentDim = view ? view.camera[dim] : Number(contentElem.getAttribute(dim))
       const $hcanvOrig = $id('ruler_' + dim).querySelector('canvas')
 
       // Bit of a hack to fully clear the canvas in Safari & IE9
@@ -86,7 +92,9 @@ class Rulers {
 
       // Set the canvas size to the width of the container
       let rulerLen
-      if (lentype === 'width') {
+      if (view) {
+        rulerLen = view.viewport[lentype]
+      } else if (lentype === 'width') {
         rulerLen = parseFloat(getComputedStyle(scanvas, null).width.replace('px', ''))
       } else if (lentype === 'height') {
         rulerLen = parseFloat(getComputedStyle(scanvas, null).height.replace('px', ''))
