@@ -93,3 +93,44 @@ export async function dragOnCanvas (page, start, end) {
   await page.mouse.move(endX, endY)
   await page.mouse.up()
 }
+
+/**
+ * Canonical form of a transform list or of path data, to compare what the
+ * browsers write. Firefox serializes the values it computes with commas and
+ * spaces ("rotate(90, 210, 60)", "M 300 300 L 460 320 Z"); Chromium, or
+ * SVG-Edit's own writer, with spaces only or commas only ("rotate(90 210 60)",
+ * "M300,300 L460,320 z"). They mean the same.
+ * @param {string|null} value
+ * @returns {string|null}
+ */
+export const canonical = (value) => {
+  if (value === null || value === undefined) { return value }
+  const tokens = String(value).match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?|[a-z]+|[()]/gi) || []
+  return tokens.map((t) => (t === 'z' ? 'Z' : t)).join(' ')
+    .replace(/ \( /g, '(').replace(/ \)/g, ')')
+}
+
+/**
+ * Matrix from the drawing's coordinates to the screen. The first layer has no
+ * transform and sits in the drawing's coordinates. The drawing's own <svg>
+ * cannot be used: Firefox leaves its x and y out of its getScreenCTM, and
+ * gives it a screen box that is neither its viewport nor its content.
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<number[]>} a, b, c, d, e, f
+ */
+export const drawingToScreen = (page) => page.evaluate(() => {
+  const m = document.querySelector('#svgcontent > g.layer').getScreenCTM()
+  return [m.a, m.b, m.c, m.d, m.e, m.f]
+})
+
+/**
+ * Screen point of a point of the drawing.
+ * @param {import('@playwright/test').Page} page
+ * @param {number} x
+ * @param {number} y
+ * @returns {Promise<{x: number, y: number}>}
+ */
+export const screenPoint = async (page, x, y) => {
+  const [a, b, c, d, e, f] = await drawingToScreen(page)
+  return { x: a * x + c * y + e, y: b * x + d * y + f }
+}

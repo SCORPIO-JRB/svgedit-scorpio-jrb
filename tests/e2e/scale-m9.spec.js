@@ -3,6 +3,10 @@ import { visitAndApproveStorage } from './helpers.js'
 
 // M9: the Scale tool (K), its panel, the imposed spacing and ungrouping.
 
+// Digits compared after a drag. Firefox computes SVG matrices and boxes in
+// single precision: a corner that stays at 100 reads 100.0000033.
+const PRECISION = 4
+
 const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:se="http://svg-edit.googlecode.com" width="640" height="480">
   <defs><symbol id="sym" viewBox="0 0 20 20"><rect width="20" height="20" stroke="#000" stroke-width="1"/></symbol></defs>
   <g class="layer"><title>Layer 1</title>
@@ -150,10 +154,10 @@ test.describe('Scale tool (M9)', () => {
     const r = await nums(page, 'r1', ['x', 'y', 'width', 'height', 'stroke-width'])
     const k = r.width / 80
     expect(k).toBeGreaterThan(1.3)
-    expect(r.x).toBeCloseTo(100, 6)
-    expect(r.y).toBeCloseTo(100, 6)
-    expect(r.height).toBeCloseTo(60 * k, 6)
-    expect(r['stroke-width']).toBeCloseTo(2 * k, 6)
+    expect(r.x).toBeCloseTo(100, PRECISION)
+    expect(r.y).toBeCloseTo(100, PRECISION)
+    expect(r.height).toBeCloseTo(60 * k, PRECISION)
+    expect(r['stroke-width']).toBeCloseTo(2 * k, PRECISION)
     expect(await attr(page, 'r1', 'transform')).toBeNull()
     expect(await attr(page, 'r1', 'data-tag')).toBe('P-101')
     expect(await undoSize(page)).toBe(1)
@@ -164,9 +168,9 @@ test.describe('Scale tool (M9)', () => {
     await select(page, ['r1'])
     await dragGrip(page, 'e', 40, 0)
     const r = await nums(page, 'r1', ['x', 'y', 'width', 'height'])
-    expect(r.x).toBeCloseTo(100, 6)
-    expect(r.y + r.height / 2).toBeCloseTo(130, 6)
-    expect(r.width / r.height).toBeCloseTo(80 / 60, 6)
+    expect(r.x).toBeCloseTo(100, PRECISION)
+    expect(r.y + r.height / 2).toBeCloseTo(130, PRECISION)
+    expect(r.width / r.height).toBeCloseTo(80 / 60, PRECISION)
   })
 
   test('a multi-selection scales as one object, strokes and dashes included, in one undo step', async ({ page }) => {
@@ -181,14 +185,14 @@ test.describe('Scale tool (M9)', () => {
     const r2 = await nums(page, 'r2', ['x', 'y', 'width', 'height', 'stroke-width'])
     const k = r1.width / 80
     expect(k).toBeGreaterThan(1.2)
-    expect(r2.width / 80).toBeCloseTo(k, 6)
-    expect(r1['stroke-width']).toBeCloseTo(2 * k, 6)
-    expect(r2['stroke-width']).toBeCloseTo(4 * k, 6)
+    expect(r2.width / 80).toBeCloseTo(k, PRECISION)
+    expect(r1['stroke-width']).toBeCloseTo(2 * k, PRECISION)
+    expect(r2['stroke-width']).toBeCloseTo(4 * k, PRECISION)
     const dashes = (await attr(page, 'r2', 'stroke-dasharray')).split(',').map(Number)
-    expect(dashes[0]).toBeCloseTo(6 * k, 6)
-    expect(dashes[1]).toBeCloseTo(2 * k, 6)
+    expect(dashes[0]).toBeCloseTo(6 * k, PRECISION)
+    expect(dashes[1]).toBeCloseTo(2 * k, PRECISION)
     // The relative positions scale too.
-    expect(r2.x - r1.x).toBeCloseTo(140 * k, 6)
+    expect(r2.x - r1.x).toBeCloseTo(140 * k, PRECISION)
     for (const id of ['r1', 'r2']) {
       const after = await screenBox(page, id)
       for (const key of ['x', 'y', 'width', 'height']) {
@@ -208,8 +212,8 @@ test.describe('Scale tool (M9)', () => {
     await select(page, ['r1'])
     await dragGrip(page, 'se', 30, 30, { modifiers: ['Alt'] })
     const r = await nums(page, 'r1', ['x', 'y', 'width', 'height'])
-    expect(r.x + r.width / 2).toBeCloseTo(140, 6)
-    expect(r.y + r.height / 2).toBeCloseTo(130, 6)
+    expect(r.x + r.width / 2).toBeCloseTo(140, PRECISION)
+    expect(r.y + r.height / 2).toBeCloseTo(130, PRECISION)
     await select(page, ['r2'])
     const before = await layerMarkup(page)
     const size = await undoSize(page)
@@ -226,7 +230,7 @@ test.describe('Scale tool (M9)', () => {
     const k = fontSize / 20
     expect(k).toBeGreaterThan(1.1)
     expect(await attr(page, 't1', 'transform')).toBeNull()
-    expect(await num(page, 't1', 'stroke-width')).toBeCloseTo(k, 6)
+    expect(await num(page, 't1', 'stroke-width')).toBeCloseTo(k, PRECISION)
     // A group keeps a matrix, which scales the strokes of its children.
     expect(await attr(page, 'grp', 'transform')).toMatch(/matrix/)
     expect(await attr(page, 'grp', 'stroke-width')).toBe('2')
@@ -244,10 +248,10 @@ test.describe('Scale tool (M9)', () => {
     const r = await nums(page, 'rr', ['width', 'height', 'stroke-width'])
     const k = r.width / 80
     expect(k).toBeGreaterThan(1.1)
-    expect(r.height).toBeCloseTo(40 * k, 6)
-    expect(r['stroke-width']).toBeCloseTo(2 * k, 6)
+    expect(r.height).toBeCloseTo(40 * k, PRECISION)
+    expect(r['stroke-width']).toBeCloseTo(2 * k, PRECISION)
     expect(await page.evaluate(() =>
-      window.svgEditor.svgCanvas.getRotationAngle(document.getElementById('rr')))).toBeCloseTo(30, 6)
+      window.svgEditor.svgCanvas.getRotationAngle(document.getElementById('rr')))).toBeCloseTo(30, PRECISION)
   })
 })
 

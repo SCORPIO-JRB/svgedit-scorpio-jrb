@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, screenPoint } from './helpers.js'
 
 // Corrections after the selection rework. Question 10: converting a shape to
 // a path wrote fill-opacity="null" and other "null" attributes, and took the
@@ -139,12 +139,14 @@ test.describe('Convert to path keeps the style of the shape (question 10)', () =
 })
 
 test.describe('A shape drawn after a click leaves out the style the clicked shape does not have (question 10)', () => {
+  // Drawn on an empty part of the page, from (550, 200) to (620, 250).
   const drawRect = async (page) => {
     await page.keyboard.press('r')
-    const box = await page.locator('#svgcontent').boundingBox()
-    await page.mouse.move(box.x + 450, box.y + 50)
+    const from = await screenPoint(page, 550, 200)
+    const to = await screenPoint(page, 620, 250)
+    await page.mouse.move(from.x, from.y)
     await page.mouse.down()
-    await page.mouse.move(box.x + 520, box.y + 100, { steps: 5 })
+    await page.mouse.move(to.x, to.y, { steps: 5 })
     await page.mouse.up()
     await settle(page)
   }
@@ -176,8 +178,8 @@ test.describe('A shape drawn after a click leaves out the style the clicked shap
     await clickCenter(page, 't1')
     expect(await page.evaluate(() => window.svgEditor.svgCanvas.getCurText('font_family'))).toBe('Arial')
     await page.keyboard.press('t')
-    const box = await page.locator('#svgcontent').boundingBox()
-    await page.mouse.click(box.x + 100, box.y + 80)
+    const at = await screenPoint(page, 500, 300)
+    await page.mouse.click(at.x, at.y)
     await page.keyboard.type('Nouveau')
     await page.keyboard.press('Escape')
     await settle(page)

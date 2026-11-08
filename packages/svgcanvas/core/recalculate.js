@@ -23,6 +23,7 @@ import {
   hasMatrixTransform,
   getTransformList,
   NEAR_ZERO,
+  MATRIX_TOLERANCE,
   getRotationTransformSummary
 } from './math.js'
 import { mergeDeep } from '../common/util.js'
@@ -43,8 +44,11 @@ const geometryLimitedElements = new Set([
   'rect'
 ])
 
+// A shear or a rotation left in the matrix, measured against its scale: the
+// single precision noise of Firefox (2e-8 for a scale of 1.2) is not one.
 const hasOffAxisTransform = (matrix) => {
-  return Math.abs(matrix.b) > NEAR_ZERO || Math.abs(matrix.c) > NEAR_ZERO
+  const limit = Math.max(NEAR_ZERO, MATRIX_TOLERANCE * Math.hypot(matrix.a, matrix.b, matrix.c, matrix.d))
+  return Math.abs(matrix.b) > limit || Math.abs(matrix.c) > limit
 }
 
 const appendMatrixTransform = (tlist, svgroot, matrix) => {
