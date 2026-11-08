@@ -29,6 +29,9 @@ export const NEAR_ZERO = 1e-10
 // 0.99999998, a shear that should be 0 reads 2e-8. Below this, the
 // difference cannot be seen, even on a large drawing.
 export const MATRIX_TOLERANCE = 1e-6
+// The same for a translation, in user units: after a rotation near (280,
+// 130), Firefox leaves a translation of 3.6e-5 where there is none.
+export const TRANSLATION_TOLERANCE = 1e-3
 
 // Create a throwaway SVG element for matrix operations
 const svg = document.createElementNS(NS.SVG, 'svg')
@@ -172,18 +175,20 @@ export const getTransformList = elem => {
 }
 
 /**
- * Checks if a matrix is the identity matrix.
+ * Checks if a matrix is the identity matrix, within the precision of the
+ * browser (see MATRIX_TOLERANCE and TRANSLATION_TOLERANCE): in Firefox, a
+ * rotation and its inverse leave matrix(1, -6.5e-9, 6.5e-9, 1, 3.6e-5, -2.6e-5).
  * @function isIdentity
  * @param {SVGMatrix} m - The matrix to check
  * @returns {boolean} True if it's an identity matrix (1,0,0,1,0,0)
  */
 export const isIdentity = m =>
-  Math.abs(m.a - 1) < NEAR_ZERO &&
-  Math.abs(m.b) < NEAR_ZERO &&
-  Math.abs(m.c) < NEAR_ZERO &&
-  Math.abs(m.d - 1) < NEAR_ZERO &&
-  Math.abs(m.e) < NEAR_ZERO &&
-  Math.abs(m.f) < NEAR_ZERO
+  Math.abs(m.a - 1) < MATRIX_TOLERANCE &&
+  Math.abs(m.b) < MATRIX_TOLERANCE &&
+  Math.abs(m.c) < MATRIX_TOLERANCE &&
+  Math.abs(m.d - 1) < MATRIX_TOLERANCE &&
+  Math.abs(m.e) < TRANSLATION_TOLERANCE &&
+  Math.abs(m.f) < TRANSLATION_TOLERANCE
 
 /**
  * Multiplies multiple matrices together (m1 * m2 * ...).
