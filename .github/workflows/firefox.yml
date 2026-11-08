@@ -1,0 +1,24 @@
+name: end-to-end tests under Firefox
+
+on: [push, workflow_dispatch]
+
+jobs:
+  firefox:
+    runs-on: ubuntu-latest
+    # Informative until the suite passes under Firefox (plan v2, lot V0).
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v3
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 20.x
+    - name: Build
+      run: |
+        npm ci
+        npm run build
+        npx playwright install --with-deps firefox
+    - name: End-to-end tests
+      run: npx playwright test --config playwright.firefox.config.mjs --reporter=list
+      env:
+        CI: true

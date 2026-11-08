@@ -97,6 +97,6 @@ npx playwright test tests/e2e/liaisons-v0.spec.js
 ## 5. Reste à faire dans V0
 
 - **Corpus réel (D4).** 10 à 20 synoptiques SCorp-io, avec au moins un fichier lié, à passer au rapport par `--corpus`.
-- **Firefox.** Un projet Firefox dans Playwright, en CI.
+- **Firefox.** Le workflow `firefox.yml` lance les 290 tests E2E sous Firefox à chaque push, avec `playwright.firefox.config.mjs`. Il reste informatif, comme le banc, jusqu'à ce que la suite y passe ; son premier résultat dira ce qu'il faut corriger.
 - **Contrats des extensions.** Un test par extension active : chargement, boutons, événements.
 - **Maquettes.** Disposition et barres contextuelles, d'après les captures de Claude Design, à valider avant V3.
