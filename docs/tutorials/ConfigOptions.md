@@ -168,3 +168,38 @@ whether the file existed or not. With version 3.0, the move was made to
 be fully modular and let plugins add their default stylesheets to
 `$.loadingStylesheets` which SVGEdit would load dynamically, so that HTML
 would not need to indicate such style-information in a non-modular fashion.)
+
+## Theme and design tokens
+
+The interface is dark by default and also comes in a light theme. The
+`theme` preference chooses between them: `"system"` (the default) follows
+the operating system and switches live with it, `"dark"` and `"light"`
+force one. The user sets it in the editor preferences; a host page can set
+it with the other options:
+
+```js
+svgEditor.setConfig({ theme: 'light' })
+```
+
+or at any time, without reloading:
+
+```js
+svgEditor.setTheme('dark')
+```
+
+The theme only changes the workspace, never the document: the SVG written
+is the same in both themes.
+
+Every colour, font, size, radius and duration of the interface is a
+`--se-*` custom property of `src/editor/tokens.css`. The tokens are set on
+the element given to `new Editor(container)`, which receives the class
+`se-editor` and a `data-se-theme` attribute (`"dark"` or `"light"`); they
+are never set on `:root`, so that they do not leak into the host page. A
+host can adjust them on that element, for instance:
+
+```css
+#container.se-editor { --se-accent: #8b6fd4; }
+```
+
+The fonts (Roboto Flex, Space Grotesk) and the icons ship with the editor:
+it loads nothing from another origin.

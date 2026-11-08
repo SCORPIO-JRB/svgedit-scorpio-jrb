@@ -76,6 +76,16 @@
   --se-marker-dark: #000;
   --se-marker-light: #fff;
 
+  /*
+   * The drawing does not inherit the interface: a text without font-family
+   * or font-size, and currentColor, render and measure as before V1, in both
+   * themes. Which default font a synoptic gets in SCorp-io is a question of
+   * section 7 of the plan (V6).
+   */
+  --se-document-color: #000;
+  --se-document-font: Verdana, Helvetica, Arial;
+  --se-document-font-size: 8pt;
+
   /* Wireframe view: drawn over the white page of the document in both themes. */
   --se-wireframe-stroke: #000;
   --se-wireframe-page: #fff;

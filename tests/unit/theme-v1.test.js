@@ -84,7 +84,7 @@ describe('theme (V1)', () => {
       .map(([, name]) => name)
     const dark = names(block('.se-editor {'))
     const light = new Set(names(block('.se-editor[data-se-theme="light"] {')))
-    const constant = ['--se-marker-dark', '--se-marker-light', '--se-wireframe-stroke', '--se-wireframe-page']
+    const constant = ['--se-marker-dark', '--se-marker-light', '--se-wireframe-stroke', '--se-wireframe-page', '--se-document-color']
     expect(dark.filter((name) => !light.has(name) && !constant.includes(name))).toEqual([])
   })
 })

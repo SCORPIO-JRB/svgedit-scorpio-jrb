@@ -63,6 +63,13 @@
 }
 
 #svgcanvas {
+  /* The drawing keeps the typography and colour it had before V1, whatever
+     the interface and its theme (see tokens.css). */
+  color: var(--se-document-color);
+  font-family: var(--se-document-font);
+  font-size: var(--se-document-font-size);
+  font-variant-numeric: normal;
+  color-scheme: light;
   line-height: normal;
   display: inline-block;
   background: var(--se-canvas);

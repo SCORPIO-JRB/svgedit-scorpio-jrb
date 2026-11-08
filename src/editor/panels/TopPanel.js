@@ -1523,6 +1523,8 @@ class TopPanel {
     this.updateTitle()
     newSeEditorDialog.init(i18next)
     $id('tool_link_url').setAttribute('title', i18next.t('tools.set_link_url'))
+    // The hidden field that receives the typed text of a text object.
+    $id('text').setAttribute('aria-label', i18next.t('properties.text_contents'))
     // register action to top panel buttons
     $click($id('tool_source'), this.showSourceEditor.bind(this))
     $click($id('tool_wireframe'), this.clickWireframe.bind(this))

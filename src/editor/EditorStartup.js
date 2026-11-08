@@ -68,7 +68,11 @@ class EditorStartup {
     }
     this.configObj.load()
     this.theme?.set(this.configObj.pref('theme'))
-    const { i18next } = await putLocale(this.configObj.pref('lang'), this.goodLangs)
+    const { i18next, langParam } = await putLocale(this.configObj.pref('lang'), this.goodLangs)
+    // The language of the interface, for screen readers; the page gets it
+    // only when it declares none.
+    this.$container?.setAttribute('lang', langParam)
+    if (!document.documentElement.lang) document.documentElement.lang = langParam
     this.i18next = i18next
     await import('./components/index.js')
     await import('./dialogs/index.js')

@@ -282,6 +282,8 @@ export class SESpinInput extends HTMLElement {
     switch (name) {
       case 'title':
         this.$div.setAttribute('title', titleWithShortcut(t(newValue), this.getAttribute('shortcut'), t))
+        // The field inside is named after it (elix forwards the label).
+        this.$input.setAttribute('aria-label', t(newValue))
         break
       case 'src':
         this.$img.setAttribute('src', this.imgPath + '/' + newValue)
@@ -306,6 +308,7 @@ export class SESpinInput extends HTMLElement {
       case 'label':
         this.$label.textContent = t(newValue)
         this.$img.remove()
+        if (!this.hasAttribute('title')) this.$input.setAttribute('aria-label', t(newValue))
         break
       case 'value':
         this.#setMixed(false)

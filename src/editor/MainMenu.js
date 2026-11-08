@@ -96,7 +96,7 @@ class MainMenu {
     // set language
     if (lang && lang !== this.editor.configObj.pref('lang')) {
       this.editor.configObj.pref('lang', lang)
-      this.editor.toast(this.editor.i18next.t('notification.language_reload'))
+      this.editor.toast?.(this.editor.i18next.t('notification.language_reload'))
     }
 
     // set grid setting

@@ -88,7 +88,8 @@ export class SeText extends HTMLElement {
    * @returns {any}
    */
   get value () {
-    return this.value
+    // It used to return this.value, a call to itself without end.
+    return this.getAttribute('value')
   }
 
   /**
@@ -96,7 +97,7 @@ export class SeText extends HTMLElement {
    * @returns {void}
    */
   set value (value) {
-    this.value = value
+    this.setAttribute('value', value)
   }
 
   /**

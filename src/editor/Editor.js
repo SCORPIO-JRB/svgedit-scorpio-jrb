@@ -71,7 +71,12 @@ class Editor extends EditorStartup {
     this.customExportPDF = false
     this.configObj = new ConfigObj(this)
     this.configObj.pref = this.configObj.pref.bind(this.configObj)
-    this.setConfig = this.configObj.setConfig.bind(this.configObj)
+    this.setConfig = (opts, cfgCfg) => {
+      const result = this.configObj.setConfig(opts, cfgCfg)
+      // The theme applies at once, also after the editor started (lot V1).
+      if (opts && 'theme' in opts) this.theme?.set(this.configObj.pref('theme'))
+      return result
+    }
     this.callbacks = []
     this.curContext = null
     this.exportWindowName = null
