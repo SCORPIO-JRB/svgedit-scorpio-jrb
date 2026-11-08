@@ -12,6 +12,7 @@ import { transformListToTransform, transformBox, transformPoint, matrixMultiply,
 import { NS } from './namespaces'
 import { warn } from '../common/logger.js'
 import { convertUnit } from './units.js'
+import { CONTOUR_TAGS, contourPath, baselinesPath, matrixBetween, matrixAttribute } from './outline.js'
 import {
   CORNER_ANGLES, GRIP_ANGLES, formatAngle, formatLength, formatPosition, formatSize, gripLayout,
   namedResizeCursors, resizeCursor, rotateCursor
@@ -536,8 +537,28 @@ export class SelectorManager {
   }
 
   /**
-  * Outlines the element a click would select, with the frame that click
-  * would draw. Null hides the outline.
+  * The outline drawn on hover (lot V4): the real outline of a shape or a
+  * path, the baselines of a text, in the same matrix as the element. Null
+  * for the others, which get the frame of their selector.
+  * @param {Element} elem
+  * @returns {{d: string, transform: string}|null}
+  */
+  hoverGeometry (elem) {
+    let d = null
+    if (CONTOUR_TAGS.has(elem.tagName)) {
+      d = contourPath(elem)
+    } else if (elem.tagName === 'text') {
+      d = baselinesPath(elem)
+    }
+    if (!d) { return null }
+    const m = matrixBetween(elem, this.selectorParentGroup)
+    return m ? { d, transform: matrixAttribute(m) } : null
+  }
+
+  /**
+  * Outlines the element a click would select: the outline of a shape, the
+  * baselines of a text, the frame a click would draw around the others.
+  * Null hides the outline.
   * @param {Element|null} elem
   * @returns {void}
   */
@@ -552,7 +573,12 @@ export class SelectorManager {
     if (elem === this.hoverTarget && !outline.hasAttribute('display')) { return }
     let frame = null
     try {
-      frame = frameGeometry(elem)
+      frame = this.hoverGeometry(elem)
+    } catch (e) {
+      frame = null
+    }
+    try {
+      frame = frame || frameGeometry(elem)
     } catch (e) {
       frame = null
     }
@@ -984,7 +1010,9 @@ export class SelectorManager {
         id: 'selectorHover',
         fill: 'none',
         stroke: SELECTION_COLOR,
-        'stroke-width': 1,
+        'stroke-width': 1.5,
+        // 1.5 px on the screen whatever the matrix of the outlined element
+        'vector-effect': 'non-scaling-stroke',
         display: 'none',
         style: 'pointer-events:none'
       }

@@ -51,6 +51,7 @@ const MEASURES = [
   ['redo', 'Rétablir le déplacement'],
   ['zoom', 'Zoom ×2 (tout sélectionné)'],
   ['marquee', 'Rectangle de sélection couvrant tout (un mouvement)'],
+  ['marqueeEdge', 'Rectangle de sélection jusqu\'au milieu, objets au bord testés sur leur géométrie (V4)'],
   ['singleDragMove', 'Un mouvement de glisser (un seul élément)'],
   ['groupResizeMove', 'Redimensionner tout, un mouvement (cadre commun)'],
   ['groupResizeRelease', 'Relâchement du redimensionnement collectif'],
@@ -230,6 +231,18 @@ async function benchSize (size) {
     await frame()
     out.marquee = await time(() => mouse('mousemove', root, content.right + 5, content.bottom + 5))
     mouse('mouseup', root, content.right + 5, content.bottom + 5)
+    await frame()
+
+    // A band that stops in the middle of the drawing: the objects under its
+    // edges are tested on their own geometry (lot V4), read on this move.
+    canvas.clearSelection()
+    await frame()
+    const middle = { x: (content.left + content.right) / 2 + 1, y: (content.top + content.bottom) / 2 + 1 }
+    mouse('mousedown', root, from.x, from.y)
+    mouse('mousemove', root, from.x + 2, from.y + 2)
+    await frame()
+    out.marqueeEdge = await time(() => mouse('mousemove', root, middle.x, middle.y))
+    mouse('mouseup', root, middle.x, middle.y)
     await frame()
 
     // Hover: the mouse passes from one element to another, no button down.

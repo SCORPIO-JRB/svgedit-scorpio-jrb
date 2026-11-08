@@ -24,6 +24,7 @@ import {
 import * as hstry from './history.js'
 import { pauseAnimations } from './sanitize.js'
 import { getClosest } from '../common/util.js'
+import { geometryMeetsRect } from './outline.js'
 
 const { BatchCommand, ChangeElementCommand } = hstry
 let svgCanvas = null
@@ -321,6 +322,33 @@ const getVisibleElementsAndBBoxes = (parent) => {
 }
 
 /**
+ * Whether a box lies entirely inside a rectangle.
+ * @param {SVGRect} rect
+ * @param {module:utilities.BBoxObject} box
+ * @returns {boolean}
+ */
+const rectContains = (rect, box) => box.x >= rect.x && box.y >= rect.y &&
+  box.x + box.width <= rect.x + rect.width && box.y + box.height <= rect.y + rect.height
+
+/**
+ * Whether the drawing of an element meets the band. Without the geometry of
+ * a browser, the box decides.
+ * @param {Element} elem
+ * @param {SVGRect} rect
+ * @param {Element} space
+ * @param {Map<Element, Object>} cache
+ * @returns {boolean}
+ */
+const meetsDrawing = (elem, rect, space, cache) => {
+  if (typeof space?.getScreenCTM !== 'function' || typeof elem.getScreenCTM !== 'function') { return true }
+  try {
+    return geometryMeetsRect(elem, rect, space, cache)
+  } catch (e) {
+    return true
+  }
+}
+
+/**
  * This method sends back an array or a NodeList full of elements that
  * intersect the multi-select rubber-band-box on the currentLayer only.
  *
@@ -366,14 +394,21 @@ const getIntersectionListMethod = (rect) => {
     // Cache all bboxes
     svgCanvas.setCurBBoxes(getVisibleElementsAndBBoxes(parent))
   }
-  let i = svgCanvas.getCurBBoxes().length
+  const curBBoxes = svgCanvas.getCurBBoxes()
+  // The boxes sort the objects; an object the band only partly covers is
+  // taken when its drawing meets the band, not just its box (lot V4). The
+  // outlines read stay for the rest of the gesture.
+  if (!curBBoxes.outlines) { curBBoxes.outlines = new Map() }
+  const space = svgCanvas.getCurrentDrawing().getCurrentLayer()
+  let i = curBBoxes.length
   while (i--) {
-    const curBBoxes = svgCanvas.getCurBBoxes()
     if (!rubberBBox.width) {
       continue
     }
-    if (curBBoxes[i].bbox && rectsIntersect(rubberBBox, curBBoxes[i].bbox)) {
-      resultList.push(curBBoxes[i].elem)
+    const { elem, bbox } = curBBoxes[i]
+    if (bbox && rectsIntersect(rubberBBox, bbox) &&
+      (rectContains(rubberBBox, bbox) || meetsDrawing(elem, rubberBBox, space, curBBoxes.outlines))) {
+      resultList.push(elem)
     }
   }
 
