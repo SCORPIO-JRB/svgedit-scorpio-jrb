@@ -15,7 +15,7 @@ import {
   transformBox,
   getTransformList
 } from './math.js'
-import { getClosest, mergeDeep } from '../common/util.js'
+import { getClosest } from '../common/util.js'
 
 // Much faster than running getBBox() every time
 const visElems =
@@ -853,29 +853,77 @@ export const getBBoxOfElementAsPath = (
   return bb
 }
 
+// What makes a shape a rect, a circle, a line… rather than a path: the path
+// gets its own d instead.
+const SHAPE_GEOMETRY = new Set([
+  'd', 'x', 'y', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 'r',
+  'x1', 'y1', 'x2', 'y2', 'points'
+])
+// The attributes a converted path used to get, in their order. They come
+// first, so the output stays the same for a shape that has only these.
+const CONVERTED_PATH_FIRST = [
+  'fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray',
+  'stroke-linejoin', 'stroke-linecap', 'stroke-opacity', 'opacity',
+  'marker-start', 'marker-end', 'marker-mid', 'filter', 'clip-path'
+]
+// The children of a shape that describe it. Animations are left out.
+const SHAPE_DESCRIPTION = new Set(['title', 'desc', 'metadata'])
+
+/**
+ * Whether convertToPath passes an attribute of the shape on to the path:
+ * every attribute but the geometry, the id, the transform and the visibility,
+ * which the path gets apart, and the mark of a connector, which a path cannot
+ * be.
+ * @param {Attr} attr
+ * @returns {boolean}
+ */
+const isPassedOnToPath = (attr) => {
+  if (!attr.namespaceURI) {
+    return !SHAPE_GEOMETRY.has(attr.localName) &&
+      !['id', 'transform', 'visibility'].includes(attr.localName)
+  }
+  return !(attr.namespaceURI === NS.SE && attr.localName === 'connector')
+}
+
 /**
  * Convert selected element to a path.
+ * The path keeps everything the shape has but its geometry: its attributes
+ * as they are (style, class, fill-rule, mask, markers, data-…, attributes of
+ * other namespaces), and its title, description and metadata. An attribute
+ * the shape does not have stays absent, so the path still inherits it from
+ * its groups; one it has is kept even at its default value, which a group
+ * could otherwise override (the export still leaves default values out when
+ * saving, for the shape as for the path).
  * @function module:utilities.convertToPath
  * @param {Element} elem - The DOM element to be converted
- * @param {module:utilities.SVGElementJSON} attrs - Apply attributes to new path. see canvas.convertToPath
- * @param {module:utilities.EditorContext#addSVGElementsFromJson} addSVGElementsFromJson - Function to add the path element to the current layer. See canvas.addSVGElementsFromJson
- * @param {module:path.pathActions} pathActions - If a transform exists, pathActions.resetOrientation() is used. See: canvas.pathActions.
- * @param {module:draw.DrawCanvasInit#clearSelection|module:path.EditorContext#clearSelection} clearSelection - see [canvas.clearSelection]{@link module:svgcanvas.SvgCanvas#clearSelection}
- * @param {module:path.EditorContext#addToSelection} addToSelection - see [canvas.addToSelection]{@link module:svgcanvas.SvgCanvas#addToSelection}
- * @param {module:history} hstry - see history module
- * @param {module:path.EditorContext#addCommandToHistory|module:draw.DrawCanvasInit#addCommandToHistory} addCommandToHistory - see [canvas.addCommandToHistory]{@link module:svgcanvas~addCommandToHistory}
+ * @param {PlainObject<string, string>} [attrs] - Attributes the path takes over those of the shape. see canvas.convertToPath
+ * @param {module:svgcanvas.SvgCanvas} svgCanvas - The canvas: its addSVGElementsFromJson, pathActions, selection and history
  * @returns {SVGPathElement|null} The converted path element or null if the DOM element was not recognized.
  */
 export const convertToPath = (elem, attrs, svgCanvas) => {
   const batchCmd = new svgCanvas.history.BatchCommand('Convert element to Path')
 
-  // Any attribute on the element not covered by the passed-in attributes
-  attrs = mergeDeep(attrs, getExtraAttributesForConvertToPath(elem))
-
+  // Hidden until it has its d.
   const path = svgCanvas.addSVGElementsFromJson({
     element: 'path',
-    attr: attrs
+    attr: { visibility: 'hidden' }
   })
+  // Copied as they are: the namespace kept, no default value removed.
+  const passed = [...(elem.attributes || [])].filter(isPassedOnToPath)
+  const rank = (attr) => {
+    const i = attr.namespaceURI ? -1 : CONVERTED_PATH_FIRST.indexOf(attr.localName)
+    return i === -1 ? CONVERTED_PATH_FIRST.length : i
+  }
+  passed.map((attr, i) => ({ attr, i })).sort((a, b) => rank(a.attr) - rank(b.attr) || a.i - b.i)
+    .forEach(({ attr }) => path.setAttributeNS(attr.namespaceURI, attr.name, attr.value))
+  ;[...(elem.children || [])].forEach((child) => {
+    if (child.namespaceURI === NS.SVG && SHAPE_DESCRIPTION.has(child.localName)) {
+      path.append(child.cloneNode(true))
+    }
+  })
+  if (attrs) {
+    assignAttributes(path, attrs)
+  }
 
   const eltrans = elem.getAttribute('transform')
   if (eltrans) {
@@ -917,7 +965,12 @@ export const convertToPath = (elem, attrs, svgCanvas) => {
 
     batchCmd.addSubCommand(new svgCanvas.history.InsertElementCommand(path))
     path.setAttribute('id', id)
-    path.removeAttribute('visibility')
+    const visibility = elem.getAttribute('visibility')
+    if (visibility === null) {
+      path.removeAttribute('visibility')
+    } else {
+      path.setAttribute('visibility', visibility)
+    }
     svgCanvas.addToSelection([path], true)
 
     svgCanvas.addCommandToHistory(batchCmd)

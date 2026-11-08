@@ -349,6 +349,74 @@ describe('utilities', function () {
     path.remove()
   })
 
+  it('convertToPath keeps every attribute of the shape but its geometry, and its title', function () {
+    const { convertToPath } = utilities
+    const elem = mockCreateSVGElement({
+      element: 'polygon',
+      attr: {
+        id: 'poly',
+        points: '0,0 10,0 5,8',
+        fill: '#3a6',
+        'fill-rule': 'evenodd',
+        'stroke-width': '1',
+        'stroke-dashoffset': '2',
+        'stroke-miterlimit': '8',
+        'clip-rule': 'evenodd',
+        mask: 'url(#m1)',
+        class: 'vanne',
+        style: 'paint-order:stroke',
+        'data-tag': 'V12',
+        visibility: 'hidden',
+        transform: 'translate(5,5)'
+      }
+    })
+    elem.setAttributeNS(NS.SE, 'se:connector', 'a b')
+    elem.setAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'inkscape:label', 'Vanne')
+    const title = document.createElementNS(NS.SVG, 'title')
+    title.textContent = 'Vanne V12'
+    elem.append(title, document.createElementNS(NS.SVG, 'animate'))
+    svgroot.append(elem)
+
+    const path = convertToPath(elem, undefined, mockSvgCanvas)
+    const attrs = Object.fromEntries([...path.attributes].map((a) => [a.name, a.value]))
+    assert.deepEqual(attrs, {
+      fill: '#3a6',
+      'stroke-width': '1',
+      visibility: 'hidden',
+      'fill-rule': 'evenodd',
+      'stroke-dashoffset': '2',
+      'stroke-miterlimit': '8',
+      'clip-rule': 'evenodd',
+      mask: 'url(#m1)',
+      class: 'vanne',
+      style: 'paint-order:stroke',
+      'data-tag': 'V12',
+      'inkscape:label': 'Vanne',
+      transform: 'translate(5,5)',
+      d: path.getAttribute('d'),
+      id: 'poly'
+    })
+    assert.equal(path.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label'), 'Vanne')
+    assert.equal(path.hasAttributeNS(NS.SE, 'connector'), false)
+    assert.deepEqual([...path.children].map((child) => child.localName), ['title'])
+    assert.equal(path.firstElementChild.textContent, 'Vanne V12')
+    assert.notEqual(path.firstElementChild, title, 'the title is a copy: undo gives back the shape as it was')
+    assert.equal(title.parentNode, elem)
+    path.remove()
+  })
+
+  it('convertToPath keeps the order of the attributes it used to pass on', function () {
+    const { convertToPath } = utilities
+    const elem = mockCreateSVGElement({
+      element: 'rect',
+      attr: { 'clip-path': 'url(#c)', opacity: '0.5', x: '0', y: '0', width: '5', height: '5', stroke: '#00f', fill: '#a63', id: 'r' }
+    })
+    svgroot.append(elem)
+    const path = convertToPath(elem, undefined, mockSvgCanvas)
+    assert.deepEqual([...path.attributes].map((a) => a.name), ['fill', 'stroke', 'opacity', 'clip-path', 'd', 'id'])
+    path.remove()
+  })
+
   it('Test convertToPath unknown element', function () {
     const { convertToPath } = utilities
     const attrs = {

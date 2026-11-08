@@ -101,11 +101,6 @@ import dataStorage from './core/dataStorage.js'
 
 // Shapes that convertToPath turns into a path.
 const CONVERTIBLE_TO_PATH = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
-// Style attributes a shape passes on to the path it is converted to.
-const STYLE_KEPT_AS_PATH = [
-  'fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray',
-  'stroke-linejoin', 'stroke-linecap', 'stroke-opacity', 'opacity'
-]
 const visElems =
   'a,circle,ellipse,foreignObject,g,image,line,path,polygon,polyline,rect,svg,text,tspan,use'
 const refAttrs = [
@@ -1325,23 +1320,17 @@ class SvgCanvas {
         this.pathActions
       )
     }
-    // The path takes the shape's own style, however the shape was selected.
-    // It used to take the current style, which only a click on the shape
-    // alone sets, with "null" for the attributes the shape did not have.
-    // An attribute the shape does not have stays absent, so the path still
-    // inherits it from its groups.
-    const attrs = {}
-    STYLE_KEPT_AS_PATH.forEach((name) => {
-      const value = elem.getAttribute(name)
-      if (value !== null) { attrs[name] = value }
-    })
-    attrs.visibility = 'hidden'
-    return convertToPath(elem, attrs, this) // call convertToPath from utilities.js
+    // The path keeps everything the shape has but its geometry, however the
+    // shape was selected (see convertToPath in utilities.js). It used to take
+    // the current style, which only a click on the shape alone sets, with
+    // "null" for the attributes the shape did not have, and to lose the
+    // attributes outside a short list (fill-rule, mask, class, title…).
+    return convertToPath(elem, undefined, this)
   }
 
   /**
-   * Converts the selected shapes to paths, as one undo step. Each path takes
-   * the style of its shape (see convertToPath). The other elements are left
+   * Converts the selected shapes to paths, as one undo step. Each path keeps
+   * everything its shape has but its geometry (see convertToPath). The other elements are left
    * as they are and stay selected with the new paths.
    * @function module:svgcanvas.SvgCanvas#convertSelectedToPaths
    * @fires module:svgcanvas.SvgCanvas#event:changed

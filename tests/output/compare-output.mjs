@@ -62,6 +62,9 @@ const SCENARIOS = {
   // Each shape keeps its own style and opacity (question 10; the export
   // already left out the "null" values the conversion wrote).
   'convert several to paths': `document.getElementById('r1').setAttribute('opacity', '0.5'); c.selectOnly(${byId(['r1', 'e1', 'l1'])}); c.convertSelectedToPaths()`,
+  // The path keeps everything the shape has but its geometry: fill-rule,
+  // stroke-miterlimit, class, the title.
+  'convert to path keeps all the shape has': `const e = document.getElementById('e1'); e.setAttribute('fill-rule', 'evenodd'); e.setAttribute('stroke-miterlimit', '2'); e.setAttribute('class', 'vanne'); const t = document.createElementNS('http://www.w3.org/2000/svg', 'title'); t.textContent = 'Vanne'; e.append(t); c.selectOnly(${byId(['e1'])}); c.convertToPath()`,
   'flip (multi)': `c.selectOnly(${byId(['r1', 'e1'])}); c.flipSelectedElements(-1, 1)`,
   'align largest (multi)': `c.selectOnly(${byId(['r1', 'e1', 'p1'])}); c.alignSelectedElements('t', 'largest')`,
   'setRotationAngle (multi)': `c.selectOnly(${byId(['r1', 'e1', 'r2'])}); c.setRotationAngle(30)`,
