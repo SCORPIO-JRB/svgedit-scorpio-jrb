@@ -376,6 +376,32 @@ export const changeSelectedAttributesMethod = (attrs, elems) => {
 }
 
 /**
+ * Runs a function whose changes go to the history as one step: every command
+ * it adds becomes a sub-command of a single batch. A paint (colour, opacity
+ * and new gradient) is undone at once this way.
+ * @function module:svgcanvas.SvgCanvas#groupHistory
+ * @param {string} label - Text of the step
+ * @param {(batch: BatchCommand) => void} fn - Its changes; it may also add
+ *   commands to the batch itself
+ * @returns {BatchCommand} The batch, added to the history unless empty
+ */
+export const groupHistoryMethod = (label, fn) => {
+  const undoMgr = svgCanvas.undoMgr
+  const batch = new hstry.BatchCommand(label)
+  const own = Object.prototype.hasOwnProperty.call(undoMgr, 'addCommandToHistory')
+  const add = undoMgr.addCommandToHistory
+  undoMgr.addCommandToHistory = (cmd) => { batch.addSubCommand(cmd) }
+  try {
+    fn(batch)
+  } finally {
+    if (own) undoMgr.addCommandToHistory = add
+    else delete undoMgr.addCommandToHistory
+  }
+  if (!batch.isEmpty()) undoMgr.addCommandToHistory(batch)
+  return batch
+}
+
+/**
  * Gives each element its own new value of an attribute, as one undo step:
  * the change a field showing "Mixed" makes with an expression such as +10.
  * @function module:svgcanvas.SvgCanvas#changeSelectedAttributeEach

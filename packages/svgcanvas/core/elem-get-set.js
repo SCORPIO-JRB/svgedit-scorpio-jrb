@@ -16,6 +16,7 @@ import {
 import { getParents } from '../common/util.js'
 import { isSafeHref } from './sanitize.js'
 import { warn } from '../common/logger.js'
+import { InsertElementCommand } from './history.js'
 
 let svgCanvas = null
 
@@ -66,6 +67,8 @@ export const init = (canvas) => {
   svgCanvas.setColor = setColorMethod // Change the current stroke/fill color/gradien
   svgCanvas.setGradient = setGradientMethod // Apply the current gradient to selected element's fill or stroke.
   svgCanvas.setPaint = setPaintMethod // Set a color/gradient to a fill/stroke.
+  svgCanvas.previewPaint = previewPaintMethod // Show a paint on the selection, outside the history.
+  svgCanvas.cancelPaintPreview = cancelPaintPreviewMethod // Give back the paint a preview replaced.
 }
 
 /**
@@ -454,25 +457,35 @@ const setColorMethod = (type, val, preventUndo) => {
 * @returns {void}
 */
 const setGradientMethod = (type) => {
+  const found = gradientOfPaint(type)
+  if (found) svgCanvas.setColor(type, `url(#${found.grad.id})`)
+}
+
+/**
+* The gradient of the current paint in the defs: an equal one already there,
+* or a copy appended with a new id.
+* @param {"fill"|"stroke"} type
+* @returns {{grad: Element, inserted: boolean}|null} null when the current
+*   paint is not a gradient
+*/
+const gradientOfPaint = (type) => {
   if (!svgCanvas.getCurProperties(`${type}_paint`) ||
-    svgCanvas.getCurProperties(`${type}_paint`).type === 'solidColor') { return }
+    svgCanvas.getCurProperties(`${type}_paint`).type === 'solidColor') { return null }
   const canvas = svgCanvas
   let grad = canvas[type + 'Grad']
-  if (!grad) { return }
+  if (!grad) { return null }
   // find out if there is a duplicate gradient already in the defs
   const duplicateGrad = findDuplicateGradient(grad)
   const defs = findDefs()
   // no duplicate found, so import gradient into defs
   if (!duplicateGrad) {
-    // const origGrad = grad;
     grad = svgCanvas.getDOMDocument().importNode(grad, true)
     defs.append(grad)
     // get next id and set it on the grad
     grad.id = svgCanvas.getNextId()
-  } else { // use existing gradient
-    grad = duplicateGrad
+    return { grad, inserted: true }
   }
-  svgCanvas.setColor(type, `url(#${grad.id})`)
+  return { grad: duplicateGrad, inserted: false }
 }
 
 /**
@@ -558,29 +571,124 @@ const findDuplicateGradient = (grad) => {
 }
 
 /**
-* Set a color/gradient to a fill/stroke.
+* Set a color/gradient to a fill/stroke, as one undo step: its opacity, its
+* colour and the gradient it adds to the defs are undone together.
 * @function module:elem-get-set.SvgCanvas#setPaint
 * @param {"fill"|"stroke"} type - String with "fill" or "stroke"
 * @param {} paint - The paint object to apply
 * @returns {void}
 */
 const setPaintMethod = (type, paint) => {
+  // A preview gives the elements back first: the step records their paint.
+  cancelPaintPreviewMethod()
   // make a copy
   const p = new Paint(paint)
-  svgCanvas.setPaintOpacity(type, p.alpha / 100, true)
+  svgCanvas.groupHistory(`Change ${type}`, (batch) => {
+    svgCanvas.setPaintOpacity(type, p.alpha / 100)
 
-  // now set the current paint object
-  svgCanvas.setCurProperties(`${type}_paint`, p)
-  switch (p.type) {
-    case 'solidColor':
-      svgCanvas.setColor(type, p.solidColor !== 'none' ? `#${p.solidColor}` : 'none')
-      break
-    case 'linearGradient':
-    case 'radialGradient':
-      svgCanvas.setCanvas(type + 'Grad', p[p.type])
-      svgCanvas.setGradient(type)
-      break
+    // now set the current paint object
+    svgCanvas.setCurProperties(`${type}_paint`, p)
+    switch (p.type) {
+      case 'solidColor':
+        svgCanvas.setColor(type, p.solidColor !== 'none' ? `#${p.solidColor}` : 'none')
+        break
+      case 'linearGradient':
+      case 'radialGradient': {
+        svgCanvas.setCanvas(type + 'Grad', p[p.type])
+        const found = gradientOfPaint(type)
+        if (!found) break
+        if (found.inserted) batch.addSubCommand(new InsertElementCommand(found.grad))
+        svgCanvas.setColor(type, `url(#${found.grad.id})`)
+        break
+      }
+    }
+  })
+}
+
+/**
+* The elements a paint changes: its opacity goes on the selected elements,
+* its colour on the shapes, those of a group included (as setColor does).
+* @param {"fill"|"stroke"} type
+* @returns {{selected: Element[], colored: Element[]}}
+*/
+const paintTargets = (type) => {
+  const selected = svgCanvas.getSelectedElements().filter(Boolean)
+  const colored = []
+  for (let i = selected.length - 1; i >= 0; i--) {
+    const elem = selected[i]
+    if (elem.tagName === 'g') {
+      walkTree(elem, (e) => { if (e.nodeName !== 'g') colored.push(e) })
+    } else if (type !== 'fill' || (elem.tagName !== 'polyline' && elem.tagName !== 'line')) {
+      colored.push(elem)
+    }
   }
+  return { selected, colored }
+}
+
+/** The paint a preview replaced, to give it back. */
+let preview = null
+
+/**
+* Shows a paint on the selected elements while it is being chosen (a drag in
+* the colour window), outside the history. setPaint, or cancelPaintPreview,
+* gives the elements back their paint first.
+* @function module:elem-get-set.SvgCanvas#previewPaint
+* @param {"fill"|"stroke"} type
+* @param {} paint
+* @returns {void}
+*/
+const previewPaintMethod = (type, paint) => {
+  const p = new Paint(paint)
+  if (preview && preview.type !== type) cancelPaintPreviewMethod()
+  if (!preview) {
+    const { selected, colored } = paintTargets(type)
+    const opacity = `${type}-opacity`
+    preview = {
+      type,
+      selected,
+      colored,
+      saved: [
+        ...selected.map((elem) => ({ elem, name: opacity, value: elem.getAttribute(opacity) })),
+        ...colored.map((elem) => ({ elem, name: type, value: elem.getAttribute(type) }))
+      ],
+      grad: null,
+      defs: svgCanvas.getSvgContent().getElementsByTagNameNS(NS.SVG, 'defs')[0] ?? null
+    }
+  }
+  for (const elem of preview.selected) elem.setAttribute(`${type}-opacity`, String(p.alpha / 100))
+  let value = 'none'
+  if (p.type === 'solidColor' && p.solidColor && p.solidColor !== 'none') {
+    value = `#${p.solidColor}`
+  } else if ((p.type === 'linearGradient' || p.type === 'radialGradient') && p[p.type]) {
+    const grad = svgCanvas.getDOMDocument().importNode(p[p.type], true)
+    grad.id = `se_paint_preview_${type}`
+    preview.grad?.remove()
+    findDefs().append(grad)
+    preview.grad = grad
+    value = `url(#${grad.id})`
+  }
+  for (const elem of preview.colored) elem.setAttribute(type, value)
+}
+
+/**
+* Gives back the paint a preview replaced.
+* @function module:elem-get-set.SvgCanvas#cancelPaintPreview
+* @returns {boolean} Whether a preview was shown
+*/
+const cancelPaintPreviewMethod = () => {
+  if (!preview) return false
+  for (const { elem, name, value } of preview.saved) {
+    if (value === null) elem.removeAttribute(name)
+    else elem.setAttribute(name, value)
+  }
+  if (preview.grad) {
+    const defs = preview.grad.parentNode
+    preview.grad.remove()
+    // The defs a gradient preview made go with it.
+    if (!preview.defs && defs && !defs.firstElementChild) defs.remove()
+  }
+  preview = null
+  return true
 }
 
 /**
