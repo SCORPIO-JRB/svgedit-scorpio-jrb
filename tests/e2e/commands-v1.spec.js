@@ -178,9 +178,10 @@ test.describe('Tooltips (V1)', () => {
     expect(await read()).toEqual(['Select Tool', 'V'])
     // The next button: at once, without a second pause.
     const moved = Date.now()
-    await page.locator('#tool_zoom').hover()
+    // The next tool of the bar (the zoom tool is in More ▾ since V3).
+    await page.locator('#tool_text').hover()
     await expect(tooltip).toHaveAttribute('open', '')
-    expect(await read()).toEqual(['Zoom Tool', 'Z'])
+    expect(await read()).toEqual(['Text Tool', 'T'])
     expect(Date.now() - moved).toBeLessThan(450)
     // Pressing a button hides it.
     await page.mouse.down()

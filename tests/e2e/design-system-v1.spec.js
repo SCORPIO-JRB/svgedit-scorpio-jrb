@@ -69,7 +69,9 @@ test('the preferences change the theme without reloading, and leave the document
     window.__marker = 'same page'
   })
   const before = await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())
-  const darkTop = await background(page, '#tools_top')
+  // The top bar: #se-topbar in the canvas layout (V3), #tools_top before.
+  const top = await page.evaluate(() => window.svgEditor.layout?.canvas ? '#se-topbar' : '#tools_top')
+  const darkTop = await background(page, top)
 
   await page.evaluate(() => window.svgEditor.mainMenu.showPreferences())
   const prefs = page.locator('#se-edit-prefs')
@@ -80,8 +82,8 @@ test('the preferences change the theme without reloading, and leave the document
   expect(await theme(page)).toBe('light')
   expect(await page.evaluate(() => window.svgEditor.configObj.pref('theme'))).toBe('light')
   expect(await page.evaluate(() => window.__marker)).toBe('same page')
-  expect(await background(page, '#tools_top')).not.toBe(darkTop)
-  expect(await background(page, '#tools_top')).toBe('rgb(255, 255, 255)')
+  expect(await background(page, top)).not.toBe(darkTop)
+  expect(await background(page, top)).toBe('rgb(255, 255, 255)')
   expect(await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())).toBe(before)
 })
 

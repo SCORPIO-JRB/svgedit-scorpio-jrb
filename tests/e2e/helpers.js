@@ -1,9 +1,15 @@
 import { expect } from '@playwright/test'
 
-export async function visitAndApproveStorage (page) {
+/**
+ * Opens the editor with an empty storage.
+ * @param {import('@playwright/test').Page} page
+ * @param {object} [options]
+ * @param {string} [options.query] Such as "?layout=classic"
+ */
+export async function visitAndApproveStorage (page, { query = '' } = {}) {
   await page.goto('about:blank')
   await page.context().clearCookies()
-  await page.goto('/index.html')
+  await page.goto(`/index.html${query}`)
   await page.evaluate(() => {
     localStorage.clear()
     sessionStorage.clear()
@@ -133,4 +139,26 @@ export const drawingToScreen = (page) => page.evaluate(() => {
 export const screenPoint = async (page, x, y) => {
   const [a, b, c, d, e, f] = await drawingToScreen(page)
   return { x: a * x + c * y + e, y: b * x + d * y + f }
+}
+
+/**
+ * Chooses a tool as a user does: a tool that is in a menu of the toolbar
+ * (Shapes ▾, Paths ▾, More ▾ in the canvas layout of V3) is chosen from that
+ * menu, opened first.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} id The id of the tool button
+ */
+export async function chooseTool (page, id) {
+  const tool = page.locator(`#${id}`)
+  if (!(await tool.isVisible())) {
+    const group = page.locator(`se-flyingbutton:has(> #${id})`)
+    if (await group.count()) {
+      if (await group.evaluate((el) => el.hasAttribute('menu-only'))) {
+        await group.click()
+      } else {
+        await group.locator('.handle').click()
+      }
+    }
+  }
+  await tool.click()
 }

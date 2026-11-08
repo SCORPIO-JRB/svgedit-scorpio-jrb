@@ -215,10 +215,15 @@ test.describe('One alignment menu (decision 4)', () => {
   test('the bar fits one line at 1366 pixels, the menu opens and closes', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 })
     await settle(page)
-    const rows = await page.evaluate(() => new Set([...document.getElementById('tools_top').children]
-      .filter((el) => getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0 &&
-        getComputedStyle(el).position !== 'absolute')
-      .map((el) => Math.round(el.getBoundingClientRect().top))).size)
+    // The classic top bar holds the fields of the object: one line of them.
+    // The canvas layout (V3) has a bar of 40 px without them, and the menu
+    // in the inspector.
+    const rows = await page.evaluate(() => window.svgEditor.layout.canvas
+      ? (document.getElementById('se-topbar').getBoundingClientRect().height === 40 ? 1 : 0)
+      : new Set([...document.getElementById('tools_top').children]
+        .filter((el) => getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0 &&
+          getComputedStyle(el).position !== 'absolute')
+        .map((el) => Math.round(el.getBoundingClientRect().top))).size)
     expect(rows).toBe(1)
     const popup = page.locator('#tool_align_popup')
     await expect(popup).toBeHidden()

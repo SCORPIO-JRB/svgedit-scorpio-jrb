@@ -70,6 +70,12 @@ describe('MainMenu', () => {
       customExportPDF: false,
       customExportImage: false
     }
+    // As Editor.setRulersShown (lot V3): the option, the rulers and their redraw.
+    editor.setRulersShown = vi.fn((on) => {
+      editor.configObj.curConfig.showRulers = Boolean(on)
+      editor.rulers.display(Boolean(on))
+      if (on) editor.rulers.updateRulers()
+    })
     globalThis.seAlert = vi.fn()
     menu = new MainMenu(editor)
   })

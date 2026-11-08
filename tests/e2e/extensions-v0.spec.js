@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage, screenPoint } from './helpers.js'
+import { visitAndApproveStorage, screenPoint, chooseTool } from './helpers.js'
 
 // V0: the contract of the extensions the editor loads by default. Lots V1 to
 // V4 rebuild the shell around the canvas: each extension must still load,
@@ -175,7 +175,8 @@ test.describe('What each button does (V0)', () => {
   test('eyedropper: the clicked shape takes the style of the selection', async ({ page }) => {
     await page.evaluate(() => window.svgEditor.svgCanvas.selectOnly([document.getElementById('r2')], true))
     await settle(page)
-    await page.locator('#tool_eyedropper').click()
+    // In More ▾ since V3.
+    await chooseTool(page, 'tool_eyedropper')
     expect(await mode(page)).toBe('eyedropper')
     await clickAt(page, 140, 130)
     expect(await page.evaluate(() => document.getElementById('r1').getAttribute('fill'))).toBe('#00c')

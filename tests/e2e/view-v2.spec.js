@@ -130,7 +130,9 @@ test('the zoom steps go up to 6 400 % and come back', async ({ page }) => {
     const up = []
     for (let i = 0; i < 8; i++) { editor.zoomStep(1); up.push(editor.svgCanvas.getZoom()) }
     editor.zoomStep(-1)
-    return { up, back: editor.svgCanvas.getZoom(), field: document.getElementById('zoom').value }
+    // The zoom menu of the view group shows it (V3).
+    const field = document.querySelector('#se-zoom-button .se-zoom-value')?.textContent ?? document.getElementById('zoom').value
+    return { up, back: editor.svgCanvas.getZoom(), field: field.replace(/[^\d.]/g, '') }
   })
   expect(steps.up).toEqual([2, 4, 8, 16, 32, 64, 64, 64])
   expect(steps.back).toBe(32)
