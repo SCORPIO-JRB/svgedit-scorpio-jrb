@@ -99,4 +99,4 @@ npx playwright test tests/e2e/liaisons-v0.spec.js
 - **Corpus réel (D4).** 10 à 20 synoptiques SCorp-io, avec au moins un fichier lié, à passer au rapport par `--corpus`.
 - **Firefox.** Le workflow `firefox.yml` lance les 290 tests E2E sous Firefox à chaque push, avec `playwright.firefox.config.mjs`. Il reste informatif, comme le banc, jusqu'à ce que la suite y passe ; son premier résultat dira ce qu'il faut corriger.
 - **Contrats des extensions.** Un test par extension active : chargement, boutons, événements.
-- **Maquettes.** Disposition et barres contextuelles, d'après les captures de Claude Design, à valider avant V3.
+- **Maquettes.** Publiées le 8 novembre, à valider avant V3 : [maquette éditeur SVG-Edit v2](https://claude.ai/artifact/1W7asSMbQuGhQCCsYNTuaz). Cinq plans de travail d'après les captures de Claude Design : texte sélectionné et styles, forme et onglet Code, multi-sélection et menu d'alignement, glissement avec guides, menu du zoom et deux cadres d'export.
