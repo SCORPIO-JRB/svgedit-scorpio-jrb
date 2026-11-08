@@ -119,6 +119,25 @@ test.describe('History (V5)', () => {
     expect(await selected(page)).toEqual(['r1'])
   })
 
+  test('the menus show a check on the current step and on the options on', async ({ page }) => {
+    const mark = (locator) => locator.evaluate((el) => getComputedStyle(el, '::before').content)
+    await select(page, 'r1')
+    await page.evaluate(() => window.svgEditor.svgCanvas.moveSelectedElements(10, 0))
+    await openZoomMenu(page)
+    // An option on, in the zoom menu (it had no check since V3).
+    const on = page.locator('#se-zoom-menu [role="menuitemcheckbox"][aria-checked="true"]').first()
+    await expect(on).toHaveCount(1)
+    expect(await mark(on)).toBe('"✓"')
+    const off = page.locator('#se-zoom-menu [role="menuitemcheckbox"][aria-checked="false"]:not([hidden])').first()
+    expect(await mark(off)).toBe('""')
+
+    await page.locator('#se-zoom-menu [data-command="show_history"]').click()
+    const menu = page.locator('#se-history-menu')
+    await expect(menu).toHaveAttribute('open', '')
+    expect(await mark(menu.locator('[data-index="1"]'))).toBe('"✓"')
+    expect(await mark(menu.locator('[data-index="0"]'))).toBe('""')
+  })
+
   test('the History menu works with the keyboard', async ({ page }) => {
     await select(page, 'r1')
     await page.evaluate(() => window.svgEditor.svgCanvas.moveSelectedElements(10, 0))

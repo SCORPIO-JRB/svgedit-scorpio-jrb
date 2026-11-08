@@ -146,7 +146,9 @@
   color: var(--se-accent);
 }
 
+/* As specific as the empty mark of a menu entry above, and after it. */
 .se-layout-canvas se-popover [aria-checked="true"]::before,
+.se-layout-canvas se-popover[menu] [aria-checked="true"]::before,
 .se-layout-canvas se-popover [data-zoom][aria-current="true"]::before {
   content: '✓';
 }
