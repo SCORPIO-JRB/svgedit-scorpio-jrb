@@ -30,9 +30,33 @@ describe('fidelity report: a file against its export', () => {
       '<g class="layer"><circle id="c" r="1" stroke="none" ink:label="x" style="animation: a 1s"><animate id="an" attributeName="r" to="2" dur="1s"/></circle></g></svg>'
     const after = `<svg ${NS}><g class="layer"><circle id="c" r="1"/></g></svg>`
     expect(kinds(diff(before, after)).sort()).toEqual([
-      'default-removed', 'definition-removed', 'definition-removed', 'definition-removed', 'foreign-namespace',
+      'default-omitted', 'definition-removed', 'definition-removed', 'definition-removed', 'foreign-namespace',
       'root-changed', 'smil-removed', 'style-removed'
     ].sort())
+  })
+
+  it('tells a default value left out without effect from one whose removal changes the drawing', () => {
+    const shapes = (sw, rx, op) => '<style>/* trait */ @media print { .fin { stroke-width: 1 } } .epais { stroke-width: 6px }</style><g class="layer">' +
+      `<g id="g1" stroke-width="5"><rect id="a"${sw}/></g>` +
+      `<g id="g2" class="epais"><rect id="b"${sw}/></g>` +
+      `<g id="g3" style="stroke-width: 5"><rect id="c"${sw}/></g>` +
+      `<g id="g4" stroke-width="1px"><rect id="d"${sw}${op}/></g>` +
+      `<rect id="e"${rx} ry="10"/><rect id="f"${rx}/><ellipse id="h"${rx} ry="4"/>` +
+      `<g id="g5" stroke-width="5"><use href="#i"/></g><rect id="i"${sw}/></g>`
+    const before = `<svg ${NS}>${shapes(' stroke-width="1"', ' rx="0"', ' opacity="1"')}</svg>`
+    const after = `<svg ${NS}>${shapes('', '', '')}</svg>`
+    const found = diff(before, after).map((f) => `${f.where} ${f.kind}`)
+    expect(found).toEqual([
+      'rect#a default-removed',
+      'rect#b default-removed',
+      'rect#c default-removed',
+      'rect#d default-omitted',
+      'rect#d default-omitted',
+      'rect#e default-removed',
+      'rect#f default-omitted',
+      'ellipse#h default-removed',
+      'rect#i default-removed'
+    ])
   })
 
   it('reports a layer added for objects outside any layer', () => {
