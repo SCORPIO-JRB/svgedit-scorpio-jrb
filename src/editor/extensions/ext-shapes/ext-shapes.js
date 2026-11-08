@@ -58,6 +58,12 @@ export default {
         if (mode !== modeId) { return undefined }
 
         const currentD = document.getElementById('tool_shapelib').dataset.draw
+        // No shape chosen in the library yet: nothing to draw. A shape
+        // without a path has an empty box, which the drag would divide by.
+        if (!currentD) {
+          curShape = null
+          return undefined
+        }
         startX = opts.start_x
         const x = startX
         startY = opts.start_y
@@ -90,7 +96,7 @@ export default {
       },
       mouseMove (opts) {
         const mode = canv.getMode()
-        if (mode !== modeId) { return }
+        if (mode !== modeId || !curShape) { return }
 
         const zoom = canv.getZoom()
         const evt = opts.event
@@ -147,7 +153,7 @@ export default {
       },
       mouseUp (opts) {
         const mode = canv.getMode()
-        if (mode !== modeId) { return undefined }
+        if (mode !== modeId || !curShape) { return undefined }
 
         const keepObject = (opts.event.clientX !== startClientPos.x && opts.event.clientY !== startClientPos.y)
 
