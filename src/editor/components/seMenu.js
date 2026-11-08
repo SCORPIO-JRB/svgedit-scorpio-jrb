@@ -76,6 +76,7 @@ export class SeMenu extends HTMLElement {
     if (oldValue === newValue) return
     switch (name) {
       case 'src':
+        if (!newValue) break
         image.src = this.imgPath + '/' + newValue
         image.width = 24
         image.height = 24
@@ -83,7 +84,15 @@ export class SeMenu extends HTMLElement {
         this.$label.prepend(image)
         break
       case 'label':
-        this.$label.prepend(newValue)
+        // One text, updated in place: the name of the document changes
+        // (canvas layout, lot V3).
+        if (!this.$text) {
+          this.$text = document.createElement('span')
+          this.$text.className = 'se-menu-label'
+          this.$text.setAttribute('part', 'label')
+          this.$label.prepend(this.$text)
+        }
+        this.$text.textContent = newValue ?? ''
         break
       default:
         console.error(`unknown attribute: ${name}`)

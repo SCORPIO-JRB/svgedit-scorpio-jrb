@@ -23,7 +23,9 @@ class Rulers {
     // add rulers component to the DOM
     const template = document.createElement('template')
     template.innerHTML = rulersTemplate
-    this.editor.$svgEditor.append(template.content.cloneNode(true))
+    // Each control in its zone of the layout (lot V3).
+    if (this.editor.layout) this.editor.layout.attach(template.content.cloneNode(true), 'rulers')
+    else this.editor.$svgEditor.append(template.content.cloneNode(true))
     const { $id } = SvgCanvas
     this.rulerX = $id('ruler_x')
     this.rulerY = $id('ruler_y')

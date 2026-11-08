@@ -4,6 +4,7 @@
  */
 @import url('./fonts/fonts.css');
 @import url('./tokens.css');
+@import url('./layout.css');
 
 :root {
   --global-se-spin-input-width: 82px;

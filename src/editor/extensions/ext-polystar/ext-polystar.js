@@ -82,9 +82,9 @@ export default {
         const titlePolygon = `${name}:buttons.1.title`
         const buttonTemplate = `
             <se-flyingbutton id="tools_polygon" title="${fbtitle}">
-              <se-button id="tool_star" title="${titleStar}" src="star.svg">
+              <se-button id="tool_star" data-group="shapes" data-rank="80" title="${titleStar}" src="star.svg">
               </se-button>
-              <se-button id="tool_polygon" title="${titlePolygon}" src="polygon.svg">
+              <se-button id="tool_polygon" data-group="shapes" data-rank="90" title="${titlePolygon}" src="polygon.svg">
               </se-button>
             </se-flyingbutton>
           `

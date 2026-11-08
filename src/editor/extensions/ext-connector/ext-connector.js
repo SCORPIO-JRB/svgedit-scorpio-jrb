@@ -411,7 +411,7 @@ export default {
         const buttonTemplate = document.createElement('template')
         const title = `${name}:buttons.0.title`
         buttonTemplate.innerHTML = `
-         <se-button id="tool_connect" title="${title}" src="conn.svg"></se-button>
+         <se-button id="tool_connect" data-group="insert" data-rank="20" title="${title}" src="conn.svg"></se-button>
          `
         $id('tools_left').append(buttonTemplate.content.cloneNode(true))
         $click($id('tool_connect'), () => {

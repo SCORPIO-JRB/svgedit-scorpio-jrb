@@ -178,6 +178,11 @@ export class ViewController {
       const py = (before.height / 2 - this.target.y) / this.target.zoom
       camera = { zoom, x: width / 2 - px * zoom, y: height / 2 - py * zoom }
     }
+    // The drawing laid out on whole pixels, whatever the width of the view
+    // (odd in the canvas layout of V3): its lines stay crisp and a pointer
+    // meets it where a gesture expects it.
+    camera.x = Math.round(camera.x)
+    camera.y = Math.round(camera.y)
     this.apply(camera, { redraw: true })
   }
 

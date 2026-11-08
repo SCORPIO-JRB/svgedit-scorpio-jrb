@@ -18,6 +18,7 @@ import './dialogs/index.js'
 
 import { isMac } from '@svgedit/svgcanvas/common/browser'
 import { CommandRegistry } from './commands.js'
+import { readsOwnKeys, NAVIGATION_KEYS } from './shortcuts.js'
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import ConfigObj from './ConfigObj.js'
@@ -37,6 +38,13 @@ const { $id, $click, decode64 } = SvgCanvas
 
 /**
  *
+ */
+/**
+ * Elements that read the keys typed in them: fields, menus, dialogs, the tree
+ * of the Layers tab, tabs and the width handle of the panel. A keyboard
+ * shortcut is not run there.
+ * @param {EventTarget} node
+ * @returns {boolean}
  */
 class Editor extends EditorStartup {
   /**
@@ -656,8 +664,16 @@ class Editor extends EditorStartup {
     // One listener for every shortcut of the editor: the registry runs the
     // first enabled command bound to the key.
     document.addEventListener('keydown', (e) => {
-      // only track keyboard shortcuts for the body containing the SVG-Editor
-      if (e.target.nodeName !== 'BODY') return
+      // The shortcuts run unless a field, a menu, a dialog or a control that
+      // reads its own keys has the focus (lot V3: a toolbar button that was
+      // clicked no longer takes them away).
+      const path = e.composedPath()
+      if (path.some(readsOwnKeys)) return
+      // On a focused control, Tab, Enter, Space and the arrows keep their
+      // meaning there (next control, press, move in a group of buttons).
+      const origin = path[0]
+      const onControl = origin?.nodeType === 1 && origin !== document.body && origin !== document.documentElement
+      if (onControl && NAVIGATION_KEYS.has(e.key)) return
       this.commands.dispatch(e)
     })
 
@@ -767,6 +783,51 @@ class Editor extends EditorStartup {
    */
   toast (text, options = {}) {
     return this.$toasts?.show(text, { closeLabel: this.i18next?.t('ui.close'), ...options }) ?? null
+  }
+
+  /**
+   * Whether changes are waiting to be saved. The top bar of the canvas
+   * layout shows it (lot V3); a host that saves the document sets it back
+   * to false.
+   * @type {boolean}
+   */
+  get showSaveWarning () {
+    return Boolean(this._showSaveWarning)
+  }
+
+  set showSaveWarning (value) {
+    this._showSaveWarning = Boolean(value)
+    this.layout?.saveStateChanged()
+  }
+
+  /**
+   * Shows the zoom in the zoom field (classic layout) or the zoom menu
+   * (canvas layout).
+   * @param {number} zoom 1 for 100 %
+   * @returns {void}
+   */
+  showZoom (zoom) {
+    document.getElementById('zoom')?.syncValue((zoom * 100).toFixed(1))
+    this.layout?.zoomChanged(zoom)
+  }
+
+  /**
+   * @returns {boolean} Whether the rulers are shown
+   */
+  rulersShown () {
+    return Boolean(this.configObj.curConfig.showRulers)
+  }
+
+  /**
+   * Shows or hides the rulers (Shift+R, zoom menu, preferences).
+   * @param {boolean} on
+   * @returns {void}
+   */
+  setRulersShown (on) {
+    this.configObj.curConfig.showRulers = Boolean(on)
+    this.rulers?.display(Boolean(on))
+    this.$svgEditor?.classList.toggle('se-rulers-hidden', !on)
+    if (on) this.rulers?.updateRulers()
   }
 
   /**
@@ -1006,6 +1067,8 @@ class Editor extends EditorStartup {
     })
 
     this.showSaveWarning = true
+    // The tree of the Layers tab follows the document (lot V3).
+    this.layout?.documentChanged()
 
     // we update the contextual panel with potentially new
     // positional/sizing information (we DON'T want to update the
@@ -1119,7 +1182,7 @@ class Editor extends EditorStartup {
       return
     }
 
-    $id('zoom').syncValue((this.svgCanvas.getZoom() * 100).toFixed(1))
+    this.showZoom(this.svgCanvas.getZoom())
 
     if (autoCenter) {
       this.updateCanvas()
@@ -1252,7 +1315,7 @@ class Editor extends EditorStartup {
     if (!Number.isFinite(newZoom) || Math.abs(newZoom - zoom) < 1e-9) { return }
     if (this.view?.borderless) {
       this.view.zoomAt(newZoom, clientX, clientY)
-      $id('zoom').syncValue((newZoom * 100).toFixed(1))
+      this.showZoom(newZoom)
       this.zoomDone()
       this.svgCanvas.runExtensions('zoomChanged', newZoom)
       return
@@ -1289,7 +1352,7 @@ class Editor extends EditorStartup {
         workarea.scrollTop += (after.b * point.x + after.d * point.y + after.f) - anchorY
       }
     }
-    $id('zoom').syncValue((newZoom * 100).toFixed(1))
+    this.showZoom(newZoom)
     this.zoomDone()
     this.svgCanvas.runExtensions('zoomChanged', newZoom)
   }
@@ -1313,7 +1376,7 @@ class Editor extends EditorStartup {
     multiplier = multiplier ? resolution.zoom * multiplier : 1
     multiplier = clampZoom(multiplier)
     // setResolution(res.w * multiplier, res.h * multiplier, true);
-    $id('zoom').syncValue((multiplier * 100).toFixed(1))
+    this.showZoom(multiplier)
     this.svgCanvas.setCurrentZoom(multiplier)
     this.zoomDone()
     this.updateCanvas(true)

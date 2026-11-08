@@ -14,10 +14,12 @@ export const regexEscape = function (str) {
 /**
  * Configuration keys that can never be set from the URL query string.
  * A path such as `extPath` would let a crafted link load and run
- * third-party code; `forceStorage` would bypass the user's storage consent.
+ * third-party code; `forceStorage` would bypass the user's storage consent;
+ * `homeUrl` and `breadcrumb` (lot V3) would put a link of the sender's choice
+ * in the top bar.
  * @type {string[]}
  */
-export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins']
+export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins', 'homeUrl', 'breadcrumb']
 
 /**
  * Tells whether a configuration key must be ignored when it comes from the URL.
@@ -79,7 +81,12 @@ export default class ConfigObj {
       // ALERT NOTICES
       // Only shows in UI as far as alert notices, but useful to remember, so keeping as pref
       save_notice_done: false,
-      export_notice_done: false
+      export_notice_done: false,
+      // RIGHT PANEL OF THE CANVAS LAYOUT (lot V3): shown, width in pixels
+      // (240 to 420), and the tab open.
+      panel_open: 'true',
+      panel_width: '280',
+      panel_tab: 'properties'
     }
     /**
       * @tutorial ConfigOptions
@@ -111,6 +118,9 @@ export default class ConfigObj {
       *   `window.location.origin` for allowing the same origin (should be safe if you trust all apps on your domain), 'null' to allow `file:///` URL usage
       * @property {string} [paramurl] This was available via URL only. Allowed an un-encoded URL within the query string (use "url" or "source" with a data: URI instead)
       * @property {Float} [canvas_expansion=3] The minimum area visible outside the canvas, as a multiple of the image dimensions. The larger the number, the more one can scroll outside the canvas. Scroll view only.
+      * @property {"canvas"|"classic"} [layout="canvas"] The layout of the editor (lot V3): "canvas" puts the canvas under a top bar of 40 px, the tools in a floating bar and properties, layers and code in a right panel that Ctrl+\ hides; "classic" is the layout of SVG-Edit, kept until the end of V4. Read at start; `?layout=classic` in the URL.
+      * @property {string} [homeUrl=""] Link of the home button of the top bar, given by the host application (canvas layout); http(s) only, never from the URL.
+      * @property {Array<string|{label: string, href?: string}>} [breadcrumb=[]] Breadcrumb of the host application before the name of the document, such as `["Le Perreux", {label: "Synoptiques", href: "/synoptiques"}]` (canvas layout); never from the URL.
       * @property {"borderless"|"scroll"} [view="borderless"] The view of the drawing (lot V2): "borderless" has no edge and no scroll bar, the wheel scrolls it and Ctrl+wheel zooms from 1 % to 6 400 %; "scroll" is the canvas of SVG-Edit with scroll bars, kept until the end of V3. Read at start.
       * @property {PlainObject} [initFill] Init fill properties
       * @property {string} [initFill.color="FF0000"] The initial fill color. Must be a hex code string. Defaults to solid red.
@@ -153,6 +163,9 @@ export default class ConfigObj {
       canvasName: 'default',
       canvas_expansion: 3,
       view: 'borderless',
+      layout: 'canvas',
+      homeUrl: '',
+      breadcrumb: [],
       initFill: {
         color: 'FF0000', // solid red
         opacity: 1

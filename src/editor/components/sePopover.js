@@ -8,7 +8,8 @@
  * - Escape closes it and gives the focus back to the anchor; so does a press
  *   outside it, or a click on an entry of a menu.
  * - With the `menu` attribute it is a menu: role="menu", the arrows move
- *   between its [role=menuitem] entries, Home and End go to the ends, Enter
+ *   between its [role=menuitem], [role=menuitemcheckbox] and
+ *   [role=menuitemradio] entries, Home and End go to the ends, Enter
  *   and Space activate the entry.
  *
  * Events: `se-popover-open` and `se-popover-close`, on the popover.
@@ -41,7 +42,7 @@ template.innerHTML = `
     display: block;
     animation: enter var(--se-duration-state) var(--se-ease-out);
   }
-  ::slotted([role="menuitem"]) {
+  ::slotted([role^="menuitem"]) {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -51,13 +52,17 @@ template.innerHTML = `
     cursor: pointer;
     outline: none;
   }
-  ::slotted([role="menuitem"]:hover),
-  ::slotted([role="menuitem"]:focus-visible) {
+  ::slotted([role^="menuitem"]:hover),
+  ::slotted([role^="menuitem"]:focus-visible) {
     background: var(--se-control-hover);
   }
-  ::slotted([role="menuitem"][aria-disabled="true"]) {
+  ::slotted([role^="menuitem"][aria-disabled="true"]) {
     opacity: 0.38;
     pointer-events: none;
+  }
+  /* The display of the entries would otherwise win over [hidden]. */
+  ::slotted([hidden]) {
+    display: none !important;
   }
   ::slotted([role="separator"]) {
     height: 1px;
@@ -115,8 +120,16 @@ export class SePopover extends HTMLElement {
     if (this.hasAttribute('menu')) this.setAttribute('role', 'menu')
     this.addEventListener('keydown', this.onKeydown)
     this.addEventListener('click', (event) => {
-      const item = event.target.closest?.('[role="menuitem"]')
-      if (this.hasAttribute('menu') && item && item.getAttribute('aria-disabled') !== 'true') this.close()
+      const item = event.target.closest?.('[role^="menuitem"]')
+      if (this.hasAttribute('menu') && item && item.getAttribute('aria-disabled') !== 'true') {
+        // Chosen with the keyboard, the focus goes back to the control that
+        // opened the menu; with the mouse, to the page, so that the arrows
+        // and the shortcuts act on the drawing again.
+        const keyboard = this.keyboardChoice
+        this.keyboardChoice = false
+        this.close({ restoreFocus: keyboard })
+        if (!keyboard && this.contains(document.activeElement)) document.activeElement.blur()
+      }
     })
   }
 
@@ -133,7 +146,7 @@ export class SePopover extends HTMLElement {
    * @returns {HTMLElement[]} The entries of a menu that can be reached
    */
   get items () {
-    return [...this.querySelectorAll('[role="menuitem"]')]
+    return [...this.querySelectorAll('[role^="menuitem"]')]
       .filter((item) => item.getAttribute('aria-disabled') !== 'true' && !item.hidden)
   }
 
@@ -220,7 +233,9 @@ export class SePopover extends HTMLElement {
       case ' ':
         if (index >= 0) {
           event.preventDefault()
+          this.keyboardChoice = true
           items[index].click()
+          this.keyboardChoice = false
         }
         break
     }

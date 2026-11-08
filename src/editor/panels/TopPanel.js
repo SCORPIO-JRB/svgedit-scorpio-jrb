@@ -4,6 +4,7 @@
 import SvgCanvas from '@svgedit/svgcanvas'
 import topPanelHTML from './TopPanel.html'
 import { commonValueOf, roundForField } from './panelValues.js'
+import { askText } from '../components/askText.js'
 
 const { $qa, $id, $click, isValidUnit, getTypeMap, convertUnit } = SvgCanvas
 
@@ -142,7 +143,7 @@ class TopPanel {
     let i
     let len
     // set title
-    $qa('#title_panel > p')[0].textContent = this.editor.title
+    this.updateTitle()
     if (this.selectedElement) {
       switch (this.selectedElement.tagName) {
         case 'use':
@@ -211,16 +212,24 @@ class TopPanel {
    * @param {boolean} [opts.cancelDeletes=false]
    * @returns {void} Resolves to `undefined`
    */
-  promptImgURL ({ cancelDeletes = false } = {}) {
-    let curhref = this.editor.svgCanvas.getHref(this.editor.selectedElement)
+  async promptImgURL ({ cancelDeletes = false } = {}) {
+    const image = this.editor.selectedElement
+    let curhref = this.editor.svgCanvas.getHref(image)
     curhref = curhref.startsWith('data:') ? '' : curhref
-    const url = prompt(
-      this.editor.i18next.t('notification.enterNewImgURL'),
-      curhref
-    )
+    // Asked in place, under the image tool (lot V3: no more prompt()).
+    const url = await askText(this.editor, {
+      label: this.editor.i18next.t('notification.enterNewImgURL'),
+      value: curhref,
+      anchor: $id('image_url')?.offsetParent ? $id('image_url') : $id('tool_image'),
+      inputType: 'url'
+    })
     if (url) {
+      if (this.editor.selectedElement !== image && image?.isConnected) {
+        this.editor.svgCanvas.selectOnly([image], true)
+      }
       this.setImageURL(url)
-    } else if (cancelDeletes) {
+    } else if (cancelDeletes && image?.isConnected) {
+      this.editor.svgCanvas.selectOnly([image], true)
       this.editor.svgCanvas.deleteSelectedElements()
     }
   }
@@ -555,6 +564,9 @@ class TopPanel {
     } else {
       $id('selLayerNames').setAttribute('disabled', 'disabled')
     }
+    // The inspector of the canvas layout hides the sections where nothing
+    // applies (lot V3).
+    this.editor.layout?.selectionChanged()
   }
 
   /**
@@ -1162,7 +1174,7 @@ class TopPanel {
 
     if (!valid) {
       e.target.value = this.selectedElement.getAttribute(attr)
-      alert(this.editor.i18next.t('notification.invalidAttrValGiven'))
+      this.editor.toast(this.editor.i18next.t('notification.invalidAttrValGiven'), { type: 'error' })
       return false
     }
 
@@ -1235,13 +1247,16 @@ class TopPanel {
    *
    * @returns {void} Resolves to `undefined`
    */
-  makeHyperlink () {
+  async makeHyperlink () {
     if (this.editor.selectedElement || this.multiselected) {
-      const url = prompt(
-        this.editor.i18next.t('notification.enterNewLinkURL'),
-        'http://'
-      )
-      if (url) {
+      const button = this.multiselected ? $id('tool_make_link_multi') : $id('tool_make_link')
+      const url = await askText(this.editor, {
+        label: this.editor.i18next.t('notification.enterNewLinkURL'),
+        value: 'https://',
+        anchor: button,
+        inputType: 'url'
+      })
+      if (url && url !== 'https://') {
         this.editor.svgCanvas.makeHyperlink(url)
       }
     }
@@ -1476,6 +1491,8 @@ class TopPanel {
     if (title) this.editor.title = title
     const titleElement = $qa('#title_panel > p')[0]
     if (titleElement) titleElement.textContent = this.editor.title
+    // The name of the document in the top bar of the canvas layout.
+    this.editor.layout?.titleChanged(this.editor.title)
   }
 
   /**
@@ -1513,7 +1530,9 @@ class TopPanel {
     const template = document.createElement('template')
     const { i18next } = this.editor
     template.innerHTML = topPanelHTML
-    this.editor.$svgEditor.append(template.content.cloneNode(true))
+    // Each control in its zone of the layout (lot V3).
+    if (this.editor.layout) this.editor.layout.attach(template.content.cloneNode(true), 'top')
+    else this.editor.$svgEditor.append(template.content.cloneNode(true))
     // svg editor source dialoag added to DOM
     const newSeEditorDialog = document.createElement(
       'se-svg-source-editor-dialog'

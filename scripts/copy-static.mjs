@@ -15,6 +15,7 @@ const targets = [
   ['src/editor/browser-not-supported.js', 'browser-not-supported.js'],
   ['src/editor/svgedit.css', 'svgedit.css'],
   ['src/editor/tokens.css', 'tokens.css'],
+  ['src/editor/layout.css', 'layout.css'],
   ['src/editor/fonts', 'fonts'],
   ['src/editor/images', 'images'],
   ['src/editor/components/jgraduate/images', 'components/jgraduate/images'],

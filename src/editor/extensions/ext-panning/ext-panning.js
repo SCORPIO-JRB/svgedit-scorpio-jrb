@@ -43,7 +43,7 @@ export default {
         // Add the button and its handler(s)
         const buttonTemplate = document.createElement('template')
         buttonTemplate.innerHTML = `
-        <se-button id="ext-panning" title="${btitle}" src="panning.svg" shortcut="H"></se-button>
+        <se-button id="ext-panning" data-group="select" data-rank="30" title="${btitle}" src="panning.svg" shortcut="H"></se-button>
         `
         insertAfter($id('tool_zoom'), buttonTemplate.content.cloneNode(true))
         $click($id('ext-panning'), () => {

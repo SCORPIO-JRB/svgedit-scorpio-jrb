@@ -42,7 +42,7 @@ export default {
         if ($id('tool_shapelib') === null) {
           const extPath = svgEditor.configObj.curConfig.extPath
           const buttonTemplate = `
-          <se-explorerbutton id="tool_shapelib" title="${svgEditor.i18next.t(`${name}:buttons.0.title`)}" lib="${extPath}/ext-shapes/shapelib/"
+          <se-explorerbutton id="tool_shapelib" data-group="insert" data-rank="30" title="${svgEditor.i18next.t(`${name}:buttons.0.title`)}" lib="${extPath}/ext-shapes/shapelib/"
           src="shapelib.svg"></se-explorerbutton>
           `
           canv.insertChildAtIndex($id('tools_left'), buttonTemplate, 9)

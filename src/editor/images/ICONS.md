@@ -12,7 +12,7 @@ couleur codée en dur, de `<style>` ni de script ; les tracés sont en `currentC
 - Material Symbols : 106 fichiers. Tracé et `viewBox="0 -960 960 960"` repris tels quels, avec
   `width="24" height="24"` et `fill="currentColor"` sur la racine. `flip_vertical.svg` est le
   tracé de `flip` pivoté de 90° (attribut `transform`).
-- Dessins propres : 37 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
+- Dessins propres : 44 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
   `currentColor` de 1,5 (l'épaisseur de Material Symbols en graisse 400 : 60/960 de 24 px),
   extrémités et jointures rondes. Exceptions voulues : les icônes de jointure et d'extrémité de
   trait montrent un trait épais, puisque c'est leur sujet.
@@ -50,6 +50,8 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `box_o.svg` | `square` | Marqueur : carré vide |
 | `c_radius.svg` | `rounded_corner` | Rayon des coins du rectangle (champ) |
 | `cancel.svg` | `close` | Annuler — *sans référence* |
+| `chevron_down.svg` | dessin propre | Ouvre un menu (barre supérieure, groupe de vue, calque courant) |
+| `chevron_right.svg` | dessin propre | Déplie un calque ou un groupe (onglet Calques) |
 | `circle.svg` | `circle` | Outil cercle |
 | `clone.svg` | `content_copy` | Dupliquer l'élément |
 | `close_path.svg` | dessin propre | Fermer le sous-chemin — *sans référence* |
@@ -66,6 +68,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `export.svg` | `output` | Exporter (PNG, JPEG, PDF…) |
 | `eye.svg` | `visibility` | Visibilité du calque |
 | `eye_dropper.svg` | `colorize` | Pipette |
+| `eye_off.svg` | dessin propre | Calque ou objet masqué (onglet Calques) |
 | `fh_ellipse.svg` | dessin propre | Outil ellipse à main levée |
 | `fh_rect.svg` | dessin propre | Outil rectangle à main levée |
 | `fill.svg` | `format_color_fill` | Couleur de remplissage |
@@ -81,6 +84,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `handle.svg` | dessin propre | Coin des boutons qui ouvrent un menu d'outils — *sans référence* |
 | `height.svg` | `height` | Hauteur — *sans référence* |
 | `hello_world.svg` | `waving_hand` | Extension d'exemple « Hello World » |
+| `home.svg` | dessin propre | Accueil de l'application hôte (barre supérieure) |
 | `image.svg` | `image` | Outil image |
 | `imagelib.svg` | `photo_library` | Bibliothèque d'images (extension archivée ext-imagelib) — *sans référence* |
 | `import.svg` | `input` | Importer — *sans référence* |
@@ -103,6 +107,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `mkr_markers_dimension.svg` | `arrow_range` | Marqueurs de cote — *sans référence* |
 | `mkr_markers_label.svg` | `label` | Marqueur étiquette — *sans référence* |
 | `mkr_markers_off.svg` | `horizontal_rule` | Sans marqueurs — *sans référence* |
+| `more_horiz.svg` | dessin propre | Plus d'outils (barre d'outils) |
 | `move_bottom.svg` | `flip_to_back` | Mettre à l'arrière-plan |
 | `move_top.svg` | `flip_to_front` | Mettre au premier plan |
 | `netlify-dark.svg` | `cloud_upload` | Badge « Deploys by Netlify » (marque remplacée par un pictogramme de déploiement) — *sans référence* |
@@ -115,6 +120,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `opacity.svg` | `opacity` | Opacité (champ) |
 | `open.svg` | `folder_open` | Ouvrir |
 | `open_path.svg` | dessin propre | Ouvrir le sous-chemin — *sans référence* |
+| `panel_right.svg` | dessin propre | Afficher ou masquer le panneau de droite (Ctrl+\\) |
 | `panning.svg` | `pan_tool` | Outil main : déplacer la vue (ext-panning) |
 | `path.svg` | `stylus_fountain_pen` | Outil chemin (plume) |
 | `pen.svg` | `pen_size_2` | Outil ligne |
@@ -131,6 +137,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `save.svg` | `save` | Enregistrer — *sans référence* |
 | `saveImg.svg` | `save` | Enregistrer ; enregistrer sous (menu principal) |
 | `scale.svg` | `open_in_full` | Outil mise à l'échelle (proportions conservées) |
+| `search.svg` | dessin propre | Rechercher un calque ou un objet (onglet Calques) |
 | `select.svg` | `arrow_selector_tool` | Outil sélection |
 | `select_node.svg` | dessin propre | Outil sélection en édition de chemin (nœuds) |
 | `shapelib.svg` | `shapes` | Bibliothèque de formes (ext-shapes) |

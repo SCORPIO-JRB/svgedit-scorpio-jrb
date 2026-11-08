@@ -11,6 +11,7 @@ import Rulers from './Rulers.js'
 import { ThemeController } from './theme.js'
 import { ViewController } from './view.js'
 import { GridLayer } from './grid.js'
+import { EditorLayout } from './layout.js'
 
 /**
    * @fires module:svgcanvas.SvgCanvas#event:svgEditorReady
@@ -94,6 +95,11 @@ class EditorStartup {
       // allow to prepare the dom without display
       this.$svgEditor.style.visibility = 'hidden'
       this.workarea = $id('workarea')
+      // The zones of the layout (lot V3): top bar, canvas, right panel; or the
+      // classic layout of SVG-Edit. The panels below attach their controls
+      // to it.
+      this.layout = new EditorLayout(this, { layout: this.configObj.curConfig.layout })
+      this.layout.build()
       // Image props dialog added to DOM
       const newSeImgPropDialog = document.createElement('se-img-prop-dialog')
       newSeImgPropDialog.setAttribute('id', 'se-img-prop')
@@ -667,11 +673,7 @@ class EditorStartup {
         $id('tool_wireframe').click()
       }
 
-      if (this.configObj.curConfig.showRulers) {
-        this.rulers.display(true)
-      } else {
-        this.rulers.display(false)
-      }
+      this.setRulersShown(this.configObj.curConfig.showRulers)
 
       if (this.configObj.curConfig.showRulers) {
         $editDialog.setAttribute('showrulers', true)
@@ -699,7 +701,7 @@ class EditorStartup {
     }.bind(this))
 
     // zoom
-    $id('zoom').syncValue((this.svgCanvas.getZoom() * 100).toFixed(1))
+    this.showZoom(this.svgCanvas.getZoom())
     this.canvMenu.setAttribute('disableallmenu', true)
     this.canvMenu.setAttribute('enablemenuitems', '#delete,#cut,#copy')
 
@@ -810,6 +812,8 @@ class EditorStartup {
         */
         (_win, _data) => {
           this.extensionsAdded = true
+          // What the extensions added goes to its zone (lot V3).
+          this.layout?.extensionsAdded()
           this.setAll()
 
           if (this.storagePromptState === 'ignore') {

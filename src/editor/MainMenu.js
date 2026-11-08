@@ -108,12 +108,8 @@ class MainMenu {
     this.editor.configObj.curConfig.gridColor = gridcolor ?? ''
     if (gridsubdivisions !== undefined) this.editor.configObj.curConfig.gridSubdivisions = Number(gridsubdivisions) || 10
     if (objectsnapping !== undefined) this.editor.configObj.curConfig.objectSnapping = Boolean(objectsnapping)
-    this.editor.configObj.curConfig.showRulers = showrulers
     // Unchecking the option used to leave the rulers visible.
-    this.editor.rulers.display(Boolean(showrulers))
-    if (this.editor.configObj.curConfig.showRulers) {
-      this.editor.rulers.updateRulers()
-    }
+    this.editor.setRulersShown(showrulers)
     this.editor.configObj.curConfig.baseUnit = baseunit
     this.editor.svgCanvas.setConfig(this.editor.configObj.curConfig)
     // The grid shown or not, apart from the snapping (lot V2).
@@ -248,7 +244,9 @@ class MainMenu {
         <se-menu-item id="tool_editor_prefs" label="config.editor_prefs" src="editPref.svg"></se-menu-item>
         <se-menu-item id="tool_editor_homepage" label="tools.editor_homepage" src="logo.svg"></se-menu-item>
     </se-menu>`
-    this.editor.$svgEditor.append(template.content.cloneNode(true))
+    // Each control in its zone of the layout (lot V3).
+    if (this.editor.layout) this.editor.layout.attach(template.content.cloneNode(true), 'menu')
+    else this.editor.$svgEditor.append(template.content.cloneNode(true))
 
     // register action to main menu entries
     /**

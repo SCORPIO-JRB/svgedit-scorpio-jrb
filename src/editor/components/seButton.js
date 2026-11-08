@@ -45,9 +45,42 @@ template.innerHTML = `
     opacity: 0.38;
     cursor: default;
   }
+  div:focus-visible {
+    outline: 2px solid var(--se-focus-ring);
+    outline-offset: -2px;
+  }
+  /* In the menu of a group of tools (canvas layout, lot V3): the name and
+     the shortcut of the tool next to its icon. */
+  .label, .kbd {
+    display: none;
+  }
+  :host([labelled]) {
+    display: block;
+  }
+  :host([labelled]) div {
+    width: 100%;
+    min-width: 200px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 8px;
+    margin: 0;
+  }
+  :host([labelled]) .label {
+    display: inline;
+    flex: 1;
+    color: var(--se-text);
+    white-space: nowrap;
+  }
+  :host([labelled]) .kbd {
+    display: inline;
+    color: var(--se-text-secondary);
+    white-space: nowrap;
+  }
   </style>
   <div role="button">
     <se-icon></se-icon>
+    <span class="label"></span>
+    <span class="kbd"></span>
   </div>
 `
 /**
@@ -65,6 +98,18 @@ export class ToolButton extends HTMLElement {
     // locate the component
     this.$div = this._shadowRoot.querySelector('div')
     this.$img = this._shadowRoot.querySelector('se-icon')
+    this.$label = this._shadowRoot.querySelector('.label')
+    this.$kbd = this._shadowRoot.querySelector('.kbd')
+    // A button reached with the keyboard is chosen with Enter or Space. A
+    // button that has the focus from a click lets them through: Space then
+    // still moves the view.
+    this.$div.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && !e.repeat && this.$div.matches(':focus-visible')) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (!this.disabled) this.click()
+      }
+    })
     this.imgPath = svgEditor.configObj.curConfig.imgPath
   }
 
@@ -88,6 +133,8 @@ export class ToolButton extends HTMLElement {
     switch (name) {
       case 'title':
         setControlName(this, this.$div, t(newValue), this.getAttribute('shortcut'), t)
+        this.$label.textContent = this.seTooltip?.label ?? ''
+        this.$kbd.textContent = this.seTooltip?.shortcut ?? ''
         break
       case 'style':
         this.$div.style = newValue

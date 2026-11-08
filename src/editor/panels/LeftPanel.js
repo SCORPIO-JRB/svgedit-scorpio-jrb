@@ -239,7 +239,9 @@ class LeftPanel {
     // add Left panel
     const template = document.createElement('template')
     template.innerHTML = leftPanelHTML
-    this.editor.$svgEditor.append(template.content.cloneNode(true))
+    // Each control in its zone of the layout (lot V3).
+    if (this.editor.layout) this.editor.layout.attach(template.content.cloneNode(true), 'left')
+    else this.editor.$svgEditor.append(template.content.cloneNode(true))
     // register actions for left panel
     $click($id('tool_select'), this.chooseSelect.bind(this))
     $click($id('tool_scale'), this.clickScale.bind(this))

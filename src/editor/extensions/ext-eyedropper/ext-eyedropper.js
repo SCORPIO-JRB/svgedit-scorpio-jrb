@@ -103,7 +103,7 @@ export default {
         // const key = `${name}:buttons.0.key`
         const key = 'ctrl+I'
         const buttonTemplate = `
-        <se-button id="tool_eyedropper" title="${title}" src="eye_dropper.svg" shortcut=${key}></se-button>
+        <se-button id="tool_eyedropper" data-group="more" data-rank="20" title="${title}" src="eye_dropper.svg" shortcut=${key}></se-button>
         `
         svgCanvas.insertChildAtIndex($id('tools_left'), buttonTemplate, 12)
         $click($id('tool_eyedropper'), () => {
