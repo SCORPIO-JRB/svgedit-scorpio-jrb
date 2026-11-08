@@ -1096,6 +1096,25 @@ class Editor extends EditorStartup {
   }
 
   /**
+   * Says, in one message, what an import, an opening or an ungrouping could
+   * not keep.
+   * @param {external:Window} win
+   * @param {{action: 'import'|'open'|'ungroup', items: string[]}} removed
+   * @returns {void}
+   */
+  contentRemoved (win, { action, items }) {
+    const messages = {
+      import: ['notification.importRemoved', 'These contents of the imported file were removed, as they are not supported or would apply to the whole drawing: {{list}}'],
+      open: ['notification.openRemoved', 'These contents of the opened file are not supported and were removed: {{list}}'],
+      ungroup: ['notification.ungroupRemoved', 'These styles of the ungrouped objects could not become attributes and were removed: {{list}}']
+    }
+    const [key, defaultValue] = messages[action] || messages.import
+    const shown = items.slice(0, 12).join(', ') + (items.length > 12 ? ` … (+${items.length - 12})` : '')
+    // Shown as text, not markup: the items (<script>...) are not escaped
+    seAlert(this.i18next.t(key, { defaultValue, list: shown, interpolation: { escapeValue: false } }))
+  }
+
+  /**
    * @returns {void}
    */
   elementRenamed (win, renameObj) {

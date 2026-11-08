@@ -1,0 +1,28 @@
+<svg width="2990" height="1639" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
+ <defs>
+  <symbol height="31" id="svg_1699" representationId="9716d7cf-4bdd-4334-91c4-c241f7ac8913" scorp_id="b9e00faa-d050-4402-9672-c0afe2ef8889||1743351078564d0ab2366-9926-471c-9e7b-ee7d4d95a354" width="73">
+   <g class="layer" id="svg_166">
+    <title/>
+    <rect fill="rgba(255,255,255,0.05)" height="30.51" id="svg_1698" stroke="#000000" stroke-width="0" width="72.94" x="0" y="0"/>
+    <text fill="#ffffff" font-family="roboto" font-size="14" font-weight="bold" id="svg_1697" scorp_id="b9e00faa-d050-4402-9672-c0afe2ef8889||174335107232143015c6b-d9cd-4d12-8b2d-ceed3087bc04" stroke="#000000" stroke-width="0" text-anchor="middle" x="36.63" xml:space="preserve" y="20.14">XX.X °C</text>
+   </g>
+  </symbol>
+  <symbol height="243" id="svg_91" representationId="861f4aed-4ea9-4ae8-8944-89449c08520a" scorp_id="5fb7a52c-a59d-4c10-8967-8eef3be0c59d||170819996526135fb12f7-237c-4c7c-988b-1b37eeb017b4" width="189">
+   <g class="layer" id="svg_2">
+    <title/>
+    <defs transform="translate(0 0.01) translate(-169.09 82.46) translate(0 -0.5)">
+     <clipPath id="svg_65"><rect fill="none" height="5.26" id="svg_87" stroke-width="0" width="43.36" x="72.4" y="76.66"/></clipPath>
+    </defs>
+    <g id="svg_63" opacity="0.2" scorp_id="5fb7a52c-a59d-4c10-8967-8eef3be0c59d||1708200068671c225f27a-b81c-49ac-85ed-22af7570d4de">
+     <g clip-path="url(#svg_65)" id="svg_64"><rect fill="#fff" height="5.26" id="svg_66" stroke-width="0" width="43.36" x="72.4" y="76.66"/></g>
+    </g>
+   </g>
+  </symbol>
+ </defs>
+ <g class="layer">
+  <title/>
+  <use href="#svg_1699" id="svg_1700" instanceId="b9e00faa-d050-4402-9672-c0afe2ef8889" representationId="9716d7cf-4bdd-4334-91c4-c241f7ac8913" scorp_name="Circuit - Salle Claire Température extérieure" transform="matrix(1.84774 0 0 1.84774 -388.121 -58.618)" x="435.49" y="130.81"/>
+  <use href="#svg_65" id="svg_442" instanceId="1315ba8a-546b-476e-88b5-5a1596117b10" representationId="81b12a61-b48d-45a7-9a0f-574ce2b1d637" scorp_name="Circuit - Plancher Température départ" transform="matrix(1 0 0 1 0 0)" x="1703.22" y="21.43"/>
+  <use href="#svg_91" id="svg_92" instanceId="5fb7a52c-a59d-4c10-8967-8eef3be0c59d" representationId="861f4aed-4ea9-4ae8-8944-89449c08520a" scorp_name="Pompes - Plancher V2 Symbole 2x pompes" transform="matrix(1 0 0 1 0 0)" x="1614.52" y="753.08"/>
+ </g>
+</svg>

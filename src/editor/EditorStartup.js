@@ -230,6 +230,7 @@ class EditorStartup {
     this.svgCanvas.bind('contextset', this.contextChanged.bind(this))
     this.svgCanvas.bind('extension_added', this.extAdded.bind(this))
     this.svgCanvas.bind('elementRenamed', this.elementRenamed.bind(this))
+    this.svgCanvas.bind('contentRemoved', this.contentRemoved.bind(this))
     this.svgCanvas.bind('clipboardChanged', this.enableOrDisableClipboard.bind(this))
     this.svgCanvas.bind(
       'resolveClipboardConflicts',

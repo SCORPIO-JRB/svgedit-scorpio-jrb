@@ -9,9 +9,11 @@
 
 import { NS } from './namespaces.js'
 import * as hstry from './history.js'
-import { text2xml } from './utilities.js'
+import { text2xml, getHref } from './utilities.js'
 import { convertToNum } from './units.js'
 import { finishPaste } from './paste-elem.js'
+import { splitTopLevel } from './css-scope.js'
+import { ANIMATION_ELEMENTS } from './sanitize.js'
 
 const { BatchCommand, InsertElementCommand } = hstry
 
@@ -58,36 +60,6 @@ const PRESENTATION = new Set([
 ])
 
 /**
- * Splits a list at its top-level commas: `a, b:not(.c, .d)` gives two items.
- * @param {string} text
- * @param {string} separator - A single character
- * @returns {string[]}
- */
-const splitTopLevel = (text, separator) => {
-  const parts = []
-  let depth = 0
-  let quote = null
-  let start = 0
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]
-    if (quote) {
-      if (char === quote) quote = null
-    } else if (char === '"' || char === "'") {
-      quote = char
-    } else if (char === '(') {
-      depth++
-    } else if (char === ')') {
-      depth = Math.max(0, depth - 1)
-    } else if (char === separator && depth === 0) {
-      parts.push(text.slice(start, i))
-      start = i + 1
-    }
-  }
-  parts.push(text.slice(start))
-  return parts.map((part) => part.trim()).filter(Boolean)
-}
-
-/**
  * Specificity of one selector, as [ids, classes, types], close enough for the
  * stylesheets that drawing applications write.
  * @param {string} selector
@@ -106,9 +78,10 @@ const specificity = (selector) => {
  * Reads the style rules of a stylesheet. At-rules (`@media`, `@font-face`,
  * `@import`...) are skipped.
  * @param {string} css
+ * @param {string[]} [skipped] - Receives the at-rules skipped
  * @returns {{selectors: {text: string, specificity: number[]}[], declarations: [string, string, boolean][]}[]}
  */
-export const parseStyleRules = (css) => {
+export const parseStyleRules = (css, skipped = []) => {
   const text = String(css).replace(/\/\*[\s\S]*?\*\//g, '')
   const rules = []
   let i = 0
@@ -126,7 +99,10 @@ export const parseStyleRules = (css) => {
     }
     const body = text.slice(open + 1, j - 1)
     i = j
-    const statement = prelude.split(';').pop().trim()
+    const statements = prelude.split(';').map((part) => part.trim())
+    const statement = statements.pop()
+    skipped.push(...statements.filter((part) => part && !/^@charset\b/i.test(part)))
+    if (statement.startsWith('@')) skipped.push(statement)
     if (!statement || statement.startsWith('@')) continue
     const declarations = splitTopLevel(body, ';').map((declaration) => {
       const colon = declaration.indexOf(':')
@@ -155,18 +131,26 @@ const compareSpecificity = (a, b) => (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b
  * two pasted files that both name a class `cls-1` would recolor each other.
  * Rules override presentation attributes and are applied by specificity,
  * then in order; the `style` attribute of an element still wins, as it is
- * turned into attributes afterwards by the import filter.
+ * turned into attributes afterwards (by the import filter, or by
+ * styleToAttributes).
  * @function module:svg-paste.inlineStyleSheets
  * @param {Element} root - The <svg> element
- * @returns {void}
+ * @param {object} [options]
+ * @param {function(string): string} [options.original] - The selector as the
+ *   file wrote it, for the list of what is lost
+ * @returns {string[]} What could not become attributes, so is lost: at-rules
+ *   (`@keyframes`, `@media`...), properties without an attribute
+ *   (`animation`...) and selectors that matched no object (states,
+ *   `:hover`...)
  */
-export const inlineStyleSheets = (root) => {
+export const inlineStyleSheets = (root, { original = (selector) => selector } = {}) => {
   const styles = [...root.querySelectorAll('*')].filter((el) => el.localName === 'style')
-  if (!styles.length) return
+  if (!styles.length) return []
   const css = styles.map((style) => style.textContent).join('\n')
   styles.forEach((style) => style.remove())
-  const rules = parseStyleRules(css)
-  if (!rules.length) return
+  const atRules = []
+  const rules = parseStyleRules(css, atRules)
+  const used = new Set()
 
   const elements = [root, ...root.querySelectorAll('*')]
   elements.forEach((element) => {
@@ -179,7 +163,10 @@ export const inlineStyleSheets = (root) => {
         } catch {
           // A selector the browser does not know matches nothing.
         }
-        if (matched) matches.push({ specificity: selector.specificity, order, rule })
+        if (matched) {
+          matches.push({ specificity: selector.specificity, order, rule })
+          used.add(original(selector.text))
+        }
       })
     })
     if (!matches.length) return
@@ -195,6 +182,35 @@ export const inlineStyleSheets = (root) => {
     values.forEach((value, name) => {
       if (PRESENTATION.has(name)) element.setAttribute(name, value)
     })
+  })
+  const properties = rules.flatMap((rule) => rule.declarations.map(([name]) => name))
+    .filter((name) => !PRESENTATION.has(name))
+  const unmatched = rules.flatMap((rule) => rule.selectors.map((selector) => original(selector.text)))
+    .filter((selector) => !used.has(selector))
+  return [...new Set([...atRules, ...properties, ...unmatched])]
+}
+
+/**
+ * Turns the presentation properties of `style` attributes into attributes,
+ * as the import filter does, so that the editor can show and change them.
+ * Run after inlineStyleSheets: the `style` attribute wins over the rules.
+ * @function module:svg-paste.styleToAttributes
+ * @param {Element} root
+ * @returns {void}
+ */
+export const styleToAttributes = (root) => {
+  [root, ...root.querySelectorAll('[style]')].forEach((element) => {
+    const style = element.getAttribute('style')
+    if (style === null) return
+    const kept = splitTopLevel(style, ';').filter((declaration) => {
+      const colon = declaration.indexOf(':')
+      const name = declaration.slice(0, colon).trim().toLowerCase()
+      if (colon === -1 || !PRESENTATION.has(name)) return true
+      element.setAttribute(name, declaration.slice(colon + 1).trim())
+      return false
+    })
+    if (kept.length) element.setAttribute('style', kept.join('; '))
+    else element.removeAttribute('style')
   })
 }
 
@@ -249,6 +265,44 @@ const readLength = (value) => {
 }
 
 /**
+ * Reads the view box of an element.
+ * @function module:svg-paste.readViewBox
+ * @param {Element} elem
+ * @returns {number[]|null} [x, y, width, height]; null when missing or invalid
+ */
+export const readViewBox = (elem) => {
+  const viewBox = (elem.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number)
+  return viewBox.length === 4 && viewBox.every(Number.isFinite) && viewBox[2] > 0 && viewBox[3] > 0
+    ? viewBox
+    : null
+}
+
+/**
+ * The size an SVG declares for itself, in pixels: its width and height, else
+ * those of its view box. A missing width or height follows the proportions of
+ * the view box.
+ * @function module:svg-paste.getDeclaredSize
+ * @param {Element} root
+ * @returns {{width: number|null, height: number|null}} Null when not declared
+ *   (or as a percentage)
+ */
+export const getDeclaredSize = (root) => {
+  const viewBox = readViewBox(root)
+  let width = readLength(root.getAttribute('width'))
+  let height = readLength(root.getAttribute('height'))
+  if (viewBox) {
+    if (width === null && height === null) {
+      [, , width, height] = viewBox
+    } else if (width === null) {
+      width = height * viewBox[2] / viewBox[3]
+    } else if (height === null) {
+      height = width * viewBox[3] / viewBox[2]
+    }
+  }
+  return { width, height }
+}
+
+/**
  * The scale between the root's view box and the size the SVG declares, so
  * that pasted objects keep the size the SVG asks for. Null when they already
  * do. The position of the view box is not applied: pasting places the
@@ -257,10 +311,8 @@ const readLength = (value) => {
  * @returns {{x: number, y: number}|null}
  */
 const getRootScale = (root) => {
-  const viewBox = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number)
-  if (viewBox.length !== 4 || !viewBox.every(Number.isFinite) || viewBox[2] <= 0 || viewBox[3] <= 0) {
-    return null
-  }
+  const viewBox = readViewBox(root)
+  if (!viewBox) return null
   const width = readLength(root.getAttribute('width'))
   const height = readLength(root.getAttribute('height'))
   let x = width ? width / viewBox[2] : null
@@ -305,10 +357,33 @@ const sortContent = (root) => {
 }
 
 /**
+ * Removes the animations of a tree being added that aim at an element
+ * outside it (`<animate href="#title">`): they would change an object of the
+ * drawing that happens to have that identifier.
+ * @function module:svg-paste.removeOutsideAnimations
+ * @param {Element} root - Its identifiers already made unique in the drawing
+ * @returns {string[]} The animations removed, for the user
+ */
+export const removeOutsideAnimations = (root) => {
+  const ids = new Set([root, ...root.querySelectorAll('[id]')].map((elem) => elem.id))
+  const removed = []
+  root.querySelectorAll([...ANIMATION_ELEMENTS].join(',')).forEach((animation) => {
+    const href = getHref(animation)
+    if (href?.startsWith('#') && !ids.has(href.slice(1))) {
+      animation.remove()
+      const item = `<${animation.localName} href="${href}">`
+      if (!removed.includes(item)) removed.push(item)
+    }
+  })
+  return removed
+}
+
+/**
  * Pastes SVG text from outside the editor, as one undo step, and selects the
  * pasted objects. The text goes through the import filter of an opened file:
  * scripts, event handlers, external references and unsafe CSS are removed.
- * Every identifier is renewed, so nothing in the drawing is replaced.
+ * The identifiers already used in the drawing are renewed, so nothing in the
+ * drawing is replaced; the others are kept.
  * @function module:svgcanvas.SvgCanvas#pasteSvgString
  * @param {string} text
  * @param {'in_place'|'point'|void} type - As for pasteElements
@@ -326,6 +401,7 @@ export const pasteSvgString = (text, type, x, y) => {
   const domDocument = svgCanvas.getDOMDocument()
   const root = domDocument.importNode(doc.documentElement, true)
   svgCanvas.uniquifyElems(root)
+  removeOutsideAnimations(root)
   const scale = getRootScale(root)
   let { drawables, resources } = sortContent(root)
   if (!drawables.length) return []

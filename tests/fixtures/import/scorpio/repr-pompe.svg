@@ -1,0 +1,19 @@
+<svg width="90" height="115" xmlns="http://www.w3.org/2000/svg" scorp_id="17366259705502024147e-ed5b-4326-b321-0977545a8ff2">
+ <g class="layer">
+  <title/>
+  <defs>
+   <clipPath id="svg_510"><rect fill="none" height="8.19" id="svg_527" stroke-width="0" width="24.23" x="32.71" y="31.38"/></clipPath>
+   <clipPath id="svg_504"><rect fill="none" height="3.14" id="svg_525" stroke-width="0" width="25.89" x="31.87" y="82.38"/></clipPath>
+  </defs>
+  <rect fill="none" height="115.34" id="svg_514" scorp_id="173662603884370da24e6-3aac-4003-b152-2424028b15d3" stroke-width="0" width="89.77" x="0" y="0"/>
+  <circle cx="44.36" cy="57.47" fill="none" id="svg_512" r="21.58" scorp_id="173662604582926769079-e5e1-488d-aba5-6ea47162360a" stroke="#fff" stroke-miterlimit="10" stroke-width="2"/>
+  <g clip-path="url(#svg_510)" id="svg_509">
+   <polygon fill="none" id="svg_511" points="56.14,38.78 53.83,32.16 35.78,32.16 33.48,38.78 56.14,38.78" stroke="#fff" stroke-linejoin="round" stroke-width="2"/>
+  </g>
+  <g id="svg_502" opacity="0.2">
+   <g clip-path="url(#svg_504)" id="svg_503">
+    <rect fill="#fff" height="3.14" id="svg_505" stroke-width="0" width="25.89" x="31.87" y="82.38"/>
+   </g>
+  </g>
+ </g>
+</svg>

@@ -1,0 +1,13 @@
+<svg width="82" height="38" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" scorp_id="174334428766820553c76-767c-4520-8be7-f6bea18633c7">
+ <!-- Created with SVG-edit - https://github.com/SVG-Edit/svgedit-->
+ <g class="layer">
+  <title/>
+  <rect fill="rgba(255,255,255,0)" height="37.77" id="svg_8" scorp_id="1743754156128786b2936-d137-4ef5-917a-521a76d47e54" stroke="#000000" stroke-width="0" width="82.24" x="0" y="0"/>
+  <rect fill="rgba(255,255,255,0.05)" height="30.51" id="svg_11" stroke="#000000" stroke-width="0" width="72.94" x="1.84" y="3.63"/>
+  <text fill="#c1272d" font-family="roboto" font-size="14" font-weight="bold" id="svg_7" scorp_id="174334433680144cd1f74-003d-49ea-ba45-9fae57c444ea" stroke="#000000" stroke-width="0" text-anchor="middle" transform="matrix(1 0 0 1 0 0)" x="38.23" xml:space="preserve" y="23.84">XX.X °C</text>
+  <g id="svg_1" scorp_id="1743344517147fccf1a4f-07a1-4c5f-a5c0-26945b621efb" visibility="hidden">
+   <rect fill="rgba(34,197,94,0.2)" height="12.85" id="svg_2" stroke="#22c55e" width="12.23" x="68.86" y="12.13"/>
+   <text fill="#22c55e" font-family="roboto" font-size="12" id="svg_3" stroke="#22c55e" stroke-width="0" text-anchor="middle" x="74.97" xml:space="preserve" y="22.73">F</text>
+  </g>
+ </g>
+</svg>

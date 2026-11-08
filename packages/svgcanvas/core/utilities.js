@@ -345,6 +345,24 @@ export const walkTreePost = (elem, cbFn) => {
   }
 }
 
+/** The identifier that starts a value of `begin` or `end`: `anim1` in `anim1.end+1s`. */
+const TIMING_ID = /^(\s*)((?:\\.|[^.\\\s])+)\.(?=[A-Za-z])/
+
+/**
+ * Points the identifiers of a `begin` or `end` value of an animation
+ * (`anim1.end+1s; rect2.click`) to new ones.
+ * @function module:utilities.remapTimingIds
+ * @param {string} value
+ * @param {(id: string) => (string|undefined)} newId - The new identifier of
+ *   an old one, if it changed
+ * @returns {string}
+ */
+export const remapTimingIds = (value, newId) => value.split(';').map((part) =>
+  part.replace(TIMING_ID, (match, space, id) => {
+    const next = newId(id.replace(/\\(.)/g, '$1'))
+    return next ? `${space}${next.replace(/[.+-]/g, '\\$&')}.` : match
+  })).join(';')
+
 /**
  * Extracts the URL from the `url(...)` syntax of some attributes.
  * Three variants:
