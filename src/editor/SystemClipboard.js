@@ -187,7 +187,10 @@ export default class SystemClipboard {
    */
   fallback (pending) {
     if (pending.kind === 'paste') {
-      this.pasteInternal(pending)
+      // No paste event came: Firefox fires none for Mod+Shift+V outside a
+      // field. The system clipboard is read as the context menu reads it,
+      // and the editor's clipboard is pasted when the browser refuses.
+      this.pasteFromMenu(pending)
       return
     }
     if (this.copyInternal(pending.kind)) this.internalIsNewer = true
