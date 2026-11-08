@@ -5,7 +5,13 @@ import { visitAndApproveStorage } from './helpers.js'
 // outside through the import filter), paste in place, copy and paste of
 // properties, Mod+D that repeats the offset of a moved copy.
 
-test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+// Chromium needs both permissions. Firefox has none to grant: its
+// configuration opens the clipboard through preferences instead.
+test.use({
+  permissions: async ({ browserName }, use) => {
+    await use(browserName === 'chromium' ? ['clipboard-read', 'clipboard-write'] : [])
+  }
+})
 
 const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
   <g class="layer"><title>Layer 1</title>

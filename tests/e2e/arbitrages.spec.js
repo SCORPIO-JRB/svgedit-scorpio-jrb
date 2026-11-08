@@ -36,10 +36,24 @@ const layers = (page) => page.evaluate(() =>
 
 const undoSize = (page) => page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.getUndoStackSize())
 
-const screenBoxes = (page, ids) => page.evaluate((ids) => ids.map((id) => {
-  const { x, y, width, height } = document.getElementById(id).getBoundingClientRect()
-  return { x, y, width, height }
-}), ids)
+// Screen box of an element's shape: its box through its screen matrix.
+// getBoundingClientRect cannot be used in Firefox: it gives a <use> the box
+// of its viewport, and widens a clipped shape by half a pixel on each side.
+// The function is passed to the page as text, so that it is written once.
+const SCREEN_BOX = `(el) => {
+  const b = el.getBBox()
+  const m = el.getScreenCTM()
+  const corners = [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]
+    .map(([x, y]) => ({ x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f }))
+  const xs = corners.map((p) => p.x)
+  const ys = corners.map((p) => p.y)
+  return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }
+}`
+
+const screenBoxes = (page, ids) => page.evaluate(({ ids, source }) => {
+  const box = new Function(`return ${source}`)() // eslint-disable-line no-new-func
+  return ids.map((id) => box(document.getElementById(id)))
+}, { ids, source: SCREEN_BOX })
 
 const close = (a, b) => Math.abs(a - b) < 0.5
 
@@ -284,11 +298,14 @@ test.describe('Objects that look the same, in the whole page (decision 5)', () =
   test('takes the objects inside groups and in every visible layer', async ({ page }) => {
     expect(await selectPumps(page)).toEqual(PUMPS)
     // Each selection box surrounds its object, whatever its group does.
-    const offsets = await page.evaluate(() => window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => {
-      const r = el.getBoundingClientRect()
-      const box = window.svgEditor.svgCanvas.selectorManager.requestSelector(el).selectorRect.getBoundingClientRect()
-      return [Math.round(r.x - box.x), Math.round(r.width - box.width)]
-    }))
+    const offsets = await page.evaluate((source) => {
+      const screenBox = new Function(`return ${source}`)() // eslint-disable-line no-new-func
+      return window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => {
+        const r = screenBox(el)
+        const box = screenBox(window.svgEditor.svgCanvas.selectorManager.requestSelector(el).selectorRect)
+        return [Math.round(r.x - box.x), Math.round(r.width - box.width)]
+      })
+    }, SCREEN_BOX)
     offsets.forEach(([dx, dw]) => {
       expect(Math.abs(dx)).toBeLessThanOrEqual(2)
       expect(Math.abs(dw)).toBeLessThanOrEqual(4)

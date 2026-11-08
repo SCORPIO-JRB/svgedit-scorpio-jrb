@@ -387,7 +387,9 @@ test.describe('Oriented cursors and rotation from the corners (M5)', () => {
 
     const before = await undoSize(page)
     const text = await dragAround(page, from, pivot, 40, { during: async () => (await label(page)).text })
-    expect(Math.abs(await angleOf(page, 'r2') - 40)).toBeLessThan(0.5)
+    // Firefox gives mouse events whole pixels: about 30 pixels from the
+    // pivot, the angle the pointer turns is known within half a degree.
+    expect(Math.abs(await angleOf(page, 'r2') - 40)).toBeLessThan(1)
     expect(text).toMatch(/^(39|40)(\.\d)?°$/)
     expect(await undoSize(page)).toBe(before + 1)
 

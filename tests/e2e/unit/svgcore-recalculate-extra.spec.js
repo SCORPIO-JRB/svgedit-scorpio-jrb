@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures.js'
+import { canonical } from '../helpers.js'
 
 test.describe('SVG core recalculate extra cases', () => {
   test.beforeEach(async ({ page }) => {
@@ -212,10 +213,10 @@ test.describe('SVG core recalculate extra cases', () => {
     expect(result.rect.transform).toContain('rotate(')
     expect(result.rect.transform).not.toContain('translate')
     expect(result.rect.hasCommand).toBe(true)
-    expect(result.visualBounds.after.x).toBeCloseTo(result.visualBounds.before.x, 5)
-    expect(result.visualBounds.after.y).toBeCloseTo(result.visualBounds.before.y, 5)
-    expect(result.visualBounds.after.width).toBeCloseTo(result.visualBounds.before.width, 5)
-    expect(result.visualBounds.after.height).toBeCloseTo(result.visualBounds.before.height, 5)
+    // Firefox places boxes on a grid of 1/60 of a pixel.
+    for (const key of ['x', 'y', 'width', 'height']) {
+      expect(Math.abs(result.visualBounds.after[key] - result.visualBounds.before[key])).toBeLessThan(1 / 30)
+    }
     expect(result.clip.x).toBe('3')
     expect(result.clip.y).toBe('-2')
     expect(result.clip.transforms).toBe(0)
@@ -321,7 +322,7 @@ test.describe('SVG core recalculate extra cases', () => {
     expect(result.poly.hasTransform).toBe(false)
     expect(result.poly.points).toContain('-5')
     expect(result.poly.hasCommand).toBe(true)
-    expect(result.path.d.startsWith('M7,8')).toBe(true)
+    expect(canonical(result.path.d).startsWith('M 7 8')).toBe(true)
     expect(result.path.transform).toBe('')
     expect(result.path.hasCommand).toBe(true)
     expect(result.rect.x).toBe('8')

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, canonical } from './helpers.js'
 
 // M4: panel of a multi-selection. X, Y, W and H of the whole selection,
 // "Mixed" values, expressions typed in the fields, commands of a single
@@ -277,7 +277,7 @@ test.describe('"Mixed" values and expressions (M4)', () => {
     expect(await angleOf(page, 'r1')).toBe(10)
     expect(await angleOf(page, 'rr')).toBe(40)
     // Each element stays in place: its center does not move.
-    expect(await attr(page, 'r1', 'transform')).toBe('rotate(10 140 130)')
+    expect(canonical(await attr(page, 'r1', 'transform'))).toBe('rotate(10 140 130)')
     expect(await undoSize(page)).toBe(1)
     expect(await field(page, 'angle')).toBe('Mixed')
     await typeField(page, 'angle', '0')
@@ -350,7 +350,7 @@ test.describe('Commands of a multi-selection, W and H of an element alone (M4)',
     // (decision of 8 November: they used to include the stroke, 298).
     expect(await field(page, 'selected_x')).toBe('300')
     await typeField(page, 'selected_w', '160')
-    expect(await attr(page, 'p1', 'd')).toBe('M300,300 L460,320 L380,400 L300,300 z')
+    expect(canonical(await attr(page, 'p1', 'd'))).toBe(canonical('M300,300 L460,320 L380,400 L300,300 z'))
     expect(await field(page, 'selected_x')).toBe('300')
     expect(await undoSize(page)).toBe(1)
     // Typing X moves the box without the stroke to that value.
