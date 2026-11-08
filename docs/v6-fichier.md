@@ -118,6 +118,7 @@ Le canevas expose `getBinding(element)`, `getReferencesTo(id)`, `renameElementId
 - **Lint** (`standard`, couleurs, libellés) : sans erreur.
 - **Tests unitaires** : 962 sur 962, dont 27 cas pour V6 (`fichier-v6.test.js`). Trois tests anciens décrivaient l'ancien comportement et ont été mis à jour : `paint-order` et `vector-effect` gardés, `fill: blue` écrit tel quel.
 - **E2E Chromium** : 480 sur 480 en disposition canevas, dont 13 pour V6 (`fichier-v6.spec.js`), et 365 sur 365 en disposition classique. Le test V3 du groupe de vue compte maintenant le bouton ▷.
+- **E2E Firefox** : à vérifier. La CI GitHub n'a pas démarré sur ce lot : le compte a un paiement refusé ou une limite de dépenses atteinte (« Billing & plans » des réglages GitHub).
 
 ## 9. Hors de ce lot
 
