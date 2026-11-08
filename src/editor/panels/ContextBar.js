@@ -515,7 +515,20 @@ export class ContextBar {
     }
     this.$bar.setAttribute('aria-label', this.t(`context.label_${kind}`))
     if (this.gesture || this.showTimer) return
-    this.position()
+    this.schedulePosition()
+  }
+
+  /**
+   * Places the bar at the next frame, once the panels have updated: the
+   * layout of the drawing is then computed once, not twice.
+   * @returns {void}
+   */
+  schedulePosition () {
+    if (this.positionFrame) return
+    this.positionFrame = requestAnimationFrame(() => {
+      this.positionFrame = null
+      this.position()
+    })
   }
 
   /**

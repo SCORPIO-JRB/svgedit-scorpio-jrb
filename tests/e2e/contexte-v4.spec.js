@@ -460,6 +460,7 @@ test.describe('Contextual bar (V4): place, gestures, focus and preference', () =
             canvas.selectorManager.requestSelector(rect).resize()
             await new Promise((resolve) => setTimeout(resolve, 0))
             window.svgEditor.layout.contextBar.update()
+            window.svgEditor.layout.contextBar.position()
             if (bar.hidden || getComputedStyle(bar).display === 'none') {
               faults.push(`not shown at ${col},${row}`)
               continue
@@ -502,6 +503,7 @@ test.describe('Contextual bar (V4): place, gestures, focus and preference', () =
       canvas.selectOnly([rect], true)
       await new Promise((resolve) => setTimeout(resolve, 0))
       window.svgEditor.layout.contextBar.update()
+      window.svgEditor.layout.contextBar.position()
       return document.getElementById('se-context-bar').dataset.side
     })
     expect(side).toBe('edge')
