@@ -210,7 +210,11 @@ test.describe('Rules by element type (M2)', () => {
     const box = await page.locator('#t1').boundingBox()
     await dragGrip(page, 'se', box.width, box.height)
     expect(await attr(page, 't1', 'transform')).toBeNull()
-    expect(Number(await attr(page, 't1', 'font-size'))).toBeCloseTo(40, 0)
+    // Mouse positions arrive in whole pixels, so a text about 20 px tall cannot
+    // be doubled exactly: the error depends on the metrics of the installed
+    // font (39.46 on the GitHub runner, 39.89 to 40.16 locally). The rule under
+    // test is a font size scaled by the gesture instead of a matrix.
+    expect(Math.abs(Number(await attr(page, 't1', 'font-size')) - 40)).toBeLessThan(2)
     await page.keyboard.press('Control+z')
     expect(await num(page, 't1', ['x', 'y', 'font-size'])).toEqual({ x: 100, y: 300, 'font-size': 20 })
   })
