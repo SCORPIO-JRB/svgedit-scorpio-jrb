@@ -57,7 +57,7 @@ Sous Chromium :
 - sortie comparée à `v4-contexte` : 21 allers-retours sur 21 et 73 scénarios sur 73 identiques ;
 - banc à 2 000 objets : inchangé ; « Tout sélectionner » dépasse toujours son budget (157 ms pour 150), comme depuis V2.
 
-Firefox tourne en CI.
+Sous Firefox, en CI : 446 tests E2E réussis.
 
 ## 6. Hors de ce lot
 
