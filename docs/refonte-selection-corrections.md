@@ -6,6 +6,7 @@ Branche `refonte-selection-corrections`, partie de `refonte-selection-arbitrages
 | --- | --- | --- |
 | 10 | La conversion en chemin écrit `fill-opacity="null"` et prend le style courant au lieu de celui de la forme | le chemin prend le style propre de la forme ; plus aucune valeur `null` n'est écrite |
 | 10 (suite) | La conversion perd `fill-rule`, `mask`, `class`, le titre et tout attribut hors d'une courte liste | le chemin garde tout ce que la forme a, sauf sa géométrie |
+| 10 (export) | L'enregistrement retire les valeurs par défaut même quand un groupe les remplace, et les retire aussi du dessin ouvert | une valeur par défaut n'est omise que si c'est sans effet ; l'enregistrement ne modifie plus le dessin |
 
 ## 1. Question 10 — Conversion en chemin
 
@@ -66,29 +67,60 @@ Le chemin garde tout ce que la forme a, sauf sa géométrie (`x`, `y`, `width`, 
 - **Visibilité.** Une forme cachée (`visibility="hidden"`) le reste ; avant, elle devenait visible.
 - **Exceptions.** Le repère de connecteur (`se:connector`) n'est pas reporté : un chemin ne peut pas être un connecteur, et l'extension Connecteur essaierait de le mettre à jour comme une polyligne. Comme avant, un connecteur converti devient un chemin ordinaire. Les animations (SMIL) ne sont pas copiées, car elles sont hors périmètre.
 
-### Ce qui reste : l'enregistrement retire les valeurs par défaut
+L'enregistrement retirait lui aussi les valeurs par défaut, de toutes les formes : c'est l'objet de la section 3.
 
-L'export enregistre chaque élément sans ses valeurs par défaut (`svg-exec.js`, `cleanupElement`). Il le fait pour toutes les formes, converties ou non, et retire aussi ces valeurs du document ouvert. La conversion ne change donc plus rien de ce côté : le chemin se comporte exactement comme la forme, dans l'éditeur comme à l'enregistrement. Le défaut de l'export reste entier : une forme au trait de 1 dans un groupe au trait de 5 est enregistrée sans son trait, et passe à 5 à la réouverture. Sa correction change la sortie de nombreux dessins : elle est proposée à part.
+## 3. Question 10 (export) — Valeurs par défaut à l'enregistrement
 
-## 3. Ce qui change dans la sortie
+### Le défaut
 
-La sortie enregistrée ne change que pour la conversion en chemin :
+À chaque enregistrement, l'export retirait les valeurs par défaut de tous les éléments (`stroke-width="1"`, `fill-opacity="1"`, `stroke="none"`, `opacity="1"`, `rx="0"`…), sans regarder le contexte. Il les retirait aussi du dessin ouvert, pas seulement du fichier. Constaté dans l'éditeur :
+- **Le trait.** Un rectangle au trait de 1, dans un groupe au trait de 5, passait à 5 dès l'enregistrement, et le fichier le gardait à 5.
+- **Les coins arrondis.** Un rectangle `rx="0" ry="10"` perdait son `rx="0"`. Or un `rx` absent prend la valeur de `ry` : les coins devenaient arrondis.
+- **Le dessin.** Avec un trait de 1 choisi dans le panneau, une forme dessinée dans un groupe ouvert au trait de 5 n'avait pas d'attribut et s'affichait à 5, alors que le panneau indiquait 1.
+- **Le collage.** Un groupe collé perdait le trait de 1 de ses enfants. Chaque enfant était créé dans le calque, nettoyé là, puis déplacé dans son groupe.
+
+### La règle de l'art
+
+Un éditeur conserve le document ; l'optimisation est un choix explicite à part (Inkscape : « SVG Inkscape » et « SVG simple » gardent tout, « SVG optimisé » passe par Scour). Un optimiseur ne retire une valeur par défaut que si c'est sans effet. SVGO (`removeUnknownsAndDefaults`) exige qu'aucun parent ne fixe la propriété, que l'élément n'ait pas d'`id` (il pourrait être réutilisé par un `<use>`) et qu'aucune règle CSS ne cible l'attribut. L'option retenue (B) garde l'allègement de SVG-Edit, mais avec ces précautions.
+
+### La correction
+
+Une valeur par défaut n'est omise que si c'est sans effet :
+- **Propriétés héritées** (`stroke`, `stroke-width`, `stroke-dasharray`, `stroke-linejoin`, `stroke-linecap`, `stroke-opacity`, `fill-opacity`) : omises seulement si le parent transmet lui-même la valeur initiale. L'ancêtre le plus proche qui fixe la propriété décide, par son attribut `style`, par une règle d'une feuille de style du dessin (`<style>`) ou par son attribut. Sans ancêtre qui la fixe, la valeur est la valeur initiale.
+- **Élément réutilisé.** Un élément qu'un `<use>` réutilise, lui ou l'un de ses ancêtres, garde ses valeurs : il hérite aussi du `<use>`. SVGO garde les valeurs de tout élément qui a un `id`. Ici, tous les éléments en ont un, donc seuls ceux réellement référencés par un `<use>` les gardent.
+- **Propriétés non héritées** (`opacity`, `stop-opacity`) : toujours omises, comme avant ; aucun groupe ne les transmet.
+- **`rx` et `ry`.** `rx="0"` n'est omis que si `ry` est absent ou nul, et inversement. Sur une ellipse, ils sont gardés, comme avant.
+- **Feuilles de style de l'éditeur.** Elles ne comptent pas. Le mode « fil de fer » impose par CSS un trait noir à tout le dessin : la sortie ne dépend pas du mode d'affichage.
+
+La règle s'applique partout où SVG-Edit allège un élément :
+- **Enregistrement.** Le dessin n'est plus modifié : seules les valeurs omises manquent au fichier.
+- **Création d'une forme** (dessin, collage, extensions par `addSVGElementsFromJson`). Le nettoyage se fait une fois l'arbre entier en place, donc chaque enfant d'un groupe collé est jugé dans son groupe.
+- **Presse-papiers du système** (M7). La copie est un document autonome : un élément copié seul n'a plus de groupe, et ses valeurs par défaut sont omises comme avant.
+
+## 4. Ce qui change dans la sortie
+
+La sortie enregistrée change pour la conversion en chemin :
 - **Forme convertie sans clic préalable** (section 1). Elle garde son propre style au lieu de prendre le style courant.
 - **Opacité** (section 1). Une forme opaque à 50 % le reste une fois convertie. Une forme sans opacité ne reçoit plus l'opacité courante.
 - **Attributs auparavant perdus** (section 2). `fill-rule`, `mask`, `class`, le titre, etc. sont enregistrés sur le chemin.
 - **Forme cliquée puis convertie, sans attribut auparavant perdu.** Sortie identique : l'export retirait déjà les « null », et les attributs gardent leur ordre.
 
+Elle change aussi, pour tout dessin, là où une valeur par défaut omise aurait changé le rendu (section 3) : un trait de 1 dans un groupe au trait plus large, `rx="0"` à côté d'un `ry` non nul, un élément réutilisé par un `<use>` dans un groupe qui fixe la propriété. Ailleurs, les valeurs par défaut sont omises comme avant.
+
 Les formes et textes dessinés après un clic gardent la même sortie et le même rendu qu'avant, y compris dans un groupe. Seuls les attributs « null » disparaissent du document ouvert.
 
-Comparaison avec `refonte-selection-arbitrages` (`06a75f9`), sur 72 scénarios :
+Comparaison avec `refonte-selection-arbitrages` (`06a75f9`), sur 73 scénarios :
 - 15 allers-retours d'import et d'export sur 15 sont identiques ;
-- 69 scénarios sur 72 sont identiques ;
-- les 3 différences sont attendues :
+- 69 scénarios sur 73 sont identiques ;
+- les 4 différences sont attendues :
   - « convert to path », une ellipse convertie par l'API sans clic : `fill="#FF0000" stroke="#000000" stroke-width="5"` devient `fill="#a63"`, son propre style ;
   - « convert several to paths », un rectangle à 50 % d'opacité converti avec deux autres formes : `opacity="0.5"` est conservé ;
-  - « convert to path keeps all the shape has », une ellipse avec `fill-rule`, `stroke-miterlimit`, `class` et un titre : le chemin les garde tous.
+  - « convert to path keeps all the shape has », une ellipse avec `fill-rule`, `stroke-miterlimit`, `class` et un titre : le chemin les garde tous ;
+  - « save keeps the defaults that matter » : le rectangle `g1`, au trait de 1 dans un groupe au trait de 5, garde `stroke-width="1"`, et `r1` garde `rx="0"` à côté de `ry="10"`. `opacity="1"` reste omis.
 
-Par rapport à la correction précédente (`4bb1cf5`), seul ce dernier scénario change : les 71 autres sont identiques.
+Par rapport à la correction précédente (`b05993a`), seul ce dernier scénario change : les 72 autres sont identiques.
+
+Temps d'enregistrement, sur un dessin de 3 000 rectangles portant chacun 5 valeurs par défaut : 135 ms contre 129 ms au premier enregistrement. Les suivants paraissaient plus rapides auparavant, car le premier avait déjà retiré ces attributs du dessin.
 
 ### API des extensions
 
@@ -96,8 +128,14 @@ Par rapport à la correction précédente (`4bb1cf5`), seul ce dernier scénario
 - `svgCanvas.convertSelectedToPaths()` suit la même règle et ne touche plus au style courant.
 - `convertToPath(elem, attrs, svgCanvas)` du module `utilities` : `attrs` devient facultatif et s'applique par-dessus les attributs de la forme. Avant, c'était le style complet du chemin.
 - `assignAttributes(elem, attrs)`, et donc `addSVGElementsFromJson`, retire l'attribut pour une valeur `null`, comme pour `undefined`, au lieu d'écrire « null ».
+- `svgCanvas.svgToString(elem, indent)` ne modifie plus `elem` : les valeurs par défaut sont omises à l'écriture, selon la règle de la section 3.
+- `cleanupElement(elem)` suit la même règle. Nouveaux, dans le module `utilities` :
+  - `isRemovableDefault(elem, name)` dit si un attribut peut être omis ;
+  - `cleanupElements(elems)` nettoie plusieurs éléments d'un même dessin ;
+  - `getDefaultsContext(elem)` donne ce que la règle doit savoir du dessin (`<use>`, feuilles de style).
+- `addSVGElementsFromJson(data)` nettoie les éléments créés une fois l'arbre entier en place, et non plus chacun au moment de sa création.
 
-## 4. Tester en local (PowerShell)
+## 5. Tester en local (PowerShell)
 
 ```powershell
 cd svgedit-scorpio-jrb
@@ -116,17 +154,25 @@ Vérification manuelle, dans l'éditeur ouvert sur `http://localhost:8000/index.
 2. Cliquez l'ellipse, puis appuyez sur Tab : le rectangle est sélectionné. Cliquez « Convertir en chemin ». Le chemin reste vert, à 50 % d'opacité, sans contour. Avant la correction, il devenait orange à trait bleu, opaque.
 3. Cliquez l'ellipse, puis dessinez un rectangle : il est orange à trait bleu. Dans les outils de développement (F12, onglet Éléments), il n'a aucun attribut « null ».
 4. Dans la source, collez `<polygon points="150,20 209,200 55,90 245,90 91,200" fill="#3a6" fill-rule="evenodd"><title>Vanne V12</title></polygon>` : une étoile au centre vide. Cliquez une de ses branches (le centre vide ne la sélectionne pas), puis « Convertir en chemin ». Le centre reste vide, et le chemin contient toujours le titre « Vanne V12 » (F12, onglet Éléments). Avant la correction, l'étoile devenait pleine et perdait son titre.
+5. Dans la source, collez `<g stroke="#000" stroke-width="5"><rect x="400" y="300" width="80" height="60" fill="#c00" stroke-width="1"/></g>` et `<rect x="250" y="300" width="80" height="60" fill="#c00" rx="0" ry="10"/>`. Enregistrez (Ctrl+S), puis rouvrez le fichier. Le premier rectangle garde son trait fin et le second ses coins carrés. Avant la correction, le trait passait à 5 dès l'enregistrement et les coins s'arrondissaient.
 
-## 5. Tests ajoutés
+## 6. Tests ajoutés
 
 **Tests unitaires :**
 - `tests/unit/utilities-extra2.test.js` : `assignAttributes` retire l'attribut pour `null`, y compris avec un espace de noms ;
 - `tests/unit/json.test.js` : une forme créée avec le style courant ne reçoit pas les attributs à `null`, ni aucune valeur « null » ;
 - `tests/unit/utilities.test.js` :
   - la conversion garde tous les attributs sauf la géométrie, espaces de noms et valeurs par défaut compris, ainsi que le titre (une copie). Elle laisse de côté le repère de connecteur et les animations ;
-  - les attributs déjà reportés gardent leur ordre.
+  - les attributs déjà reportés gardent leur ordre ;
+- `tests/unit/utilities-extra2.test.js`, valeurs par défaut :
+  - une valeur que rien ne remplace est retirée, comme avant ;
+  - une valeur qu'un groupe remplace est gardée, que le groupe la fixe par attribut, par `style` ou par feuille de style ;
+  - elle est retirée si le groupe transmet aussi la valeur initiale ;
+  - un élément réutilisé par un `<use>` garde la sienne ;
+  - la règle de `rx` et `ry`, et le cas d'un élément hors du dessin ;
+- `tests/unit/json.test.js` : un enfant créé avec son groupe est nettoyé dans son groupe, pas dans le calque.
 
-**`tests/e2e/corrections.spec.js` (9 tests, sans erreur dans la page) :**
+**`tests/e2e/corrections.spec.js` (12 tests, sans erreur dans la page) :**
 - forme cliquée puis convertie par le bouton : style gardé, aucun « null », annulation ;
 - forme sélectionnée par l'API après un clic sur une autre : elle garde son style et son opacité ;
 - forme d'un groupe : aucun attribut ajouté, le remplissage et le contour hérités du groupe sont les mêmes ;
@@ -138,16 +184,24 @@ Vérification manuelle, dans l'éditeur ouvert sur `http://localhost:8000/index.
   - tout est gardé et le centre reste vide ;
   - le titre est enregistré dans le chemin ;
   - l'annulation rend l'étoile intacte ;
-- rectangle au trait de 1 dans un groupe au trait de 5 : le chemin garde le trait de 1.
+- rectangle au trait de 1 dans un groupe au trait de 5 : le chemin garde le trait de 1 ;
+- enregistrement d'un dessin où un groupe, une feuille de style ou un `<use>` remplace une valeur par défaut :
+  - la valeur est enregistrée, tout comme `rx="0"` à côté de `ry="10"` ;
+  - les valeurs que rien ne remplace sont omises ;
+  - le dessin ouvert n'est pas modifié, et le fichier rouvert s'affiche à l'identique ;
+- rectangle dessiné au trait de 1 dans un groupe ouvert au trait de 5 : il garde son trait, à l'écran comme à l'enregistrement ;
+- groupe collé dont un enfant a un trait de 1 : l'enfant le garde.
 
-Les 7 premiers tests échouent sur `refonte-selection-arbitrages`. Les 2 derniers échouent sur la correction précédente (`4bb1cf5`). Tous passent sur cette branche.
+Les 7 premiers tests échouent sur `refonte-selection-arbitrages`. Les 8e et 9e échouent sur `4bb1cf5`, et les 3 derniers sur `b05993a`. Tous passent sur cette branche.
 
-**`tests/output/`** : nouveaux scénarios « convert several to paths » et « convert to path keeps all the shape has ».
+**`tests/output/`** : nouveaux scénarios « convert several to paths », « convert to path keeps all the shape has » et « save keeps the defaults that matter ».
 
-**Résultats :** lint propre, 752 tests unitaires et 281 tests E2E passent ; comparaison de sortie en section 3.
+**Résultats :** lint propre, 759 tests unitaires et 284 tests E2E passent ; comparaison de sortie en section 4.
 
-## 6. Limites connues
+## 7. Limites connues
 
-- **Valeurs par défaut à l'enregistrement.** L'export retire les valeurs par défaut de chaque élément (section 2). C'est un défaut général de l'export, pas de la conversion, et sa correction est proposée à part.
+- **Feuilles de style hors du dessin.** La règle ne connaît que les `<style>` du dessin. Une page web qui affiche le fichier et fixe, par CSS, le trait d'un groupe peut encore remplacer une valeur omise.
+- **Sélecteurs d'attribut.** Une règle CSS qui cible un attribut (`[stroke-width="1"]`) n'est pas prise en compte, contrairement à SVGO. Pour une même propriété, la règle de feuille de style retenue est la dernière qui s'applique, sans calcul complet de priorité.
+- **`<use>` d'un autre fichier.** Un élément réutilisé depuis un autre fichier ne peut pas être repéré.
 - **Animations (SMIL).** Elles ne sont pas copiées sur le chemin, car elles sont hors périmètre.
 - **Connecteurs.** Un connecteur converti devient un chemin ordinaire, comme avant.

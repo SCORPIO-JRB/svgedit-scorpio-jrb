@@ -21,6 +21,16 @@ const DRAWING_FULL = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height
 <g id="g2" stroke="#000" stroke-width="5" fill-opacity="0.3"><rect id="r2" x="350" y="300" width="80" height="60" fill="#c00" stroke-width="1" fill-opacity="1"/></g>
 </g></svg>`
 
+// Values at their default that a group, a style sheet or a <use> overrides.
+const DRAWING_DEFAULTS = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" height="480"><style>.epais { stroke-width: 6px }</style><g class="layer"><title>Layer 1</title>
+<g id="g2" stroke="#000" stroke-width="5"><rect id="r2" x="350" y="300" width="80" height="60" fill="#c00" stroke-width="1"/></g>
+<g id="g3" class="epais" stroke="#000"><rect id="r3" x="350" y="50" width="80" height="60" fill="#c00" stroke-width="1"/></g>
+<rect id="r4" x="50" y="300" width="80" height="60" fill="#c00" stroke="#000" stroke-width="1" opacity="1"/>
+<rect id="r5" x="200" y="300" width="80" height="60" fill="#c00" rx="0" ry="10"/>
+<rect id="r6" x="50" y="50" width="80" height="60" fill="#c00" stroke="#00f" stroke-width="1"/>
+<g id="g4" stroke-width="5"><use id="u1" xlink:href="#r6" x="150" y="0"/></g>
+</g></svg>`
+
 async function loadDrawing (page, drawing = DRAWING) {
   await page.evaluate((svg) => {
     window.svgEditor.setConfig({ gridSnapping: false })
@@ -217,8 +227,6 @@ test.describe('Convert to path keeps everything the shape has but its geometry (
     expect(await page.evaluate(() => document.getElementById('star').children.length)).toBe(1)
   })
 
-  // The export still leaves out a value at its default when saving, for the
-  // shape as for the path: the conversion itself changes nothing.
   test('an attribute at its default value is kept, so the group does not override it in the drawing', async ({ page }) => {
     const computed = () => page.evaluate(() => {
       const { strokeWidth, fillOpacity } = getComputedStyle(document.getElementById('r2'))
@@ -234,5 +242,72 @@ test.describe('Convert to path keeps everything the shape has but its geometry (
     expect(await tagOf(page, 'r2')).toBe('path')
     expect(await style(page, 'r2')).toEqual({ fill: '#c00', 'stroke-width': '1', 'fill-opacity': '1' })
     expect(await computed()).toEqual(before)
+  })
+})
+
+test.describe('Saving leaves out a default value only where it changes nothing (question 10)', () => {
+  test.beforeEach(async ({ page }) => {
+    await loadDrawing(page, DRAWING_DEFAULTS)
+  })
+
+  // The tag of an element in the saved text.
+  const tagIn = (saved, id) => saved.match(new RegExp(`<[a-z]+ [^>]*\\bid="${id}"[^>]*>`))?.[0] ?? ''
+  const widths = (page) => page.evaluate(() => Object.fromEntries(['r2', 'r3', 'r4'].map((id) =>
+    [id, getComputedStyle(document.getElementById(id)).strokeWidth])))
+
+  test('a default a group, a style sheet or a <use> overrides is saved, and saving changes nothing in the drawing', async ({ page }) => {
+    const before = await widths(page)
+    expect(before).toEqual({ r2: '1px', r3: '1px', r4: '1px' })
+    const saved = await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())
+    expect(tagIn(saved, 'r2')).toContain('stroke-width="1"')
+    expect(tagIn(saved, 'r3')).toContain('stroke-width="1"')
+    expect(tagIn(saved, 'r6')).toContain('stroke-width="1"')
+    expect(tagIn(saved, 'r5')).toContain('rx="0"')
+    // Nothing overrides these: they are left out, as before.
+    expect(tagIn(saved, 'r4')).not.toContain('stroke-width')
+    expect(tagIn(saved, 'r4')).not.toContain('opacity')
+    // The drawing keeps them all.
+    expect(await page.evaluate(() => ['r2', 'r4'].map((id) => document.getElementById(id).getAttribute('stroke-width')))).toEqual(['1', '1'])
+    expect(await page.evaluate(() => document.getElementById('r4').getAttribute('opacity'))).toBe('1')
+    expect(await widths(page)).toEqual(before)
+    // Reopened, the file looks the same.
+    await loadDrawing(page, saved)
+    expect(await widths(page)).toEqual(before)
+    expect(await page.evaluate(() => document.getElementById('r5').getAttribute('rx'))).toBe('0')
+  })
+
+  test('a shape drawn with a stroke width of 1 in a group with a wider stroke keeps its width', async ({ page }) => {
+    await page.evaluate(() => {
+      const canvas = window.svgEditor.svgCanvas
+      canvas.setContext(document.getElementById('g2'))
+      canvas.clearSelection()
+      canvas.setStrokeWidth(1)
+    })
+    await page.keyboard.press('r')
+    const box = await page.locator('#svgcontent').boundingBox()
+    await page.mouse.move(box.x + 450, box.y + 200)
+    await page.mouse.down()
+    await page.mouse.move(box.x + 520, box.y + 250, { steps: 5 })
+    await page.mouse.up()
+    await settle(page)
+    const drawn = await page.evaluate(() => {
+      const rect = document.querySelector('#g2 rect:not(#r2)')
+      return rect && { width: rect.getAttribute('stroke-width'), computed: getComputedStyle(rect).strokeWidth, id: rect.id }
+    })
+    expect(drawn).toMatchObject({ width: '1', computed: '1px' })
+    const saved = await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())
+    expect(tagIn(saved, drawn.id)).toContain('stroke-width="1"')
+  })
+  test('a group pasted with a child at a stroke width of 1 keeps it', async ({ page }) => {
+    const pasted = await page.evaluate(() => {
+      const canvas = window.svgEditor.svgCanvas
+      canvas.selectOnly([document.getElementById('g2')], true)
+      canvas.copySelectedElements()
+      canvas.pasteElements('in_place')
+      const group = canvas.getSelectedElements().filter(Boolean)[0]
+      const rect = group?.querySelector('rect')
+      return rect && { group: group.id !== 'g2', width: rect.getAttribute('stroke-width'), computed: getComputedStyle(rect).strokeWidth }
+    })
+    expect(pasted).toEqual({ group: true, width: '1', computed: '1px' })
   })
 })

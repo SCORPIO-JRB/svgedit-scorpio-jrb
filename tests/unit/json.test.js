@@ -160,4 +160,21 @@ describe('json', () => {
     expect(rect.hasAttribute('stroke-dasharray')).toBe(false)
     expect(rect.getAttribute('stroke')).toBe('#000')
   })
+  it('addSVGElementsFromJson() cleans up a child in its group, not in the layer it is made in', () => {
+    const group = addSVGElementsFromJson({
+      element: 'g',
+      attr: { id: 'pasted', 'stroke-width': '5' },
+      children: [
+        { element: 'rect', attr: { id: 'thin', width: 3, height: 4, 'stroke-width': '1', opacity: '1' } },
+        { element: 'g', attr: { id: 'inner' }, children: [{ element: 'rect', attr: { id: 'deep', 'stroke-width': '1' } }] }
+      ]
+    })
+    expect(group.parentNode).toBe(layer)
+    const thin = group.querySelector('#thin')
+    expect(thin.getAttribute('stroke-width')).toBe('1')
+    expect(thin.hasAttribute('opacity')).toBe(false)
+    expect(group.querySelector('#deep').getAttribute('stroke-width')).toBe('1')
+    const alone = addSVGElementsFromJson({ element: 'rect', attr: { id: 'alone', 'stroke-width': '1' } })
+    expect(alone.hasAttribute('stroke-width')).toBe(false)
+  })
 })
