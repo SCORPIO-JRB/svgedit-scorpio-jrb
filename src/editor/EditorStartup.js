@@ -786,6 +786,11 @@ class EditorStartup {
     const mode = this.svgCanvas.getMode()
 
     this.setCursorStyle(mode)
+    // Another mode turns the Scale tool off: its panel goes with it.
+    if (this.workarea.classList.contains('scale_tool') && !this.svgCanvas.isScaleTool?.()) {
+      this.workarea.classList.remove('scale_tool')
+      this.topPanel.updateContextPanel()
+    }
   }
 
   /**

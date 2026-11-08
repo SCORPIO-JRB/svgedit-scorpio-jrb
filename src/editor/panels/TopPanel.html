@@ -72,6 +72,10 @@
       src="align_distrib_horiz.svg"></se-button>
     <se-button id="tool_align_distrib_verti" title="tools.align_distrib_verti"
       src="align_distrib_verti.svg"></se-button>
+    <!-- Tidy up: a row, a column or a grid, with the most frequent gap or
+         the spacing typed in the field; an empty field distributes evenly. -->
+    <se-button id="tool_tidy_up" title="tools.tidy_up" src="tidy_up.svg"></se-button>
+    <se-input id="tool_align_spacing" size="3" label="tools.spacing_label" title="tools.spacing"></se-input>
     <!-- Shift+H and Shift+V are bound by tool_flip_h and tool_flip_v, which
          flip a multi-selection too: these buttons only show the hint. -->
     <se-button id="tool_flip_h_multi" title="tools.flip_horizontal" shortcut="Shift+H"
@@ -128,6 +132,29 @@
     <se-spin-input id="selected_h" size="4" min=0 label="properties.h_label"
       title="properties.selection_height"></se-spin-input>
     <se-button id="tool_ratio_lock" title="tools.ratio_lock" src="ratio_lock.svg"></se-button>
+  </div>
+  <!-- The Scale tool (K): factor, width and height of the selection, and
+       the point that stays in place. Strokes, dashes and text sizes scale
+       with the geometry. -->
+  <div class="scale_panel">
+    <div class="tool_sep"></div>
+    <se-spin-input id="scale_factor" size="3" min="0.01" step="0.1" label="tools.scale_factor_label"
+      title="tools.scale_factor"></se-spin-input>
+    <se-spin-input id="scale_w" size="4" min="0" label="properties.w_label" title="tools.scale_width">
+    </se-spin-input>
+    <se-spin-input id="scale_h" size="4" min="0" label="properties.h_label" title="tools.scale_height">
+    </se-spin-input>
+    <div id="scale_anchor" role="radiogroup">
+      <button type="button" role="radio" data-anchor="nw"></button>
+      <button type="button" role="radio" data-anchor="n"></button>
+      <button type="button" role="radio" data-anchor="ne"></button>
+      <button type="button" role="radio" data-anchor="w"></button>
+      <button type="button" role="radio" data-anchor="c"></button>
+      <button type="button" role="radio" data-anchor="e"></button>
+      <button type="button" role="radio" data-anchor="sw"></button>
+      <button type="button" role="radio" data-anchor="s"></button>
+      <button type="button" role="radio" data-anchor="se"></button>
+    </div>
   </div>
   <div class="rect_panel">
     <se-spin-input id="rect_width" data-attr="width" size="4" label="properties.w_label"

@@ -14,6 +14,9 @@
     "groupResizeRelease": 300,
     "groupRotateMove": 100,
     "groupRotateRelease": 300,
+    "scaleToolMove": 100,
+    "scaleToolRelease": 300,
+    "tidyUp": 200,
     "hover": 4
   }
 }

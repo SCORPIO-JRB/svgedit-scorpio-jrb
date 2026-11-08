@@ -258,6 +258,7 @@ class TopPanel {
     this.hideTool('a_panel')
     this.hideTool('xy_panel')
     this.hideTool('wh_panel')
+    this.hideTool('scale_panel')
     if (elem) {
       const elname = elem.nodeName
 
@@ -513,6 +514,14 @@ class TopPanel {
         '#delete,#cut,#copy,#group,#ungroup,#move_front,#move_up,#move_down,#move_back'
       )
     }
+    // The Scale tool (K): its panel takes the place of the W and H fields.
+    if (this.editor.svgCanvas.isScaleTool?.() && (elem || this.multiselected) && !isNode) {
+      this.hideTool('wh_panel')
+      this.displayTool('scale_panel')
+      this.scheduleScaleFields()
+    } else {
+      this.scaleBase = null
+    }
     // Objects that look the same as the selection: same symbol for a <use>,
     // same fill or stroke for a shape or a text.
     SIMILAR_CRITERIA.forEach((criterion) => {
@@ -760,7 +769,152 @@ class TopPanel {
     const lock = $id('tool_ratio_lock')
     lock.pressed = ratioForced || Boolean(this.keepRatio)
     lock.disabled = ratioForced
-    this.displayTool('wh_panel')
+    // The Scale tool's panel has its own W and H.
+    if (!this.editor.svgCanvas.isScaleTool?.()) { this.displayTool('wh_panel') }
+  }
+
+  /**
+   * Fills the fields of the Scale tool once the next frame is drawn, as for
+   * the fields of a multi-selection (see scheduleSelectionFields).
+   * @returns {void}
+   */
+  scheduleScaleFields () {
+    if (this.scaleFieldsPending) { return }
+    this.scaleFieldsPending = true
+    requestAnimationFrame(() => {
+      const run = () => {
+        this.scaleFieldsPending = false
+        this.showScaleFields()
+      }
+      if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(run, { timeout: 100 })
+      } else {
+        setTimeout(run, 0)
+      }
+    })
+  }
+
+  /**
+   * Shows the factor of the selection since it was selected with the Scale
+   * tool on, and the W and H of its box, stroke excluded.
+   * @returns {void}
+   */
+  showScaleFields () {
+    if (!this.editor.svgCanvas.isScaleTool?.()) { return }
+    const elements = this.editor.svgCanvas.getSelectedElements().filter(Boolean)
+    const box = elements.length ? this.editor.svgCanvas.getSelectionBox?.(elements) : null
+    if (!box) { return }
+    const base = this.scaleBase
+    if (!base || base.elements.length !== elements.length ||
+      base.elements.some((elem, i) => elem !== elements[i])) {
+      // The factor counts from the size the selection had when it was taken.
+      this.scaleBase = { elements: [...elements], width: box.width, height: box.height }
+    }
+    const factor = this.scaleFactorOf(box)
+    this.shownScale = {
+      factor: String(Math.round(factor * 1000) / 1000),
+      w: String(this.toField(box.width)),
+      h: String(this.toField(box.height))
+    }
+    $id('scale_factor').value = this.shownScale.factor
+    $id('scale_factor').preciseValue = factor
+    $id('scale_w').value = this.shownScale.w
+    $id('scale_h').value = this.shownScale.h
+    $id('scale_w').preciseValue = this.inUnit(box.width)
+    $id('scale_h').preciseValue = this.inUnit(box.height)
+  }
+
+  /**
+   * Factor of the selection's box compared with its size when it was taken.
+   * @param {module:utilities.BBoxObject} box
+   * @returns {number}
+   */
+  scaleFactorOf (box) {
+    const base = this.scaleBase
+    if (base?.width > 1e-9) { return box.width / base.width }
+    if (base?.height > 1e-9) { return box.height / base.height }
+    return 1
+  }
+
+  /**
+   * Scales the selection with the Scale tool by its factor, W or H field,
+   * about the chosen anchor: proportions kept, strokes included.
+   * @param {Event} e
+   * @returns {void}
+   */
+  changeScaleField (e) {
+    const field = { scale_factor: 'factor', scale_w: 'w', scale_h: 'h' }[e.target.id]
+    if (e.target.value === this.shownScale?.[field]) { return }
+    const { svgCanvas } = this.editor
+    const box = svgCanvas.getSelectionBox?.()
+    const value = Number(e.target.value)
+    let k = NaN
+    if (box && field === 'factor') {
+      k = value / this.scaleFactorOf(box)
+    } else if (box && field === 'w') {
+      k = this.fromField(value) / box.width
+    } else if (box) {
+      k = this.fromField(value) / box.height
+    }
+    if (Number.isFinite(k) && k > 0) {
+      svgCanvas.scaleSelectionBy(k, { anchor: this.scaleAnchor })
+    }
+    this.scheduleScaleFields()
+  }
+
+  /**
+   * Chooses the point of the selection that stays in place when the Scale
+   * tool's fields are changed.
+   * @param {string} anchor - n, ne, e, se, s, sw, w, nw or c
+   * @param {boolean} [focus] - Moves the focus to its button
+   * @returns {void}
+   */
+  setScaleAnchor (anchor, focus = false) {
+    this.scaleAnchor = anchor
+    $id('scale_anchor').querySelectorAll('button').forEach((button) => {
+      const checked = button.dataset.anchor === anchor
+      button.setAttribute('aria-checked', String(checked))
+      button.tabIndex = checked ? 0 : -1
+      if (checked && focus) { button.focus() }
+    })
+  }
+
+  /**
+   * Arrow keys move the anchor within its three by three grid.
+   * @param {KeyboardEvent} e
+   * @returns {void}
+   */
+  keyScaleAnchor (e) {
+    const order = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se']
+    const moves = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] }
+    const move = moves[e.key]
+    if (!move) { return }
+    e.preventDefault()
+    const i = order.indexOf(this.scaleAnchor)
+    const row = Math.min(2, Math.max(0, Math.floor(i / 3) + move[0]))
+    const col = Math.min(2, Math.max(0, (i % 3) + move[1]))
+    this.setScaleAnchor(order[row * 3 + col], true)
+  }
+
+  /**
+   * Spacing typed for Distribute and Tidy up, in the drawing's units.
+   * @returns {number|null} Null when the field is empty or not a number:
+   *   Distribute then spaces the objects evenly, Tidy up uses their most
+   *   frequent gap.
+   */
+  alignSpacing () {
+    const raw = String($id('tool_align_spacing')?.value ?? '').trim().replace(',', '.')
+    if (raw === '') { return null }
+    const n = Number(raw)
+    return Number.isFinite(n) ? this.fromField(n) : null
+  }
+
+  /**
+   * Tidies the selection up into a row, a column or a grid.
+   * @returns {void}
+   */
+  clickTidyUp () {
+    this.editor.svgCanvas.tidyUpSelectedElements({ spacing: this.alignSpacing() })
   }
 
   /**
@@ -931,7 +1085,13 @@ class TopPanel {
     if (value === '') {
       value = 'selected'
     }
-    this.editor.svgCanvas.alignSelectedElements(pos, value)
+    // A spacing typed in its field replaces the even distribution.
+    const spacing = pos.startsWith('distrib') ? this.alignSpacing() : null
+    if (spacing === null) {
+      this.editor.svgCanvas.alignSelectedElements(pos, value)
+    } else {
+      this.editor.svgCanvas.alignSelectedElements(pos, value, { spacing })
+    }
   }
 
   /**
@@ -1322,6 +1482,22 @@ class TopPanel {
     $click($id('tool_topath'), this.convertToPath.bind(this))
     $click($id('tool_topath_multi'), this.convertToPath.bind(this))
     $click($id('tool_ratio_lock'), this.clickRatioLock.bind(this))
+    // The Scale tool's panel (M9)
+    ;['scale_factor', 'scale_w', 'scale_h'].forEach((id) =>
+      $id(id).addEventListener('change', this.changeScaleField.bind(this))
+    )
+    const anchors = $id('scale_anchor')
+    anchors.setAttribute('aria-label', i18next.t('tools.scale_anchor'))
+    anchors.title = i18next.t('tools.scale_anchor')
+    anchors.querySelectorAll('button').forEach((button) => {
+      const label = i18next.t(`tools.anchor_${button.dataset.anchor}`)
+      button.setAttribute('aria-label', label)
+      button.title = label
+      button.addEventListener('click', () => this.setScaleAnchor(button.dataset.anchor))
+    })
+    anchors.addEventListener('keydown', this.keyScaleAnchor.bind(this))
+    this.setScaleAnchor('nw')
+    $click($id('tool_tidy_up'), this.clickTidyUp.bind(this))
     ;['selected_x', 'selected_y'].forEach(id =>
       $id(id).addEventListener('change', this.changeSelectionPosition.bind(this))
     )

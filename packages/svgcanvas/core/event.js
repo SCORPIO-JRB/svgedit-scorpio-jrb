@@ -28,6 +28,10 @@ import {
   beginGroupRotate,
   updateGroupRotate,
   commitGroupRotate,
+  beginGroupScale,
+  updateGroupScale,
+  commitGroupScale,
+  isGroupScaling,
   cancelGroupGesture,
   isGroupGesture,
   isGroupResizing,
@@ -524,6 +528,15 @@ const mouseMoveEvent = (evt) => {
       break
     }
     case 'resize': {
+      if (isGroupScaling()) {
+        // The Scale tool: one uniform factor, strokes included.
+        updateGroupScale(x, y, {
+          alt: evt.altKey,
+          snap: svgCanvas.getCurConfig().gridSnapping ? snapToGrid : undefined
+        })
+        svgCanvas.call('transition', selectedElements)
+        break
+      }
       if (isGroupResizing()) {
         // The common frame of a multi-selection: one matrix for all.
         updateGroupResize(x, y, {
@@ -990,10 +1003,16 @@ const mouseUpEvent = (evt) => {
   rotateOffset = null
   let t
   const mouseUpMode = svgCanvas.getCurrentMode()
-  if ((mouseUpMode === 'resize' && isGroupResizing()) || (mouseUpMode === 'rotate' && isGroupRotating())) {
-    // Resize or rotation of a multi-selection: one undo step for all the
-    // elements.
-    const batch = mouseUpMode === 'resize' ? commitGroupResize() : commitGroupRotate()
+  if ((mouseUpMode === 'resize' && (isGroupResizing() || isGroupScaling())) ||
+    (mouseUpMode === 'rotate' && isGroupRotating())) {
+    // Resize or rotation of a multi-selection, or a drag with the Scale
+    // tool: one undo step for all the elements.
+    let batch
+    if (mouseUpMode === 'rotate') {
+      batch = commitGroupRotate()
+    } else {
+      batch = isGroupScaling() ? commitGroupScale() : commitGroupResize()
+    }
     svgCanvas.setCurrentMode('select')
     if (batch) {
       svgCanvas.addCommandToHistory(batch)
@@ -1637,6 +1656,15 @@ const mouseDownEvent = (evt) => {
       }, 100)
       break
     case 'resize': {
+      if (svgCanvas.isScaleTool?.()) {
+        // The Scale tool: one element or several, proportions kept, strokes
+        // scaled.
+        svgCanvas.setStarted(true)
+        svgCanvas.setStartX(x)
+        svgCanvas.setStartY(y)
+        beginGroupScale(selectedElements.filter(Boolean), svgCanvas.getCurrentResizeMode(), x, y)
+        break
+      }
       if (selectedElements.filter(Boolean).length > 1) {
         // A grip of the common frame: the whole selection is resized.
         svgCanvas.setStarted(true)

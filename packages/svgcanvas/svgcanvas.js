@@ -33,6 +33,7 @@ import { init as selectionInit } from './core/selection.js'
 import { init as textActionsInit, textActionsMethod } from './core/text-actions.js'
 import { init as eventInit } from './core/event.js'
 import { init as multiTransformInit } from './core/multi-transform.js'
+import { init as scaleToolInit } from './core/scale-tool.js'
 import { init as selectionNavInit } from './core/selection-nav.js'
 import {
   init as jsonInit,
@@ -279,6 +280,7 @@ class SvgCanvas {
 
     eventInit(this)
     multiTransformInit(this)
+    scaleToolInit(this)
     selectionNavInit(this)
     textActionsInit(this)
     svgInit(this)
@@ -880,6 +882,8 @@ class SvgCanvas {
    * @returns {void}
    */
   setMode (name) {
+    // The Scale tool works in the select mode only.
+    if (name !== 'select') { this.setScaleTool?.(false) }
     this.selectorManager?.hideHover?.()
     this.pathActions.clear(true)
     this.textActions.clear()

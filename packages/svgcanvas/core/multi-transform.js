@@ -23,6 +23,7 @@ import { getBBox, getRotationAngle, withBBoxCache } from './utilities.js'
 import { getTransformList, normalizeRotationAngle, transformListToTransform } from './math.js'
 import { recalculateDimensions, withStartTransform } from './recalculate.js'
 import { hasGeometryChanged, rotateElementTo } from './selection.js'
+import { anchorOfGrip, boxPoint, dragFactor, readStrokeLengths, scaleStrokeLengths } from './scale-tool.js'
 
 let svgCanvas = null
 
@@ -44,6 +45,7 @@ const EPSILON = 1e-9
 export const init = (canvas) => {
   svgCanvas = canvas
   svgCanvas.scaleSelectedElements = scaleSelectedElements
+  svgCanvas.scaleSelectionBy = scaleSelectionBy
   svgCanvas.rotateSelectedElements = rotateSelectedElements
   svgCanvas.setSelectionAngle = setSelectionAngle
   svgCanvas.getSelectionAngle = getSelectionAngle
@@ -549,12 +551,13 @@ const commitElement = (info, Mp) => {
  * @param {Element[]} elements
  * @param {PlainObject} M
  * @param {PlainObject[]} [infos] - Descriptions read beforehand
+ * @param {string} [name] - Name of the undo step
  * @returns {module:history.BatchCommand}
  */
-const applyToElements = (elements, M, infos) => {
+const applyToElements = (elements, M, infos, name = 'Resize Elements') => {
   // Every description (and so every geometry read) comes before any write.
   const described = infos || elements.map(describe)
-  const batch = new BatchCommand('Resize Elements')
+  const batch = new BatchCommand(name)
   described.forEach((info) => {
     const cmd = commitElement(info, inParent(M, info))
     if (cmd) { batch.addSubCommand(cmd) }
@@ -589,6 +592,58 @@ export const scaleSelectedElements = (sx, sy, ox, oy) => {
     svgCanvas.call('changed', elements)
   }
   resizeSelectorsOf(elements)
+  return batch
+}
+
+/**
+ * Applies a uniform scale with the Scale tool's rules: the geometry, as for
+ * a resize, then the stroke lengths and the blur (see scale-tool.js).
+ * @param {Element[]} elements
+ * @param {number} k
+ * @param {{x: number, y: number}} origin - Fixed point, in the drawing's coordinates
+ * @param {PlainObject[]} infos - From describe, read beforehand
+ * @param {PlainObject[]} strokes - From readStrokeLengths, read beforehand
+ * @returns {module:history.BatchCommand}
+ */
+const applyUniformScale = (elements, k, origin, infos, strokes) => {
+  const M = multiply(translate(origin.x, origin.y), scale(k, k), translate(-origin.x, -origin.y))
+  const batch = applyToElements(elements, M, infos, 'Scale Elements')
+  const strokeCmd = scaleStrokeLengths(strokes, k)
+  if (!strokeCmd.isEmpty()) { batch.addSubCommand(strokeCmd) }
+  return batch
+}
+
+/**
+ * Scales the selection by a factor with the Scale tool: the proportions are
+ * kept, and stroke widths, dashes, text sizes and the editor's blur scale
+ * with the geometry. One undo step.
+ * @function module:svgcanvas.SvgCanvas#scaleSelectionBy
+ * @param {number} k - Factor, greater than 0
+ * @param {PlainObject} [options]
+ * @param {string} [options.anchor='nw'] - Point of the selection's box (see
+ *   getSelectionBox) that stays in place: n, ne, e, se, s, sw, w, nw or c
+ * @param {number} [options.x] - Fixed point, instead of the anchor
+ * @param {number} [options.y]
+ * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @returns {module:history.BatchCommand|null} Null when nothing changed
+ */
+export const scaleSelectionBy = (k, { anchor = 'nw', x, y } = {}) => {
+  const elements = svgCanvas.getSelectedElements().filter(Boolean)
+  if (!elements.length || !(k > 0) || !Number.isFinite(k) || Math.abs(k - 1) < EPSILON) { return null }
+  let origin = { x, y }
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    const box = drawingBoxOf(elements)
+    if (!box) { return null }
+    origin = boxPoint(box, anchor)
+  }
+  // Every geometry and length is read before any write.
+  const infos = elements.map(describe)
+  const strokes = readStrokeLengths(elements)
+  const batch = applyUniformScale(elements, k, origin, infos, strokes)
+  resizeSelectorsOf(elements)
+  if (batch.isEmpty()) { return null }
+  svgCanvas.addCommandToHistory(batch)
+  svgCanvas.call('changed', elements)
   return batch
 }
 
@@ -1092,6 +1147,11 @@ export const isGroupResizing = () => gesture?.type === 'resize'
 export const isGroupRotating = () => gesture?.type === 'rotate'
 
 /**
+ * @returns {boolean} True while the selection is scaled with the Scale tool
+ */
+export const isGroupScaling = () => gesture?.type === 'scale'
+
+/**
  * Inserts a temporary transform at the start of each element's list, which
  * the gesture then replaces.
  * @param {PlainObject[]} infos
@@ -1149,6 +1209,44 @@ export const beginGroupResize = (elements, dir, startX, startY) => {
 }
 
 /**
+ * Moves the common frame of a multi-selection with the gesture's matrix.
+ * @param {PlainObject} M - Matrix of the drawing
+ * @returns {void}
+ */
+const followFrame = (M) => {
+  if (!gesture.screenFrame) { return }
+  const zoom = svgCanvas.getZoom()
+  const { x: fx, y: fy, width: fw, height: fh } = gesture.screenFrame
+  const Ms = multiply(scale(zoom, zoom), M, scale(1 / zoom, 1 / zoom))
+  const p1 = apply(Ms, fx, fy)
+  const p2 = apply(Ms, fx + fw, fy + fh)
+  const box = {
+    x: Math.min(p1.x, p2.x),
+    y: Math.min(p1.y, p2.y),
+    width: Math.abs(p2.x - p1.x),
+    height: Math.abs(p2.y - p1.y)
+  }
+  svgCanvas.selectorManager.lockFrame(box)
+  svgCanvas.selectorManager.updateMultiFrame(box)
+}
+
+/**
+ * Shows, on top of each element's transform, a matrix of the drawing, and
+ * moves its selection box with it.
+ * @param {PlainObject} M
+ * @returns {void}
+ */
+const previewElements = (M) => {
+  gesture.infos.forEach((info, i) => {
+    const tlist = getTransformList(info.elem)
+    if (!tlist?.numberOfItems) { return }
+    const xform = toSVGTransform(previewMatrix(inParent(M, info), info))
+    tlist.replaceItem(xform, 0)
+    svgCanvas.selectorManager.requestSelector(info.elem).resize(gesture.boxes[i], Boolean(gesture.boxes[i]))
+  })
+}
+
+/**
  * Follows the pointer: one matrix, one write per element.
  * @param {number} x - Pointer, in the drawing's coordinates
  * @param {number} y
@@ -1169,29 +1267,8 @@ export const updateGroupResize = (x, y, { alt = false, shift = false, snap } = {
   const { sx, sy, ox, oy } = computeResizeScale({ box: gesture.frame, dir: gesture.dir, dx, dy, alt, shift })
   const M = multiply(translate(ox, oy), scale(sx, sy), translate(-ox, -oy))
   gesture.M = M
-  gesture.infos.forEach((info, i) => {
-    const tlist = getTransformList(info.elem)
-    if (!tlist?.numberOfItems) { return }
-    const xform = toSVGTransform(previewMatrix(inParent(M, info), info))
-    tlist.replaceItem(xform, 0)
-    svgCanvas.selectorManager.requestSelector(info.elem).resize(gesture.boxes[i], Boolean(gesture.boxes[i]))
-  })
-  // The frame follows the matrix exactly.
-  if (gesture.screenFrame) {
-    const zoom = svgCanvas.getZoom()
-    const { x: fx, y: fy, width: fw, height: fh } = gesture.screenFrame
-    const Ms = multiply(scale(zoom, zoom), M, scale(1 / zoom, 1 / zoom))
-    const p1 = apply(Ms, fx, fy)
-    const p2 = apply(Ms, fx + fw, fy + fh)
-    const box = {
-      x: Math.min(p1.x, p2.x),
-      y: Math.min(p1.y, p2.y),
-      width: Math.abs(p2.x - p1.x),
-      height: Math.abs(p2.y - p1.y)
-    }
-    svgCanvas.selectorManager.lockFrame(box)
-    svgCanvas.selectorManager.updateMultiFrame(box)
-  }
+  previewElements(M)
+  followFrame(M)
   // Dimensions of the selection, stroke excluded, as the matrix scales them.
   if (gesture.geometry) {
     const { width, height } = gesture.geometry
@@ -1231,6 +1308,115 @@ export const commitGroupResize = () => {
   gesture = null
   if (isIdentityMatrix(M)) { return null }
   const batch = applyToElements(elements, M, infos)
+  return batch.isEmpty() ? null : batch
+}
+
+// ---------------------------------------------------------------------------
+// The Scale tool's gesture.
+
+/**
+ * Frame of a drag with the Scale tool: the common frame of a multi-selection,
+ * or the own box of an element alone, with the transform that draws it (its
+ * grips follow its rotation).
+ * @param {Element[]} elements
+ * @param {PlainObject[]} infos
+ * @returns {{box: module:utilities.BBoxObject, m: PlainObject}}
+ */
+const scaleFrameOf = (elements, infos) => {
+  if (elements.length === 1) {
+    const box = getBBox(elements[0])
+    if (box) {
+      const tlist = getTransformList(elements[0])
+      const own = tlist?.numberOfItems ? toPlain(transformListToTransform(tlist).matrix) : identity()
+      return { box, m: multiply(infos[0].P, own) }
+    }
+  }
+  return { box: frameOf(elements, infos), m: identity() }
+}
+
+/**
+ * Starts a drag of a grip with the Scale tool, for one element or several.
+ * Every box and every stroke length is read here, once.
+ * @param {Element[]} elements
+ * @param {string} dir - The grip
+ * @param {number} startX - Pointer, in the drawing's coordinates
+ * @param {number} startY
+ * @returns {void}
+ */
+export const beginGroupScale = (elements, dir, startX, startY) => {
+  const infos = elements.map(describe)
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  const boxes = elements.map((elem) => (measure ? measure(elem) : undefined))
+  const frame = scaleFrameOf(elements, infos)
+  const strokes = readStrokeLengths(elements)
+  // The dimension label: the own size of an element alone, as for a resize,
+  // or the box of a multi-selection.
+  const size = elements.length === 1 ? frame.box : drawingBoxOf(elements, boxes)
+  const mgr = svgCanvas.selectorManager
+  insertTemporaryTransforms(infos, false)
+  gesture = {
+    type: 'scale',
+    elements,
+    infos,
+    boxes,
+    dir,
+    start: { x: startX, y: startY },
+    frame,
+    strokes,
+    size,
+    screenFrame: elements.length > 1 && mgr.frameBox ? { ...mgr.frameBox } : null,
+    M: identity(),
+    k: 1,
+    origin: { x: 0, y: 0 }
+  }
+}
+
+/**
+ * Follows the pointer with the Scale tool: one uniform factor, about the
+ * opposite grip, or about the center with Alt. The strokes scale in the
+ * preview as they will in the result.
+ * @param {number} x - Pointer, in the drawing's coordinates
+ * @param {number} y
+ * @param {PlainObject} [modifiers]
+ * @param {boolean} [modifiers.alt]
+ * @param {Function} [modifiers.snap] - Rounds a distance to the grid
+ * @returns {number} The factor
+ */
+export const updateGroupScale = (x, y, { alt = false, snap } = {}) => {
+  if (gesture?.type !== 'scale') { return 1 }
+  const { start, dir } = gesture
+  const { box, m } = gesture.frame
+  const pointer = snap
+    ? { x: start.x + snap(x - start.x), y: start.y + snap(y - start.y) }
+    : { x, y }
+  const local = boxPoint(box, anchorOfGrip(dir, alt))
+  const gripPoint = boxPoint(box, dir)
+  const origin = apply(m, local.x, local.y)
+  const grip = apply(m, gripPoint.x, gripPoint.y)
+  const k = dragFactor({ anchor: origin, grip, start, pointer })
+  const M = multiply(translate(origin.x, origin.y), scale(k, k), translate(-origin.x, -origin.y))
+  gesture.M = M
+  gesture.k = k
+  gesture.origin = origin
+  previewElements(M)
+  followFrame(M)
+  if (gesture.size) {
+    svgCanvas.selectorManager.showSize?.(gesture.size.width * k, gesture.size.height * k)
+  }
+  return k
+}
+
+/**
+ * Ends a drag with the Scale tool and writes the result, as one undo step.
+ * @returns {module:history.BatchCommand|null} Null when nothing changed
+ */
+export const commitGroupScale = () => {
+  if (gesture?.type !== 'scale') { return null }
+  const { elements, infos, k, origin, strokes } = gesture
+  restoreElements()
+  gesture = null
+  if (Math.abs(k - 1) < EPSILON) { return null }
+  const batch = applyUniformScale(elements, k, origin, infos, strokes)
   return batch.isEmpty() ? null : batch
 }
 

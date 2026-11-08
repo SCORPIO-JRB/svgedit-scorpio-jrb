@@ -625,3 +625,36 @@ ul li.current {
 .dropdown li.tool_button {
   width: 24px;
 }
+
+/* The nine-point anchor of the Scale tool (M9): the point of the selection
+   that stays in place when a factor, a width or a height is typed. */
+#scale_anchor {
+  display: grid;
+  grid-template-columns: repeat(3, 10px);
+  grid-template-rows: repeat(3, 10px);
+  gap: 2px;
+  margin: 7px 4px;
+  padding: 2px;
+  border-radius: 3px;
+  background-color: var(--input-color);
+}
+
+#scale_anchor button {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1px solid #fff;
+  border-radius: 2px;
+  background-color: var(--main-bg-color);
+  cursor: pointer;
+}
+
+#scale_anchor button[aria-checked="true"] {
+  background-color: var(--orange-color);
+  border-color: var(--orange-color);
+}
+
+#scale_anchor button:focus-visible {
+  outline: 2px solid var(--icon-bg-color-hover);
+  outline-offset: 1px;
+}

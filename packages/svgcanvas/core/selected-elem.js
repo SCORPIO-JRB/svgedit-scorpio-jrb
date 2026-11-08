@@ -35,6 +35,7 @@ import { recalculateDimensions, withStartTransform } from './recalculate.js'
 import { isGecko } from '../common/browser.js'
 import { getParents } from '../common/util.js'
 import { createClipboardPayload } from './clipboard.js'
+import { tidyUpLayout } from './tidy-up.js'
 
 const {
   MoveElementCommand,
@@ -66,6 +67,7 @@ export const init = canvas => {
   svgCanvas.getDuplicateOffset = getDuplicateOffset
   svgCanvas.rememberDuplicate = rememberDuplicate
   svgCanvas.alignSelectedElements = alignSelectedElements // Aligns selected elements.
+  svgCanvas.tidyUpSelectedElements = tidyUpSelectedElements
   svgCanvas.updateCanvas = updateCanvas // Updates the editor canvas width/height/position after a zoom has occurred.
   svgCanvas.cycleElement = cycleElement // Select the next/previous element within the current layer.
   svgCanvas.deleteSelectedElements = deleteSelectedElements // Removes all selected elements from the DOM and adds the change to the history
@@ -255,8 +257,10 @@ const moveSelectedElements = (dx, dy, undoable = true) => {
   }
 
   const batchCmd = new BatchCommand('position')
+  const moved = []
   selectedElements.forEach((selected, i) => {
     if (selected) {
+      moved.push(selected)
       // Store the existing transform before modifying
       const existingTransform = selected.getAttribute('transform') || ''
 
@@ -290,12 +294,16 @@ const moveSelectedElements = (dx, dy, undoable = true) => {
           new ChangeElementCommand(selected, { transform: existingTransform })
         )
       }
-
-      svgCanvas
-        .gettingSelectorManager()
-        .requestSelector(selected)
-        .resize()
     }
+  })
+  // The selection boxes follow once every element is written: all their
+  // boxes are read, then all are drawn. Read between the writes, each box
+  // forced a layout of the drawing (700 ms to align 2000 objects).
+  const manager = svgCanvas.gettingSelectorManager()
+  const measure = svgCanvas.getSelector?.()?.getSelectionBBox
+  const boxes = moved.map((elem) => (measure ? measure(elem) : undefined))
+  moved.forEach((elem, i) => {
+    manager.requestSelector(elem).resize(boxes[i], Boolean(boxes[i]))
   })
   if (!batchCmd.isEmpty()) {
     if (undoable) {
@@ -488,9 +496,13 @@ const duplicateSelectedElements = (offset) => {
  * @function module:selected-elem.SvgCanvas#alignSelectedElements
  * @param {string} type - String with single character indicating the alignment type
  * @param {"selected"|"largest"|"smallest"|"page"} relativeTo
+ * @param {PlainObject} [options]
+ * @param {number} [options.spacing] - Gap imposed by a distribution: the
+ *   first object stays in place and each next one follows the previous one
+ *   at this distance, whatever the reference (M9)
  * @returns {void}
  */
-const alignSelectedElements = (type, relativeTo) => {
+const alignSelectedElements = (type, relativeTo, { spacing } = {}) => {
   const selectedElements = svgCanvas.getSelectedElements()
   const bboxes = [] // angles = [];
   const len = selectedElements.length
@@ -518,6 +530,11 @@ const alignSelectedElements = (type, relativeTo) => {
 
   // distribute horizontal and vertical align is not support smallest and largest
   if (['smallest', 'largest'].includes(relativeTo) && ['dh', 'distrib_horiz', 'dv', 'distrib_verti'].includes(type)) {
+    relativeTo = 'selected'
+  }
+  // An imposed spacing starts from the first object.
+  const imposed = Number.isFinite(spacing) ? spacing : null
+  if (imposed !== null && ['dh', 'distrib_horiz', 'dv', 'distrib_verti'].includes(type)) {
     relativeTo = 'selected'
   }
 
@@ -561,9 +578,9 @@ const alignSelectedElements = (type, relativeTo) => {
   let dy = []
 
   if (['dh', 'distrib_horiz'].includes(type)) { // distribute horizontal align
-    [dx, dy] = _getDistributeHorizontalDistances(relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy)
+    [dx, dy] = _getDistributeHorizontalDistances(relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy, imposed)
   } else if (['dv', 'distrib_verti'].includes(type)) { // distribute vertical align
-    [dx, dy] = _getDistributeVerticalDistances(relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy)
+    [dx, dy] = _getDistributeVerticalDistances(relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy, imposed)
   } else { // normal align (top, left, right, ...)
     [dx, dy] = _getNormalDistances(type, selectedElements, bboxes, minx, maxx, miny, maxy)
   }
@@ -572,12 +589,29 @@ const alignSelectedElements = (type, relativeTo) => {
 }
 
 /**
- * Aligns selected elements.
- * @function module:selected-elem.SvgCanvas#alignSelectedElements
- * @param {string} type - String with single character indicating the alignment type
- * @param {"selected"|"largest"|"smallest"|"page"} relativeTo
- * @returns {void}
+ * Tidies the selection up into a regular row, column or grid (see
+ * tidy-up.js), as one undo step: objects keep their size and their order,
+ * the top left corner of the selection stays in place, and the gaps are the
+ * most frequent gap between neighbors, or the spacing given.
+ * @function module:selected-elem.SvgCanvas#tidyUpSelectedElements
+ * @param {PlainObject} [options]
+ * @param {number|null} [options.spacing] - Gap between neighbors
+ * @fires module:selected-elem.SvgCanvas#event:changed
+ * @returns {BatchCommand|null} Null when nothing moved
  */
+const tidyUpSelectedElements = ({ spacing = null } = {}) => {
+  const selectedElements = svgCanvas.getSelectedElements()
+  const count = selectedElements.findIndex((elem) => !elem)
+  const elements = count === -1 ? selectedElements : selectedElements.slice(0, count)
+  if (elements.length < 2) { return null }
+  const boxes = elements.map((elem) => getStrokedBBoxDefaultVisible([elem]))
+  if (boxes.some((box) => !box)) { return null }
+  const { positions } = tidyUpLayout(boxes, { spacing })
+  const dx = positions.map((p, i) => p.x - boxes[i].x)
+  const dy = positions.map((p, i) => p.y - boxes[i].y)
+  if (dx.every((d) => Math.abs(d) < 1e-9) && dy.every((d) => Math.abs(d) < 1e-9)) { return null }
+  return moveSelectedElements(dx, dy) || null
+}
 
 /**
  * get distribution horizontal distances.
@@ -590,10 +624,11 @@ const alignSelectedElements = (type, relativeTo) => {
  * @param {Float} maxx - selected area max-x
  * @param {Float} miny - selected area min-y
  * @param {Float} maxy - selected area max-y
+ * @param {number|null} [imposed] - Imposed gap, instead of an even one
  * @returns {Array.Float[]} x and y distances array
  * @private
  */
-const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy) => {
+const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy, imposed = null) => {
   const dx = []
   const dy = []
 
@@ -614,7 +649,7 @@ const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes,
 
   const totalWidth = maxx - minx
   const totalBoxWidth = bboxesSortedClone.map(b => b.width).reduce((w1, w2) => w1 + w2, 0)
-  const space = (totalWidth - totalBoxWidth) / (bboxesSortedClone.length - 1)
+  const space = imposed ?? (totalWidth - totalBoxWidth) / (bboxesSortedClone.length - 1)
   const _dx = []
 
   for (let i = 0; i < bboxesSortedClone.length; ++i) {
@@ -648,10 +683,11 @@ const _getDistributeHorizontalDistances = (relativeTo, selectedElements, bboxes,
  * @param {Float} maxx - selected area max-x
  * @param {Float} miny - selected area min-y
  * @param {Float} maxy - selected area max-y
+ * @param {number|null} [imposed] - Imposed gap, instead of an even one
  * @returns {Array.Float[]}} x and y distances array
  * @private
  */
-const _getDistributeVerticalDistances = (relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy) => {
+const _getDistributeVerticalDistances = (relativeTo, selectedElements, bboxes, minx, maxx, miny, maxy, imposed = null) => {
   const dx = []
   const dy = []
 
@@ -671,7 +707,7 @@ const _getDistributeVerticalDistances = (relativeTo, selectedElements, bboxes, m
 
   const totalHeight = maxy - miny
   const totalBoxHeight = bboxesSortedClone.map(b => b.height).reduce((h1, h2) => h1 + h2, 0)
-  const space = (totalHeight - totalBoxHeight) / (bboxesSortedClone.length - 1)
+  const space = imposed ?? (totalHeight - totalBoxHeight) / (bboxesSortedClone.length - 1)
   const _dy = []
 
   for (let i = 0; i < bboxesSortedClone.length; ++i) {

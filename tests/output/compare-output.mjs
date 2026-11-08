@@ -70,6 +70,10 @@ const SCENARIOS = {
   // copy and the editor's own clipboard give the same SVG as before.
   'copy, paste in place': `c.selectOnly(${byId(['r1', 'c1'])}); c.copySelectedElements(); c.pasteElements('in_place')`,
   'cut, paste at a point': `c.selectOnly(${byId(['e1', 't1'])}); c.cutSelectedElements(); c.pasteElements('point', 200, 220)`,
+  // Moves that M9 makes faster (the selection boxes follow in two passes):
+  // the drawing must not change.
+  'distribute v page (multi)': `c.selectOnly(${byId(['r1', 'e1', 'p1', 't1'])}); c.alignSelectedElements('dv', 'page')`,
+  'arrows, Shift+arrow (keys)': `c.selectOnly(${byId(['r1', 'grp', 'l1'])}); const press = (init) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })); press({ key: 'ArrowRight', code: 'ArrowRight' }); press({ key: 'ArrowRight', code: 'ArrowRight' }); press({ key: 'ArrowDown', code: 'ArrowDown', shiftKey: true })`,
   'Mod+D twice, Alt+right arrow (keys)': `c.selectOnly(${byId(['r1', 'p1'])}); const key = (init) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })); key({ key: 'd', code: 'KeyD', ctrlKey: true }); key({ key: 'd', code: 'KeyD', ctrlKey: true }); key({ key: 'ArrowRight', code: 'ArrowRight', altKey: true })`
 }
 // Every element type alone: flip, rotation by the API, resize by a grip,

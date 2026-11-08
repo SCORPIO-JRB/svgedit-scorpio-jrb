@@ -50,6 +50,9 @@ const MEASURES = [
   ['groupResizeRelease', 'Relâchement du redimensionnement collectif'],
   ['groupRotateMove', 'Pivoter tout, un mouvement (poignée du cadre commun)'],
   ['groupRotateRelease', 'Relâchement de la rotation collective'],
+  ['scaleToolMove', 'Outil Échelle, un mouvement (traits compris)'],
+  ['scaleToolRelease', 'Relâchement de l\'outil Échelle'],
+  ['tidyUp', 'Ranger (tout sélectionné)'],
   ['hover', 'Surbrillance au survol (un mouvement, sans attendre l\'image)']
 ]
 
@@ -180,6 +183,29 @@ async function benchSize (size) {
     out.groupRotateRelease = await time(() => mouse('mouseup', rotateGrip, rotatePoint.x + 20, rotatePoint.y + 5))
     canvas.undoMgr.undo()
     await frame()
+
+    // The Scale tool (M9): the same grip scales everything, strokes
+    // included. Tidy up rearranges the whole selection.
+    if (canvas.setScaleTool) {
+      canvas.setScaleTool(true)
+      canvas.selectAllInCurrentLayer()
+      await frame()
+      const scaleGrip = document.getElementById('selectorGrip_resize_se')
+      const scalePoint = center(scaleGrip)
+      mouse('mousedown', scaleGrip, scalePoint.x, scalePoint.y)
+      mouse('mousemove', scaleGrip, scalePoint.x + 10, scalePoint.y + 10)
+      await frame()
+      out.scaleToolMove = await time(() => mouse('mousemove', scaleGrip, scalePoint.x + 20, scalePoint.y + 15))
+      out.scaleToolRelease = await time(() => mouse('mouseup', scaleGrip, scalePoint.x + 20, scalePoint.y + 15))
+      canvas.undoMgr.undo()
+      canvas.setScaleTool(false)
+      await frame()
+      canvas.selectAllInCurrentLayer()
+      await frame()
+      out.tidyUp = await time(() => canvas.tidyUpSelectedElements())
+      canvas.undoMgr.undo()
+      await frame()
+    }
 
     canvas.selectAllInCurrentLayer()
     await frame()
