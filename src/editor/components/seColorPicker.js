@@ -1062,7 +1062,6 @@ export class SeColorPicker extends HTMLElement {
       if (e?.composedPath?.().some((node) => node.localName === 'input')) return
       this.openPicker()
     })
-    this.$block.setAttribute('role', 'button')
     this.$block.addEventListener('keydown', (e) => {
       if (!this.editable || (e.key !== 'Enter' && e.key !== ' ')) return
       e.preventDefault()
@@ -1095,12 +1094,13 @@ export class SeColorPicker extends HTMLElement {
     const name = this.getAttribute('title') || this.label || ''
     if (this.editable) {
       this.$block.tabIndex = 0
+      this.$block.setAttribute('role', 'button')
       this.$block.setAttribute('aria-label', name)
       this.$block.setAttribute('aria-haspopup', 'dialog')
       this.$valueField.setAttribute('aria-label', name)
       this.$alphaField.setAttribute('aria-label', `${name} · ${t('color.opacity')}`)
     } else {
-      this.$block.removeAttribute('tabindex')
+      for (const name of ['tabindex', 'role', 'aria-label', 'aria-haspopup']) this.$block.removeAttribute(name)
     }
   }
 }

@@ -2069,7 +2069,7 @@
   cursor: grab;
 }
 
-#se-paint .se-paint-handle[aria-pressed="true"] {
+#se-paint .se-paint-handle[aria-current="true"] {
   box-shadow: 0 0 0 1px var(--se-thumb-shadow), 0 0 0 3px var(--se-accent);
 }
 

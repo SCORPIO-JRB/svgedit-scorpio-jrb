@@ -263,7 +263,7 @@ export class PaintPicker {
           </label>
           <div class="se-paint-row">
             <select id="se-paint-library" class="se-paint-select" aria-label="${t('color.library')}"></select>
-            <button type="button" id="se-paint-view" class="se-paint-icon" aria-pressed="false" aria-label="${t('color.view_list')}" title="${t('color.view_list')}">${this.icon('view_list.svg')}</button>
+            <button type="button" id="se-paint-view" class="se-paint-icon" aria-label="${t('color.view_list')}" title="${t('color.view_list')}">${this.icon('view_list.svg')}</button>
           </div>
           <div class="se-paint-groups" id="se-paint-groups"></div>
         </div>
@@ -393,7 +393,6 @@ export class PaintPicker {
       this.libraryView = this.libraryView === 'grid' ? 'list' : 'grid'
       const list = this.libraryView === 'list'
       const label = this.t(list ? 'color.view_grid' : 'color.view_list')
-      this.$view.setAttribute('aria-pressed', String(list))
       this.$view.setAttribute('aria-label', label)
       this.$view.title = label
       this.$view.innerHTML = this.icon(list ? 'view_grid.svg' : 'view_list.svg')
@@ -1188,7 +1187,7 @@ export class PaintPicker {
       const offset = Math.round(stop.offset * 100)
       handle.setAttribute('aria-label', this.t('color.stop', { offset }))
       handle.setAttribute('aria-valuenow', String(offset))
-      handle.setAttribute('aria-pressed', String(stop === this.activeStop))
+      handle.setAttribute('aria-current', String(stop === this.activeStop))
       handle.tabIndex = stop === this.activeStop ? 0 : -1
       handle.style.left = `${stop.offset * 100}%`
       handle.style.setProperty('--se-paint-color', cssColor(parseColor(stop.color), stop.opacity))

@@ -1,3 +1,4 @@
+import { AxeBuilder } from '@axe-core/playwright'
 import { test, expect } from './fixtures.js'
 import { visitAndApproveStorage } from './helpers.js'
 
@@ -178,7 +179,7 @@ test.describe('Colour window (V4 couleurs)', () => {
     await page.locator('#se-paint .se-paint-channels input').press('Enter')
     expect((await gradient()).stops[1][1]).toBe('#f08a62')
     // Delete removes the stop chosen.
-    await page.locator('#se-paint-bar .se-paint-handle[aria-pressed="true"]').focus()
+    await page.locator('#se-paint-bar .se-paint-handle[aria-current="true"]').focus()
     await page.keyboard.press('Delete')
     expect((await gradient()).stops).toHaveLength(2)
     await page.selectOption('#se-paint-style', 'radialGradient')
@@ -312,5 +313,38 @@ test.describe('Colour window (V4 couleurs)', () => {
     expect(await page.evaluate(() => window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => el.id))).toEqual(['r1'])
     await expect(picker(page)).toBeVisible()
     await expect(page.locator('#se-paint-hint')).toBeHidden()
+  })
+})
+
+test.describe('Colour window, WCAG AA (V4 couleurs)', () => {
+  for (const scheme of ['dark', 'light']) {
+    for (const tab of ['custom', 'libraries']) {
+      test(`the ${tab} tab in the ${scheme} theme, gradient included`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme: scheme })
+        await visitAndApproveStorage(page)
+        await loadDrawing(page)
+        await select(page, 'r1')
+        await openFill(page)
+        if (tab === 'custom') await page.click('#se-paint [data-mode="gradient"]')
+        else await page.click('#se-paint-tab-libraries')
+        const { violations } = await new AxeBuilder({ page }).include('#se-paint').withTags(['wcag2a', 'wcag2aa']).analyze()
+        const serious = violations
+          .filter((v) => ['serious', 'critical'].includes(v.impact))
+          .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' > ')).join(', ')}`)
+        expect(serious).toEqual([])
+      })
+    }
+  }
+})
+
+test.describe('Classic layout (V4 couleurs)', () => {
+  test('keeps the jGraduate dialog, without the new window', async ({ page }) => {
+    await visitAndApproveStorage(page, { query: '?layout=classic' })
+    await loadDrawing(page)
+    await select(page, 'r1')
+    await expect(page.locator('#se-paint')).toHaveCount(0)
+    await page.locator('#fill_color').locator('#picker').click()
+    await expect(page.locator('#fill_color').locator('#color_picker')).toBeVisible()
+    await expect(page.locator('#fill_color').locator('.jGraduate_tabs')).toBeVisible()
   })
 })
