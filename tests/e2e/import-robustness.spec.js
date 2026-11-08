@@ -38,14 +38,14 @@ const snapshot = (page, ids) => page.evaluate((ids) => ids.map((id) => {
 
 /**
  * Defines window.drawnBox(elem): the box of an object on the screen, from its
- * own geometry. Firefox counts in getBoundingClientRect() of a <use> the
- * viewport of its symbol, scaled a second time by the view box: a symbol of
- * 200 mm with a view box 200 wide measured 2 857 px instead of 756, while the
- * drawing was right.
+ * own geometry, the same way for every object. Firefox counts in
+ * getBoundingClientRect() of a <use> the viewport of its symbol, scaled a
+ * second time by the view box (a symbol of 200 mm with a view box 200 wide
+ * measured 2 857 px instead of 756, while the drawing was right), and rounds
+ * the box of other objects to the pixel.
  */
 const installDrawnBox = (page) => page.evaluate(() => {
   window.drawnBox = (elem) => {
-    if (elem.tagName !== 'use') return elem.getBoundingClientRect()
     const box = elem.getBBox()
     const matrix = elem.getScreenCTM()
     const points = [[box.x, box.y], [box.x + box.width, box.y], [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]
@@ -253,7 +253,7 @@ test.describe('SVG import: integrity of the drawing', () => {
       const shown = window.drawnBox(use).width / zoom
       canvas.selectOnly([use])
       canvas.ungroupSelectedElement()
-      const ungrouped = document.querySelector('#svgcontent g.layer rect[fill="orange"]').getBoundingClientRect().width / zoom
+      const ungrouped = window.drawnBox(document.querySelector('#svgcontent g.layer rect[fill="orange"]')).width / zoom
       return { shown: Math.round(shown), ungrouped: Math.round(ungrouped) }
     }, useId)
     // 200 mm = 755.9 px

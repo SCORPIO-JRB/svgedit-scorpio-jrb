@@ -71,15 +71,19 @@ test.describe('Geometric hover (V4)', () => {
     expect(outline).toMatchObject({ shown: true, target: 'el' })
     expect(outline.d).toBe('M120,150A80,30 0 1 0 280,150A80,30 0 1 0 120,150Z')
     expect(outline.transform).toMatch(/^matrix\(/)
-    // The outline follows the ellipse on the screen.
-    const ends = await page.evaluate(() => {
+    // The outline lies on the ellipse on the screen: points along it, taken
+    // back into the space of the ellipse, are on the ellipse.
+    const offsets = await page.evaluate(() => {
       const outline = document.getElementById('selectorHover')
       const ellipse = document.getElementById('el')
-      const a = outline.getBoundingClientRect()
-      const b = ellipse.getBoundingClientRect()
-      return [a.x - b.x, a.y - b.y, a.width - b.width, a.height - b.height].map((n) => Math.abs(n) < 1.5)
+      const toEllipse = ellipse.getScreenCTM().inverse().multiply(outline.getScreenCTM())
+      const length = outline.getTotalLength()
+      return Array.from({ length: 12 }, (_, i) => {
+        const p = outline.getPointAtLength(i * length / 12).matrixTransform(toEllipse)
+        return Math.abs(Math.hypot((p.x - 200) / 80, (p.y - 150) / 30) - 1)
+      })
     })
-    expect(ends).toEqual([true, true, true, true])
+    expect(Math.max(...offsets)).toBeLessThan(0.01)
     // 1.5 px on the screen, whatever the zoom
     expect(await page.evaluate(() => {
       const outline = document.getElementById('selectorHover')
