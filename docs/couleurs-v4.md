@@ -48,7 +48,18 @@ La pastille ouvre la fenêtre ; la couleur et l'opacité se saisissent aussi dan
 - `packages/svgcanvas/core/elem-get-set.js`, `undo.js` : `setPaint` en une étape, `groupHistory`, `previewPaint`, `cancelPaintPreview`.
 - Six icônes dessinées (plus, moins, uni, dégradé, liste, grille), listées dans `src/editor/images/ICONS.md` ; jetons `--se-checker-light`, `--se-checker-dark` et `--se-thumb-shadow`, identiques dans les deux thèmes comme les marqueurs.
 
-## 5. Hors de ce lot
+## 5. Vérifications
+
+Sous Chromium :
+- lint vert (dont aucune couleur ni aucun libellé en dur) ; 901 tests unitaires réussis, dont 13 sur les calculs de couleur et de dégradé et 6 sur l'historique et l'aperçu d'une peinture ;
+- E2E en disposition canevas : 446 réussis, dont les 19 de la fenêtre (`tests/e2e/couleurs-v4.spec.js`) : ouverture et Échap, aperçu puis une étape, clavier, formats, couleurs du document et récentes, dégradé, glisser d'un arrêt, bibliothèques, champ de l'inspecteur, − et +, multi-sélection, barre contextuelle, pipette, axe (AA) dans les deux thèmes, jGraduate gardé par la disposition classique ;
+- E2E en disposition classique, sans les tests propres à V3 et V4 : 364 réussis ;
+- sortie comparée à `v4-contexte` : 21 allers-retours sur 21 et 73 scénarios sur 73 identiques ;
+- banc à 2 000 objets : inchangé ; « Tout sélectionner » dépasse toujours son budget (157 ms pour 150), comme depuis V2.
+
+Firefox tourne en CI.
+
+## 6. Hors de ce lot
 
 - Le type « image » de la référence (motif d'image en remplissage) : SVG-Edit n'a pas de peinture par motif ; c'est un sujet de fidélité (V6) avant d'être un sujet d'interface.
 - Le « + » de l'onglet Bibliothèques (ajouter une couleur à une bibliothèque) : il suppose un lieu où l'hôte enregistre ses bibliothèques.
