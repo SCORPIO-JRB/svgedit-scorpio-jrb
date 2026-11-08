@@ -3,7 +3,8 @@ import { visitAndApproveStorage } from './helpers.js'
 
 // Corrections after the selection rework. Question 10: converting a shape to
 // a path wrote fill-opacity="null" and other "null" attributes, and took the
-// style of the last clicked shape when the shape was not clicked.
+// style of the last clicked shape when the shape was not clicked. Shapes
+// drawn after a click got the same "null" attributes.
 
 const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><g class="layer"><title>Layer 1</title>
 <ellipse id="e1" cx="200" cy="200" rx="50" ry="30" fill="#a63" stroke="#00f" stroke-width="3"/>
@@ -116,9 +117,8 @@ test.describe('Convert to path keeps the style of the shape (question 10)', () =
   })
 })
 
-test.describe('The style a click copies has no "null" value (question 10)', () => {
-  test('a rectangle drawn after a click on a shape takes its style without "null"', async ({ page }) => {
-    await clickCenter(page, 'e1')
+test.describe('A shape drawn after a click leaves out the style the clicked shape does not have (question 10)', () => {
+  const drawRect = async (page) => {
     await page.keyboard.press('r')
     const box = await page.locator('#svgcontent').boundingBox()
     await page.mouse.move(box.x + 450, box.y + 50)
@@ -126,6 +126,11 @@ test.describe('The style a click copies has no "null" value (question 10)', () =
     await page.mouse.move(box.x + 520, box.y + 100, { steps: 5 })
     await page.mouse.up()
     await settle(page)
+  }
+
+  test('a rectangle drawn after a click on a shape takes its style without "null"', async ({ page }) => {
+    await clickCenter(page, 'e1')
+    await drawRect(page)
     const drawn = await page.evaluate(() => {
       const rect = [...document.querySelectorAll('#svgcontent rect')].find((el) => el.id !== 'r1')
       return rect && { fill: rect.getAttribute('fill'), stroke: rect.getAttribute('stroke'), width: rect.getAttribute('stroke-width') }
@@ -134,11 +139,21 @@ test.describe('The style a click copies has no "null" value (question 10)', () =
     expect(await nullAttributes(page)).toEqual([])
   })
 
-  test('a text written after a click on a text keeps a font size', async ({ page }) => {
-    const before = await page.evaluate(() => window.svgEditor.svgCanvas.getCurText('font_size'))
+  test('a rectangle drawn in a group, after a click on a shape without fill, still takes the fill of the group', async ({ page }) => {
+    await page.evaluate(() => window.svgEditor.svgCanvas.setContext(document.getElementById('g1')))
+    await clickCenter(page, 'p1')
+    await drawRect(page)
+    const drawn = await page.evaluate(() => {
+      const rect = document.querySelector('#g1 rect')
+      return rect && { fill: rect.getAttribute('fill'), stroke: rect.getAttribute('stroke'), computed: getComputedStyle(rect).fill }
+    })
+    expect(drawn).toEqual({ fill: null, stroke: null, computed: 'rgb(204, 0, 204)' })
+    expect(await nullAttributes(page)).toEqual([])
+  })
+
+  test('a text written after a click on a text without a size has no size either', async ({ page }) => {
     await clickCenter(page, 't1')
     expect(await page.evaluate(() => window.svgEditor.svgCanvas.getCurText('font_family'))).toBe('Arial')
-    expect(await page.evaluate(() => window.svgEditor.svgCanvas.getCurText('font_size'))).toBe(before)
     await page.keyboard.press('t')
     const box = await page.locator('#svgcontent').boundingBox()
     await page.mouse.click(box.x + 100, box.y + 80)
@@ -147,9 +162,13 @@ test.describe('The style a click copies has no "null" value (question 10)', () =
     await settle(page)
     const written = await page.evaluate(() => {
       const text = [...document.querySelectorAll('#svgcontent text')].find((el) => el.id !== 't1')
-      return text && { family: text.getAttribute('font-family'), size: text.getAttribute('font-size') }
+      return text && {
+        family: text.getAttribute('font-family'),
+        size: text.getAttribute('font-size'),
+        sameSize: getComputedStyle(text).fontSize === getComputedStyle(document.getElementById('t1')).fontSize
+      }
     })
-    expect(written).toEqual({ family: 'Arial', size: String(before) })
+    expect(written).toEqual({ family: 'Arial', size: null, sameSize: true })
     expect(await nullAttributes(page)).toEqual([])
   })
 })

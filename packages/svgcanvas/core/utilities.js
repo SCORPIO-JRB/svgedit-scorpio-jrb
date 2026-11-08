@@ -1358,10 +1358,12 @@ export const getElement = id => {
 }
 
 /**
- * Assigns multiple attributes to an element.
+ * Assigns multiple attributes to an element. An undefined or null value
+ * removes the attribute: null, which the current style holds for what the
+ * last clicked shape did not have, used to be written as the text "null".
  * @function module:utilities.assignAttributes
  * @param {Element} elem - DOM element to apply new attribute values to
- * @param {PlainObject<string, string>} attrs - Object with attribute keys/values
+ * @param {PlainObject<string, string|null|undefined>} attrs - Object with attribute keys/values
  * @param {Integer} [suspendLength] - Milliseconds to suspend redraw
  * @param {boolean} [unitCheck=false] - Boolean to indicate the need to use units.setUnitAttr
  * @returns {void}
@@ -1374,7 +1376,7 @@ export const assignAttributes = (elem, attrs, suspendLength, unitCheck) => {
         : key.startsWith('xlink:')
           ? NS.XLINK
           : null
-    if (value === undefined) {
+    if (value === undefined || value === null) {
       if (ns) {
         elem.removeAttributeNS(ns, key)
       } else {

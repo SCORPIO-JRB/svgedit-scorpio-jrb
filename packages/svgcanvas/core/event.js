@@ -21,7 +21,6 @@ import * as hstry from './history.js'
 import { findPos } from '../../svgcanvas/common/util.js'
 import { isMac } from '../common/browser.js'
 import { isDeepClick } from './selection-nav.js'
-import { copyShapeStyle } from './shape-style.js'
 import {
   beginGroupResize,
   updateGroupResize,
@@ -1060,8 +1059,19 @@ const mouseUpEvent = (evt) => {
             case 'image':
             case 'foreignObject':
               break
+            case 'text':
+              svgCanvas.setCurText('font_size', selected.getAttribute('font-size'))
+              svgCanvas.setCurText('font_family', selected.getAttribute('font-family'))
+            // fallthrough
             default:
-              copyShapeStyle(svgCanvas, selected)
+              svgCanvas.setCurProperties('fill', selected.getAttribute('fill'))
+              svgCanvas.setCurProperties('fill_opacity', selected.getAttribute('fill-opacity'))
+              svgCanvas.setCurProperties('stroke', selected.getAttribute('stroke'))
+              svgCanvas.setCurProperties('stroke_opacity', selected.getAttribute('stroke-opacity'))
+              svgCanvas.setCurProperties('stroke_width', selected.getAttribute('stroke-width'))
+              svgCanvas.setCurProperties('stroke_dasharray', selected.getAttribute('stroke-dasharray'))
+              svgCanvas.setCurProperties('stroke_linejoin', selected.getAttribute('stroke-linejoin'))
+              svgCanvas.setCurProperties('stroke_linecap', selected.getAttribute('stroke-linecap'))
           }
           svgCanvas.selectorManager.requestSelector(selected).showGrips(true)
         }
