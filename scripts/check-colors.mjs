@@ -31,7 +31,10 @@ const EXEMPT_DIRS = {
   // The jPicker and jGraduate plug-ins compute colours of the colour being
   // picked (gradient stops, text over the chosen colour). Their chrome is
   // styled by seColorPicker.js on the tokens; se-color-field replaces them in V3.
-  'src/editor/components/jgraduate': 'colours of the colour being picked'
+  'src/editor/components/jgraduate': 'colours of the colour being picked',
+  // The colour window computes the colours of the colour being picked
+  // (hue track, CSS of the swatches and of the gradient stops).
+  'src/editor/color': 'colours of the colour being picked'
 }
 
 const EXEMPT_FILES = {
@@ -39,6 +42,7 @@ const EXEMPT_FILES = {
   'src/editor/ConfigObj.js': 'default paint and grid colour of the document',
   'src/editor/components/sePalette.js': 'palette of document colours',
   'src/editor/text-styles.js': 'colours of the text styles written in the document (lot V4)',
+  'src/editor/color-libraries.js': 'colours of the libraries offered for the document',
   'src/editor/components/PaintBox.js': 'swatch of the document paint',
   'src/editor/dialogs/editorPreferencesDialog.js': 'canvas backgrounds offered to the user',
   'src/editor/extensions/ext-eyedropper/ext-eyedropper.js': 'default paint copied by the eyedropper'

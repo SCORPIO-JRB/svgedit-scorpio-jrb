@@ -350,3 +350,46 @@ svgEditor.setConfig({
 A label is a translation key or a text. The default list comes from the
 stylesheet of the reference synoptic of the corpus
 (`tests/fixtures/import/scorpio/synoptique-chaufferie.svg`).
+
+## Colour window
+
+In the canvas layout, the swatch of Fill or Stroke (in the inspector or the
+contextual bar) opens a colour window; the classic layout keeps the jPicker
+and jGraduate dialogs.
+
+- Custom tab: solid or gradient (linear or radial, its angle, its stops);
+  saturation and brightness, hue and opacity; the colour in Hex, RGB or HSL;
+  an eyedropper (the browser's, or the colour of an object of the drawing
+  where the browser has none); the colours of the document, or the recent
+  ones.
+- Libraries tab: named colours, searched by name, group or hexadecimal, shown
+  as a grid or a list.
+- A colour being dragged shows on the drawing outside the history; it is
+  applied when the gesture ends, as one undo step with its opacity and the
+  gradient it adds.
+- In the inspector, the colour and its opacity are also typed in the field;
+  − removes the fill or the stroke, + gives back the one of `initFill` or
+  `initStroke`.
+
+The format of the fields and the recent colours are kept in the preferences
+`color_format` and `recent_colors`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `colorLibraries` | `null` | The libraries of the Libraries tab; `null` for the colours of the Scorp-io synoptics and of the Scorp-io design system. Never read from the URL |
+
+```js
+svgEditor.setConfig({
+  colorLibraries: [{
+    id: 'site',
+    name: 'Charte du site',
+    groups: [
+      { name: 'États', colors: [{ name: 'En marche', value: '#4CC38A' }, { name: 'Défaut', value: '#F43F5E' }] },
+      { name: 'Nuit', colors: [{ step: '70', value: '#160F23' }, { step: '80', value: '#0C0813' }] }
+    ]
+  }]
+})
+```
+
+A name is a translation key or a text; a colour of a scale may give a `step`,
+shown after the name of its group ("Nuit 70").

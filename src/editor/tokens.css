@@ -92,6 +92,11 @@
    */
   --se-marker-dark: #000;
   --se-marker-light: #fff;
+  /* Ring of the cursors of the colour window, and the checkerboard shown
+     under a transparent colour: the same in both themes. */
+  --se-thumb-shadow: rgb(0 0 0 / 45%);
+  --se-checker-light: #fff;
+  --se-checker-dark: #cbcbcb;
 
   /*
    * The drawing does not inherit the interface: a text without font-family

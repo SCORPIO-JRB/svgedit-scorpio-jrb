@@ -25,6 +25,7 @@ import { LayerTree } from './panels/LayerTree.js'
 import { CodePanel } from './panels/CodePanel.js'
 import { ContextBar } from './panels/ContextBar.js'
 import { TextStyles } from './panels/TextStyles.js'
+import { PaintPicker } from './panels/PaintPicker.js'
 import { CommandPalette } from './panels/CommandPalette.js'
 
 export const LAYOUTS = ['canvas', 'classic']
@@ -136,6 +137,8 @@ export class EditorLayout {
     this.contextBar = new ContextBar(this.editor, this.$stage)
     this.editor.textStyles = new TextStyles(this.editor, this.$stage)
     this.palette = new CommandPalette(this.editor, root)
+    // The colour window, which replaces jPicker and jGraduate here.
+    this.paintPicker = new PaintPicker(this.editor, root)
 
     this.initPanel()
     this.observeSize()
@@ -383,6 +386,7 @@ export class EditorLayout {
     this.layerTree?.selectionChanged(this.editor.svgCanvas?.getSelectedElements() ?? [])
     this.codePanel?.invalidate()
     this.contextBar?.refresh()
+    this.paintPicker?.selectionChanged()
   }
 
   /**

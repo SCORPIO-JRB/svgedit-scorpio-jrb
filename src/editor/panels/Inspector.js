@@ -275,6 +275,9 @@ export class Inspector {
     for (const el of [...bottom.children]) {
       const section = BOTTOM_CONTROLS[el.id]
       if (section) this.put(el, section)
+      // Fill and stroke: the colour and its opacity are typed in the field,
+      // the swatch opens the colour window.
+      if (el.localName === 'se-colorpicker') el.setAttribute('editable', '')
     }
     // The width of the stroke has no label in the bottom bar; here it has a
     // field of its own, named as in the mockups.

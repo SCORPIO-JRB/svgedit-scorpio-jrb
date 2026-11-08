@@ -238,6 +238,13 @@ class BottomPanel {
     $id('fill_color').addEventListener('change', evt =>
       this.handleColorPicker.bind(this)('fill', evt)
     )
+    // While a colour is chosen in the window of the canvas layout: shown on
+    // the drawing, outside the history, until it is applied.
+    for (const type of ['fill', 'stroke']) {
+      $id(`${type}_color`).addEventListener('input', (evt) => {
+        if (evt.detail?.paint) this.editor.svgCanvas.previewPaint(type, evt.detail.paint)
+      })
+    }
     $id('stroke_width').addEventListener(
       'change',
       this.changeStrokeWidth.bind(this)

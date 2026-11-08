@@ -1636,3 +1636,512 @@
   margin: 8px 10px;
   color: var(--se-text-secondary);
 }
+
+/*
+ * Colour window (se-color-field, canvas layout): beside the panel, or over
+ * the contextual bar.
+ */
+#se-paint {
+  --se-checker: repeating-conic-gradient(var(--se-checker-dark) 0% 25%, var(--se-checker-light) 0% 50%) 0 0 / 8px 8px;
+
+  width: 256px;
+  padding: 0 0 12px;
+  overflow-x: hidden;
+}
+
+#se-paint [hidden] {
+  display: none !important;
+}
+
+#se-paint .se-paint-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 4px 14px;
+}
+
+#se-paint .se-paint-title {
+  font-size: var(--se-font-size-title);
+  font-weight: 600;
+  line-height: var(--se-line-height-title);
+}
+
+#se-paint .se-paint-icon,
+.se-paint-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-icon);
+  cursor: pointer;
+}
+
+#se-paint .se-paint-icon:hover,
+.se-paint-toggle:hover {
+  background: var(--se-control-hover);
+  color: var(--se-text);
+}
+
+#se-paint .se-paint-icon[aria-pressed="true"] {
+  background: var(--se-accent-bg);
+  color: var(--se-accent);
+}
+
+#se-paint .se-paint-icon:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+#se-paint button:focus-visible,
+#se-paint [role="slider"]:focus-visible,
+.se-paint-toggle:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: 1px;
+}
+
+#se-paint .se-paint-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 12px 8px;
+}
+
+#se-paint [role="tab"] {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: transparent;
+  color: var(--se-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+#se-paint [role="tab"][aria-selected="true"] {
+  background: var(--se-surface-tab-active);
+  color: var(--se-text);
+}
+
+#se-paint [role="tabpanel"] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px;
+}
+
+#se-paint .se-paint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#se-paint .se-paint-label {
+  flex: 0 0 40px;
+  color: var(--se-text-label);
+  font-size: var(--se-font-size-label);
+  line-height: var(--se-line-height-label);
+}
+
+/* Solid or gradient: a segmented control. */
+#se-paint .se-paint-segments {
+  display: flex;
+  flex: 1 1 auto;
+  padding: 2px;
+  border-radius: var(--se-radius-control);
+  background: var(--se-control);
+}
+
+#se-paint .se-paint-segments button {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-icon);
+  cursor: pointer;
+}
+
+#se-paint .se-paint-segments button[aria-checked="true"] {
+  background: var(--se-surface-tab-active);
+  color: var(--se-text);
+}
+
+/* The segment chosen shows by its background, not by the check of menus. */
+.se-layout-canvas #se-paint .se-paint-segments [aria-checked="true"]::before {
+  content: none;
+}
+
+#se-paint .se-paint-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--se-control-size);
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text);
+  font: inherit;
+}
+
+#se-paint .se-paint-select-plain {
+  flex: 0 1 auto;
+  padding-left: 0;
+  background: transparent;
+  color: var(--se-text-secondary);
+}
+
+/* A field: a grey box, as in the inspector. */
+#se-paint .se-paint-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  height: var(--se-control-size);
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text-secondary);
+}
+
+#se-paint .se-paint-field:focus-within {
+  border-color: var(--se-accent);
+}
+
+#se-paint .se-paint-field input {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+#se-paint .se-paint-angle {
+  flex: 0 0 72px;
+}
+
+#se-paint .se-paint-percent {
+  flex: 0 0 56px;
+}
+
+#se-paint .se-paint-percent input {
+  text-align: right;
+}
+
+/* Saturation and brightness, hue, opacity. */
+#se-paint .se-paint-area {
+  position: relative;
+  height: 160px;
+  border-radius: var(--se-radius-control);
+  background:
+    linear-gradient(to top, var(--se-marker-dark), transparent),
+    linear-gradient(to right, var(--se-marker-light), var(--se-paint-hue));
+  cursor: crosshair;
+  touch-action: none;
+}
+
+#se-paint .se-paint-thumb {
+  position: absolute;
+  top: 50%;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid var(--se-marker-light);
+  border-radius: 50%;
+  background: var(--se-paint-color);
+  box-shadow: 0 0 0 1px var(--se-thumb-shadow), inset 0 0 0 1px var(--se-thumb-shadow);
+  pointer-events: none;
+}
+
+#se-paint .se-paint-area .se-paint-thumb {
+  margin-top: -7px;
+}
+
+#se-paint .se-paint-sliders {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#se-paint .se-paint-tracks {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 7px;
+}
+
+#se-paint .se-paint-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+#se-paint .se-paint-hue {
+  background: var(--se-paint-hue-track);
+}
+
+#se-paint .se-paint-alpha {
+  background: linear-gradient(to right, transparent, var(--se-paint-opaque)), var(--se-checker);
+}
+
+#se-paint .se-paint-alpha .se-paint-thumb {
+  background: linear-gradient(var(--se-paint-color), var(--se-paint-color)), var(--se-checker);
+}
+
+#se-paint .se-paint-hint {
+  margin: -4px 0 0;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+  line-height: var(--se-line-height-label);
+}
+
+#se-paint .se-paint-values {
+  display: flex;
+  gap: 4px;
+}
+
+#se-paint .se-paint-values > .se-paint-select {
+  flex: 0 0 58px;
+}
+
+#se-paint .se-paint-channels {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+#se-paint .se-paint-channels .se-paint-field {
+  flex: 1 1 0;
+  padding: 0 4px;
+}
+
+#se-paint .se-paint-channels-3 input {
+  text-align: center;
+}
+
+/* Swatches: of the document, recent, of a library. */
+#se-paint .se-paint-swatches-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: -4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--se-border);
+}
+
+#se-paint .se-paint-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 22px);
+  gap: 6px;
+}
+
+.se-swatch {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: var(--se-paint-color);
+  box-shadow: inset 0 0 0 1px var(--se-border-control);
+  cursor: pointer;
+}
+
+#se-paint .se-swatch:hover {
+  box-shadow: inset 0 0 0 1px var(--se-border-control), 0 0 0 2px var(--se-border-control);
+}
+
+#se-paint .se-paint-empty {
+  margin: 0;
+  color: var(--se-text-secondary);
+}
+
+#se-paint .se-paint-search input {
+  height: 100%;
+}
+
+#se-paint .se-paint-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+#se-paint .se-paint-group-name {
+  margin: 0 0 6px;
+  color: var(--se-text-label);
+  font-size: var(--se-font-size-label);
+  font-weight: 500;
+  line-height: var(--se-line-height-label);
+}
+
+#se-paint .se-paint-list {
+  display: flex;
+  flex-direction: column;
+}
+
+#se-paint .se-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+#se-paint .se-swatch-row:hover {
+  background: var(--se-control-hover);
+}
+
+#se-paint .se-swatch-row .se-swatch {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+#se-paint .se-swatch-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#se-paint .se-swatch-hex {
+  color: var(--se-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Gradient: the bar of its stops, the list. */
+#se-paint .se-paint-bar {
+  position: relative;
+  height: 20px;
+  margin: 4px 9px;
+  border-radius: var(--se-radius-field);
+  background: var(--se-checker);
+  cursor: copy;
+  touch-action: none;
+}
+
+#se-paint .se-paint-bar-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--se-border-control);
+}
+
+#se-paint .se-paint-handle {
+  position: absolute;
+  top: 50%;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  padding: 0;
+  border: 2px solid var(--se-marker-light);
+  border-radius: 50%;
+  background: linear-gradient(var(--se-paint-color), var(--se-paint-color)), var(--se-checker);
+  box-shadow: 0 0 0 1px var(--se-thumb-shadow);
+  cursor: grab;
+}
+
+#se-paint .se-paint-handle[aria-pressed="true"] {
+  box-shadow: 0 0 0 1px var(--se-thumb-shadow), 0 0 0 3px var(--se-accent);
+}
+
+#se-paint .se-paint-stops-head {
+  justify-content: space-between;
+}
+
+#se-paint .se-paint-stops {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: -6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+#se-paint .se-paint-stop {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border-radius: var(--se-radius-control);
+}
+
+#se-paint .se-paint-stop[aria-current="true"] {
+  background: var(--se-accent-row);
+}
+
+#se-paint .se-paint-stop .se-paint-percent {
+  flex: 0 0 50px;
+}
+
+#se-paint .se-paint-stop-color {
+  flex: 1 1 auto;
+}
+
+#se-paint .se-paint-chip {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: linear-gradient(var(--se-paint-color), var(--se-paint-color)), var(--se-checker);
+  box-shadow: inset 0 0 0 1px var(--se-border-control);
+  cursor: pointer;
+}
+
+/* Picking a colour on the drawing. */
+.se-paint-picking,
+.se-paint-picking * {
+  cursor: crosshair !important;
+}
+
+/* The − and + of the Fill and Stroke sections, on the line of their title. */
+.se-layout-canvas .se-inspector .se-section[data-section="fill"],
+.se-layout-canvas .se-inspector .se-section[data-section="stroke"] {
+  position: relative;
+}
+
+.se-layout-canvas .se-inspector .se-paint-toggle {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+}
+
+/* The field of the inspector: swatch, hexadecimal and opacity typed in. */
+.se-layout-canvas .se-inspector se-colorpicker[editable]::part(swatch) {
+  cursor: pointer;
+}
+
+/* The window takes the focus when it opens; its controls show theirs. */
+#se-paint:focus {
+  outline: none;
+}

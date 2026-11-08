@@ -672,6 +672,9 @@ export class ContextBar {
       original.setPaint(e.detail.paint)
       this.editor.bottomPanel.handleColorPicker(type, e)
     })
+    picker.addEventListener('input', (e) => {
+      if (e.detail?.paint) this.svgCanvas.previewPaint(type, e.detail.paint)
+    })
     picker.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' && e.key !== ' ') return
       e.preventDefault()

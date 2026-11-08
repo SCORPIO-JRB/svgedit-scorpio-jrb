@@ -19,7 +19,7 @@ export const regexEscape = function (str) {
  * in the top bar.
  * @type {string[]}
  */
-export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins', 'homeUrl', 'breadcrumb']
+export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins', 'homeUrl', 'breadcrumb', 'colorLibraries']
 
 /**
  * Tells whether a configuration key must be ignored when it comes from the URL.
@@ -88,7 +88,11 @@ export default class ConfigObj {
       panel_width: '280',
       panel_tab: 'properties',
       // Contextual bar above the selection (lot V4), on unless turned off.
-      context_bar: 'true'
+      context_bar: 'true',
+      // Colour window (canvas layout): the format of its fields (hex, rgb,
+      // hsl) and the recent colours, hexadecimal, most recent first.
+      color_format: 'hex',
+      recent_colors: ''
     }
     /**
       * @tutorial ConfigOptions
@@ -124,6 +128,7 @@ export default class ConfigObj {
       * @property {string} [homeUrl=""] Link of the home button of the top bar, given by the host application (canvas layout); http(s) only, never from the URL.
       * @property {Array<string|{label: string, href?: string}>} [breadcrumb=[]] Breadcrumb of the host application before the name of the document, such as `["Le Perreux", {label: "Synoptiques", href: "/synoptiques"}]` (canvas layout); never from the URL.
       * @property {Array<{id: string, label: string, fontFamily: string, fontSize: number, fontWeight: number, fill: string}>|null} [textStyles=null] Named text styles of the Style ▾ window (lot V4): each writes font-family, font-size, font-weight and fill, and is recognised by these values. Null for the styles of the SCorp-io synoptics; never from the URL.
+      * @property {Array<{id: string, name: string, groups: Array<{name: string, colors: Array<{value: string, name?: string, step?: string}>}>}>|null} [colorLibraries=null] Colour libraries of the Libraries tab of the colour window (canvas layout). A name is a translation key or a text; a colour of a scale may give a step, shown after the name of its group. Null for the colours of the Scorp-io synoptics and of the Scorp-io design system; never from the URL.
       * @property {"borderless"|"scroll"} [view="borderless"] The view of the drawing (lot V2): "borderless" has no edge and no scroll bar, the wheel scrolls it and Ctrl+wheel zooms from 1 % to 6 400 %; "scroll" is the canvas of SVG-Edit with scroll bars, kept until the end of V3. Read at start.
       * @property {PlainObject} [initFill] Init fill properties
       * @property {string} [initFill.color="FF0000"] The initial fill color. Must be a hex code string. Defaults to solid red.
@@ -170,6 +175,7 @@ export default class ConfigObj {
       homeUrl: '',
       breadcrumb: [],
       textStyles: null,
+      colorLibraries: null,
       initFill: {
         color: 'FF0000', // solid red
         opacity: 1
