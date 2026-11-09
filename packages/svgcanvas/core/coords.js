@@ -11,6 +11,7 @@ import {
   assignAttributes,
   getBBox,
   getRefElem,
+  getGradientAttribute,
   findDefs
 } from './utilities.js'
 import {
@@ -102,8 +103,10 @@ export const remapElement = (selected, changes, m) => {
       const tagName = (grad.tagName || '').toLowerCase()
       if (!['lineargradient', 'radialgradient'].includes(tagName)) return
 
-      // userSpaceOnUse gradients do not need object-bounding-box correction.
-      if (grad.getAttribute('gradientUnits') === 'userSpaceOnUse') return
+      // userSpaceOnUse gradients do not need object-bounding-box correction:
+      // they follow their element (recalculate.js), also when they take
+      // these units from the gradient they refer to.
+      if (getGradientAttribute(grad, 'gradientUnits') === 'userSpaceOnUse') return
 
       const newgrad = grad.cloneNode(true)
       if (m.a < 0) {

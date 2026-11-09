@@ -22,7 +22,8 @@ import {
   getBBox as utilsGetBBox,
   walkTreePost,
   assignAttributes,
-  getFeGaussianBlur
+  getFeGaussianBlur,
+  isInsideDefinition
 } from './utilities.js'
 import {
   transformPoint,
@@ -32,7 +33,6 @@ import {
   getRotationCenterFromRotateTransform
 } from './math.js'
 import { recalculateDimensions, withStartTransform } from './recalculate.js'
-import { isGecko } from '../common/browser.js'
 import { getParents } from '../common/util.js'
 import { createClipboardPayload } from './clipboard.js'
 import { drawingMatrixInParent, invert, multiply, parentBoxToDrawing, parentDelta, parentToDrawing } from './multi-transform.js'
@@ -1392,16 +1392,19 @@ const viewBoxTransform = (use, symbol) => {
  * Converts selected/given `<use>` or child SVG element to a group.
  * @function module:selected-elem.SvgCanvas#convertToGroup
  * @param {Element} elem
+ * @param {BatchCommand} [outerCmd] - Receives the changes, which then are
+ *   not added to the history on their own: the ungrouping of an import is
+ *   one undo step
  * @fires module:selected-elem.SvgCanvas#event:selected
  * @returns {void}
  */
-const convertToGroup = elem => {
+const convertToGroup = (elem, outerCmd) => {
   const selectedElements = svgCanvas.getSelectedElements()
   if (!elem) {
     elem = selectedElements[0]
   }
   const $elem = elem
-  const batchCmd = new BatchCommand()
+  const batchCmd = outerCmd || new BatchCommand()
   let ts
   const dataStorage = svgCanvas.getDataStorage()
   if (dataStorage.has($elem, 'gsvg')) {
@@ -1476,16 +1479,10 @@ const convertToGroup = elem => {
     }
     g.append(...copy.childNodes)
 
-    // Duplicate the gradients for Gecko, since they weren't included in the <symbol>
-    if (isGecko()) {
-      const svgElement = findDefs()
-      const gradients = svgElement.querySelectorAll(
-        'linearGradient,radialGradient,pattern'
-      )
-      for (let i = 0, im = gradients.length; im > i; i++) {
-        g.appendChild(gradients[i].cloneNode(true))
-      }
-    }
+    // In Firefox, the gradients of the import are in the <defs> of the
+    // drawing (see importSvgString): the objects keep using them. Every
+    // gradient of the drawing used to be copied at each ungrouping, and the
+    // originals, no longer used, were removed by the next save.
 
     if (ts) {
       g.setAttribute('transform', ts)
@@ -1500,17 +1497,6 @@ const convertToGroup = elem => {
     }
 
     svgCanvas.uniquifyElems(g)
-
-    // Put the dupe gradients back into <defs> (after uniquifying them)
-    if (isGecko()) {
-      const svgElement = findDefs()
-      const elements = g.querySelectorAll(
-        'linearGradient,radialGradient,pattern'
-      )
-      for (let i = 0, im = elements.length; im > i; i++) {
-        svgElement.appendChild(elements[i])
-      }
-    }
 
     // now give the g itself a new id
     g.id = svgCanvas.getNextId()
@@ -1527,26 +1513,26 @@ const convertToGroup = elem => {
 
     svgCanvas.setUseData(g)
 
-    if (isGecko()) {
-      svgCanvas.convertGradients(findDefs())
-    } else {
-      svgCanvas.convertGradients(g)
-    }
+    // The gradients keep their units, as when a file is opened: they follow
+    // their shapes when the transforms below are recalculated.
 
     // recalculate dimensions on the top-level children so that unnecessary transforms
-    // are removed
+    // are removed. Recorded: a gradient shared with another shape is copied
+    // into the <defs> of the drawing when its shape changes.
     walkTreePost(g, n => {
       try {
-        recalculateDimensions(n)
+        const cmd = recalculateDimensions(n)
+        if (cmd) { batchCmd.addSubCommand(cmd) }
       } catch (e) {
         error('Error recalculating dimensions', e, 'selected-elem')
       }
     })
 
-    // Give ID for any visible element missing one
+    // Give ID for any visible element missing one, but not to the content
+    // of a definition (the clip paths and gradients of the file)
     const visElems = g.querySelectorAll(svgCanvas.getVisElems())
     Array.prototype.forEach.call(visElems, el => {
-      if (!el.id) {
+      if (!el.id && !isInsideDefinition(el, g)) {
         el.id = svgCanvas.getNextId()
       }
     })
@@ -1558,7 +1544,7 @@ const convertToGroup = elem => {
       batchCmd.addSubCommand(cm)
     }
 
-    svgCanvas.addCommandToHistory(batchCmd)
+    if (!outerCmd) { svgCanvas.addCommandToHistory(batchCmd) }
     return g
   } else {
     warn('Unexpected element to ungroup:', elem, 'selected-elem')
@@ -1612,13 +1598,15 @@ const ungroupSelectedElement = () => {
   if (!g) {
     return
   }
+  // One undo step, also when imported content is converted first
+  const batchCmd = new BatchCommand('Ungroup Elements')
   if (dataStorage.has(g, 'gsvg') || dataStorage.has(g, 'symbol')) {
     // Is svg (e.g. imported content), so convert to a real group first, then
     // fall through below to actually ungroup/flatten that new group - a
     // single Ungroup action on imported content should ungroup it, not just
     // silently swap its <use>/gsvg wrapper for a <g> that still needs a
     // second Ungroup to do anything.
-    g = convertToGroup(g)
+    g = convertToGroup(g, batchCmd)
     if (!g) { return }
   } else if (g.tagName === 'use') {
     // Somehow doesn't have data set, so retrieve
@@ -1634,7 +1622,7 @@ const ungroupSelectedElement = () => {
     }
     dataStorage.put(g, 'symbol', symbol)
     dataStorage.put(g, 'ref', symbol)
-    g = convertToGroup(g)
+    g = convertToGroup(g, batchCmd)
     if (!g) { return }
   }
   const parentsA = getParents(g.parentNode, 'a')
@@ -1644,7 +1632,6 @@ const ungroupSelectedElement = () => {
 
   // Look for parent "a"
   if (g.tagName === 'g' || g.tagName === 'a') {
-    const batchCmd = new BatchCommand('Ungroup Elements')
     const cmd = pushGroupProperty(g, true)
     if (cmd) {
       batchCmd.addSubCommand(cmd)

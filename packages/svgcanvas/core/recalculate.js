@@ -11,6 +11,7 @@ import {
   getBBox,
   getHref,
   getRefElem,
+  getGradientAttribute,
   findDefs
 } from './utilities.js'
 import { BatchCommand, ChangeElementCommand, InsertElementCommand } from './history.js'
@@ -1039,6 +1040,13 @@ const CUT_REFERENCES = [
   ['mask', 'mask', 'maskContentUnits']
 ]
 
+// A gradient in user units follows its element the same way, through its
+// gradientTransform; one in bounding box units follows by itself. The
+// gradients of a file are not converted to bounding box units any more when
+// it is opened: that conversion changed how they look.
+const PAINT_ATTRIBUTES = ['fill', 'stroke']
+const GRADIENTS = new Set(['linearGradient', 'radialGradient'])
+
 const cleanNumber = (n) => Number(n.toPrecision(12))
 
 /**
@@ -1054,18 +1062,51 @@ const transformValue = (m) => {
 }
 
 /**
- * Puts a matrix in front of an element's transform, as one undoable change.
+ * Puts a matrix in front of an element's transform, or of a gradient's
+ * gradientTransform, as one undoable change.
  * @param {Element} elem
  * @param {SVGMatrix} m
  * @param {BatchCommand} batch
  * @returns {void}
  */
 const prependTransform = (elem, m, batch) => {
-  const old = elem.getAttribute('transform')
-  const tlist = getTransformList(elem)
+  const name = GRADIENTS.has(elem.tagName) ? 'gradientTransform' : 'transform'
+  const old = elem.getAttribute(name)
+  if (name === 'gradientTransform' && old === null) {
+    // Taken from the gradient it refers to: it becomes its own
+    const inherited = getGradientAttribute(elem, name)
+    if (inherited !== null) { elem.setAttribute(name, inherited) }
+  }
+  const tlist = name === 'gradientTransform' ? elem.gradientTransform?.baseVal : getTransformList(elem)
   const current = tlist?.numberOfItems ? transformListToTransform(tlist).matrix : null
-  elem.setAttribute('transform', transformValue(current ? matrixMultiply(m, current) : m))
-  batch.addSubCommand(new ChangeElementCommand(elem, { transform: old }))
+  elem.setAttribute(name, transformValue(current ? matrixMultiply(m, current) : m))
+  batch.addSubCommand(new ChangeElementCommand(elem, { [name]: old }))
+}
+
+/**
+ * Whether a gradient that an element paints with is used by anything else:
+ * another element, a gradient made from it (href), a stylesheet or an
+ * animation. It is then copied before it follows the element.
+ * @param {Element} grad
+ * @param {Element} elem
+ * @returns {boolean}
+ */
+const isGradientShared = (grad, elem) => {
+  const content = svgCanvas.getSvgContent()
+  const hash = `#${grad.id}`
+  const quoted = hash.replace(/["\\]/g, '\\$&')
+  const painters = content.querySelectorAll(`[fill*="${quoted}"],[stroke*="${quoted}"]`)
+  if ([...painters].some((other) => other !== elem &&
+    PAINT_ATTRIBUTES.some((attr) => getRefElem(other.getAttribute(attr)) === grad))) {
+    return true
+  }
+  if ([...content.querySelectorAll('linearGradient,radialGradient')].some((other) => getHref(other) === hash)) {
+    return true
+  }
+  if ([...content.querySelectorAll('style')].some((style) => style.textContent.includes(hash))) {
+    return true
+  }
+  return Boolean(content.querySelector(`[values*="${quoted}"],[from*="${quoted}"],[to*="${quoted}"],[by*="${quoted}"]`))
 }
 
 /**
@@ -1085,6 +1126,13 @@ export const readCutReferences = (elem) => {
     if (!ref || ref.tagName !== tag || ref.getAttribute(units) === 'objectBoundingBox') { return }
     refs.push({ attr, ref })
   })
+  PAINT_ATTRIBUTES.forEach((attr) => {
+    const ref = getRefElem(elem.getAttribute(attr))
+    // Fill and stroke with the same gradient: it follows once
+    if (!ref || !GRADIENTS.has(ref.tagName) || refs.some((other) => other.ref === ref)) { return }
+    if (getGradientAttribute(ref, 'gradientUnits') !== 'userSpaceOnUse') { return }
+    refs.push({ attr, ref })
+  })
   if (!refs.length) { return null }
   const tlist = getTransformList(elem)
   const before = tlist?.numberOfItems
@@ -1094,10 +1142,11 @@ export const readCutReferences = (elem) => {
 }
 
 /**
- * Gives a clip path or a mask the change its element took: what the element's
- * transform drew before, its new geometry and transform draw now, and the cut
- * follows the same way. A reference shared with other elements is copied
- * first, so that they keep theirs.
+ * Gives a clip path, a mask or a gradient in user units the change its
+ * element took: what the element's transform drew before, its new geometry
+ * and transform draw now, and the reference follows the same way. A
+ * reference shared with other elements is copied first, so that they keep
+ * theirs.
  * @param {Element} elem
  * @param {{refs: Array<{attr: string, ref: Element}>, before: SVGMatrix}} cut
  * @param {module:history.Command|null} cmd - The element's own change
@@ -1115,17 +1164,27 @@ export const followCutReferences = (elem, cut, cmd) => {
   const content = svgCanvas.getSvgContent()
   cut.refs.forEach(({ attr, ref }) => {
     let target = ref
-    if (ref.id && content.querySelectorAll(`[${attr}="url(#${ref.id})"]`).length > 1) {
+    const gradient = GRADIENTS.has(ref.tagName)
+    const shared = gradient
+      ? isGradientShared(ref, elem)
+      : content.querySelectorAll(`[${attr}="url(#${ref.id})"]`).length > 1
+    if (ref.id && shared) {
       target = ref.cloneNode(true)
       target.id = svgCanvas.getNextId()
       target.querySelectorAll('[id]').forEach((child) => { child.id = svgCanvas.getNextId() })
       findDefs().append(target)
       batch.addSubCommand(new InsertElementCommand(target))
-      const old = elem.getAttribute(attr)
-      elem.setAttribute(attr, `url(#${target.id})`)
-      batch.addSubCommand(new ChangeElementCommand(elem, { [attr]: old }))
+      // The fill and the stroke of the element may both use the gradient
+      const attrs = gradient
+        ? PAINT_ATTRIBUTES.filter((name) => getRefElem(elem.getAttribute(name)) === ref)
+        : [attr]
+      attrs.forEach((name) => {
+        const old = elem.getAttribute(name)
+        elem.setAttribute(name, `url(#${target.id})`)
+        batch.addSubCommand(new ChangeElementCommand(elem, { [name]: old }))
+      })
     }
-    if (target.tagName === 'clipPath') {
+    if (target.tagName === 'clipPath' || gradient) {
       prependTransform(target, change, batch)
       return
     }
