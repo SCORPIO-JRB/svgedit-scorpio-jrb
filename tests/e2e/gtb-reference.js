@@ -13,7 +13,6 @@
 export const buildReference = async () => {
   const ed = window.svgEditor
   const c = ed.svgCanvas
-  const NS_SVG = 'http://www.w3.org/2000/svg'
   const t = (key) => ed.i18next.t(key)
   const layer = (key) => c.setCurrentLayer(t(key))
 
