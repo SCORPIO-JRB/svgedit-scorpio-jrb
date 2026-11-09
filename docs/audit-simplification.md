@@ -307,6 +307,7 @@ Seule la disposition « canevas » change. `src/editor/simplification.js` liste 
 **Mesures à la livraison** (Chromium) :
 - `simplification-s1.spec.js` : 12 tests réussis ; `simplification-s0.spec.js` : 21 ;
 - suites touchées (V3, V4, V7, contrats des extensions, registre, presse-papiers, outils de texte, raccourcis, menu principal) : 172 tests réussis, après la mise à jour de `layout-v3` ;
+- suite complète de bout en bout : 557 tests sur 558. Le dernier, « Enter makes a line » (`texte-multiligne.spec.js`), échoue quand la machine est chargée : il passe seul, et sous quatre processus il échoue aussi sur `master` (7 fois sur 12, contre 9 sur 12 avec S1) ;
 - sortie comparée à `master` : 25 allers-retours sur 25 et 73 scénarios sur 73 identiques ;
 - rapport de fidélité des fichiers du lot : aucune perte ;
 - `standard`, contrôles des couleurs et des libellés, `remark` : réussis.
