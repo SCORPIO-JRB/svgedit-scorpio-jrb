@@ -102,4 +102,12 @@ Le changement compte un module nouveau, des retouches dans le canevas et l'édit
 
 ## 8. Vérifications
 
-Voir la description de la pull request : tests unitaires, tests de bout en bout dans les mises en page canevas et classique, comparaison avec V7 (`tests/output/compare-output.mjs`), fichiers produits par SVG-Edit.
+- **Tests unitaires** : 995/995, dont les 15 de `texte-multiligne.test.js`.
+- **De bout en bout, mise en page canevas** : 516/516, dont les 9 de `texte-multiligne.spec.js`. Après la limite posée sur la prise dans le cadre (ci-dessous), les suites touchées ont été rejouées : 32/32.
+- **De bout en bout, mise en page classique** : en cours au moment de ce commit.
+- **Sortie comparée à V7** (`tests/output/compare-output.mjs`) :
+  - scénarios : 73/73 identiques ;
+  - allers-retours : 23/23 identiques.
+- **Fichiers produits par SVG-Edit** : 19/19 identiques. Le synoptique de référence de V7 (`docs/v7/synoptique-reference.svg`), ouvert puis enregistré, est identique.
+- **Coût au survol.** Prendre un texte dans son cadre ne lit que les textes en bloc : ceux qui ont des lignes ou une largeur fixe. Mesuré sur 600 textes d'une ligne, l'appel par mouvement de souris passe de 0,0006 ms à 0,1 ms. Sans cette limite, il coûtait 0,78 ms.
+- **Firefox** : à vérifier. La CI ne démarre pas, faute de facturation GitHub.
