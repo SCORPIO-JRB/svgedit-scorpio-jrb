@@ -12,7 +12,7 @@ couleur codée en dur, de `<style>` ni de script ; les tracés sont en `currentC
 - Material Symbols : 106 fichiers. Tracé et `viewBox="0 -960 960 960"` repris tels quels, avec
   `width="24" height="24"` et `fill="currentColor"` sur la racine. `flip_vertical.svg` est le
   tracé de `flip` pivoté de 90° (attribut `transform`).
-- Dessins propres : 54 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
+- Dessins propres : 56 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
   `currentColor` de 1,5 (l'épaisseur de Material Symbols en graisse 400 : 60/960 de 24 px),
   extrémités et jointures rondes. Exceptions voulues : les icônes de jointure et d'extrémité de
   trait montrent un trait épais, puisque c'est leur sujet.
@@ -97,6 +97,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `leftarrow_o.svg` | dessin propre | Marqueur : flèche vide vers la gauche |
 | `letter_spacing.svg` | `format_letter_spacing_2` | Espacement des lettres (champ) |
 | `library.svg` | `shapes` | Bibliothèque (même dessin que shapelib) — *sans référence* |
+| `line_height.svg` | dessin propre | Interligne d'un texte de plusieurs lignes (champ) |
 | `linecap_butt.svg` | dessin propre | Extrémité du trait : plate (butt) |
 | `linecap_round.svg` | dessin propre | Extrémité du trait : ronde |
 | `linecap_square.svg` | dessin propre | Extrémité du trait : carrée |
@@ -157,6 +158,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `stroke.svg` | `border_color` | Couleur du contour |
 | `svg-edit-home.svg` | `public` | Site web de SVG-Edit — *sans référence* |
 | `text.svg` | `title` | Outil texte ; renommer le calque |
+| `text_auto_width.svg` | dessin propre | Largeur automatique d'un texte : il ne passe plus à la ligne de lui-même |
 | `text_decoration_linethrough.svg` | `format_strikethrough` | Barré |
 | `text_decoration_overline.svg` | `format_overline` | Trait au-dessus (overline) |
 | `text_decoration_underline.svg` | `format_underlined` | Souligné |

@@ -249,6 +249,13 @@
     <se-spin-input size="2" id="tool_word_spacing" min=0 max=1000 step=1 title="properties.text_word_spacing"
       src="word_spacing.svg"></se-spin-input>
 
+    <!-- Line Height: of the lines of a text, in font sizes -->
+    <se-spin-input size="2" id="tool_line_height" min=0.5 max=5 step=0.1 title="properties.text_line_height"
+      src="line_height.svg"></se-spin-input>
+
+    <!-- Auto Width: a text of fixed width becomes as wide as its lines -->
+    <se-button id="tool_text_auto_width" title="properties.text_auto_width" src="text_auto_width.svg"></se-button>
+
     <!-- Text Length -->
     <se-spin-input size="2" id="tool_text_length" min=0 max=1000 step=1 title="properties.text_length"
       src="text_length.svg"></se-spin-input>
@@ -258,8 +265,8 @@
       options="properties.text_length_adjust_spacing,properties.text_length_adjust_spacing_and_glyphs"
       values="spacing::spacingAndGlyphs"></se-select>
   </div>
-  <!-- Not visible, but still used -->
-  <input id="text" type="text" size="35" />
+  <!-- Not visible, but still used: what is typed in a text, line by line -->
+  <textarea id="text" rows="1" wrap="off" spellcheck="false" autocomplete="off"></textarea>
   <div class="container_panel">
     <div class="tool_sep"></div>
     <se-input id="g_title" data-attr="title" size="8" label="properties.label"></se-input>

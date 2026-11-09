@@ -441,7 +441,10 @@ const elementToString = (elem, indent) => {
     if (elem.hasChildNodes()) {
       out.push('>')
       indent++
-      let bOneLine = false
+      // Inside a text, white space is drawn: nothing is added between its
+      // spans (an indented line of a centered text moved by half a space).
+      const inText = Boolean(elem.closest?.('text'))
+      let bOneLine = inText
 
       for (let i = 0; i < childs.length; i++) {
         const child = childs.item(i)
@@ -449,6 +452,10 @@ const elementToString = (elem, indent) => {
           case 1: { // element node
             // An element written as nothing (an empty <defs>) leaves no
             // blank line (V6, option fidelity.stableSave)
+            if (inText) {
+              out.push(svgCanvas.svgToString(child, 0))
+              break
+            }
             const text = svgCanvas.svgToString(child, indent)
             if (text === '' && isFidelityOn(curConfig, 'stableSave')) break
             out.push('\n')
@@ -906,12 +913,14 @@ const setSvgString = (xmlString, preventUndo) => {
     // identify layers
     draw.identifyLayers()
 
-    // Give ID for any visible layer children missing one
+    // Give ID for any visible layer children missing one. Not to the lines
+    // of a text: they are not selected alone, and a text saved, opened and
+    // saved again stays the same.
     const chiElems = content.children
     Array.prototype.forEach.call(chiElems, chiElem => {
       const visElems = chiElem.querySelectorAll(svgCanvas.getVisElems())
       Array.prototype.forEach.call(visElems, elem => {
-        if (!elem.id) {
+        if (!elem.id && elem.localName !== 'tspan') {
           elem.id = svgCanvas.getNextId()
         }
       })

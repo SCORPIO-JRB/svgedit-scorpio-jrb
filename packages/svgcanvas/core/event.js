@@ -46,6 +46,7 @@ import {
   parentToDrawing
 } from './multi-transform.js'
 import { isFidelityOn } from './fidelity.js'
+import { startTextWidthResize, resizeTextWidth, restoreContent } from './text-lines.js'
 
 // The tools whose points snap while drawing (lot V2). The grid keeps its own
 // snapping there, as before.
@@ -76,6 +77,9 @@ let selectionBeforeClone = null
 let rubberBandBase = new Set()
 // A single text resized by a grip: it gets a new font size, not a matrix.
 let singleTextResize = null
+// The width of a single text changed by a side grip: its lines break again
+// (texts of several lines).
+let textWidthResize = null
 // Rotation of a single element started from a zone outside a corner: the
 // difference between its angle and the pointer's, so that it does not jump.
 // Null for the handle above the frame, whose behaviour is unchanged.
@@ -579,6 +583,18 @@ const cancelGesture = () => {
       if (selectedElements[0]) {
         restoreTransform(selectedElements[0], svgCanvas.getStartTransform())
       }
+      if (textWidthResize) {
+        // The width, the place and the lines the text had
+        const { text, before, content } = textWidthResize
+        for (const [name, value] of Object.entries(before)) {
+          if (value === null) {
+            text.removeAttribute(name)
+          } else {
+            text.setAttribute(name, value)
+          }
+        }
+        restoreContent(text, content)
+      }
       if (mode === 'rotate') {
         // Drop the undoable change opened on mousedown.
         svgCanvas.undoMgr.finishUndoableChange()
@@ -614,6 +630,7 @@ const cancelGesture = () => {
   pendingCloneCmd = null
   selectionBeforeClone = null
   singleTextResize = null
+  textWidthResize = null
   svgCanvas.setStarted(false)
   svgCanvas.setCurrentMode('select')
 
@@ -871,6 +888,15 @@ const mouseMoveEvent = (evt) => {
       }
       if (!svgCanvas.getCurrentResizeMode().includes('e') && !svgCanvas.getCurrentResizeMode().includes('w')) {
         dx = 0
+      }
+      if (textWidthResize?.text === selected) {
+        // A side grip of a text sets its width: the lines break again as
+        // the pointer moves, the font stays.
+        const width = resizeTextWidth(textWidthResize, dx, svgCanvas.getCurrentResizeMode(), evt.altKey)
+        svgCanvas.selectorManager.requestSelector(selected).resize()
+        svgCanvas.selectorManager.showSize?.(width * textWidthResize.scale, getBBox(selected).height)
+        svgCanvas.call('transition', selectedElements)
+        break
       }
 
       let // ts = null,
@@ -1375,6 +1401,19 @@ const mouseUpEvent = (evt) => {
             if (mouseUpMode === 'resize' && elem === circleResize?.elem) {
               restoreCircleScale(elem, circleResize)
             }
+            if (mouseUpMode === 'resize' && elem === textWidthResize?.text) {
+              // The grip set the width: the transforms of the gesture go, the
+              // width, the place and the lines are one step.
+              if (oldTransform) {
+                elem.setAttribute('transform', oldTransform)
+              } else {
+                elem.removeAttribute('transform')
+              }
+              const { before, content } = textWidthResize
+              batchCmd.addSubCommand(new ChangeElementCommand(elem, before, 'se:width', content))
+              changedElements.push(elem)
+              return
+            }
             if (mouseUpMode === 'resize' && elem === singleTextResize) {
               const textCmd = commitSingleTextResize(elem, oldTransform)
               if (textCmd) {
@@ -1647,6 +1686,7 @@ const mouseUpEvent = (evt) => {
   svgCanvas.dragStartTransforms = null
   endDragOffset()
   singleTextResize = null
+  textWidthResize = null
   flushPendingClone()
 
   /**
@@ -1921,6 +1961,7 @@ const mouseDownEvent = (evt) => {
     mouseTarget = selectedElements[0]
   }
   singleTextResize = null
+  textWidthResize = null
 
   // Nothing is drawn into a locked layer or group (lot V7): the editor says
   // why.
@@ -2026,6 +2067,12 @@ const mouseDownEvent = (evt) => {
       svgCanvas.setStartX(x)
       svgCanvas.setStartY(y)
       singleTextResize = isScalableText(mouseTarget) ? mouseTarget : null
+      {
+        const side = svgCanvas.getCurrentResizeMode()
+        textWidthResize = mouseTarget?.tagName === 'text' && (side === 'e' || side === 'w')
+          ? startTextWidthResize(mouseTarget)
+          : null
+      }
 
       // Getting the BBox from the selection box, since we know we
       // want to orient around it

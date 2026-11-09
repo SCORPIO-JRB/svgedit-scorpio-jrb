@@ -9,6 +9,7 @@
 import { NS } from './namespaces.js'
 import { getHref, setHref, getRotationAngle, getBBox } from './utilities.js'
 import { getTransformList, transformListToTransform, transformPoint } from './math.js'
+import { getTextSource, setTextSource, cloneContent, restoreContent, sameContent, LAYOUT_ATTRS } from './text-lines.js'
 
 // Attributes that affect an element's bounding box. Only these require
 // recalculating the rotation center when changed.
@@ -342,6 +343,21 @@ export class RemoveElementCommand extends Command {
 */
 
 /**
+* Sets the content of an element: the lines of a text are laid out.
+* @param {Element} elem
+* @param {string|null} value
+* @returns {void}
+*/
+const setText = (elem, value) => {
+  const content = value === null || value === undefined ? '' : String(value)
+  if (elem.localName === 'text') {
+    setTextSource(elem, content)
+  } else {
+    elem.textContent = content
+  }
+}
+
+/**
 * History command to make a change to an element.
 * Usually an attribute change, but can also be textcontent.
 * @implements {module:history.HistoryCommand}
@@ -351,16 +367,25 @@ export class ChangeElementCommand extends Command {
   * @param {Element} elem - The DOM element that was changed
   * @param {module:history.CommandAttributes} attrs - Attributes to be changed with the values they had *before* the change
   * @param {string} text - An optional string visible to user related to this change
+  * @param {{nodes: Node[], attrs: Array<string|null>}} [oldContent] - The
+  *   content of the element before the change (from `cloneContent`), when
+  *   the change laid it out again (a text of several lines): the step puts
+  *   back that content and the one after, exactly
    */
-  constructor (elem, attrs, text) {
+  constructor (elem, attrs, text, oldContent) {
     super()
     this.elem = elem
     this.text = text ? `Change ${elem.tagName} ${text}` : `Change ${elem.tagName}`
     this.newValues = {}
     this.oldValues = attrs
+    if (oldContent) {
+      this.oldContent = oldContent
+      this.newContent = cloneContent(elem)
+    }
     for (const attr in attrs) {
       if (attr === '#text') {
-        this.newValues[attr] = (elem) ? elem.textContent : ''
+        // The content as typed: the lines of a text separated by "\n"
+        this.newValues[attr] = (elem) ? getTextSource(elem) : ''
       } else if (attr === '#href') {
         this.newValues[attr] = getHref(elem)
       } else {
@@ -381,7 +406,7 @@ export class ChangeElementCommand extends Command {
       Object.entries(this.newValues).forEach(([attr, value]) => {
         const isNullishOrEmpty = value === null || value === undefined || value === ''
         if (attr === '#text') {
-          this.elem.textContent = value === null || value === undefined ? '' : String(value)
+          if (!this.newContent) setText(this.elem, value)
         } else if (attr === '#href') {
           if (isNullishOrEmpty) {
             this.elem.removeAttribute('href')
@@ -402,6 +427,7 @@ export class ChangeElementCommand extends Command {
 
         if (attr === 'transform') { bChangedTransform = true }
       })
+      if (this.newContent) restoreContent(this.elem, this.newContent)
 
       // relocate rotational transform, if necessary
       if (!bChangedTransform) {
@@ -422,7 +448,7 @@ export class ChangeElementCommand extends Command {
       Object.entries(this.oldValues).forEach(([attr, value]) => {
         const isNullishOrEmpty = value === null || value === undefined || value === ''
         if (attr === '#text') {
-          this.elem.textContent = value === null || value === undefined ? '' : String(value)
+          if (!this.oldContent) setText(this.elem, value)
         } else if (attr === '#href') {
           if (isNullishOrEmpty) {
             this.elem.removeAttribute('href')
@@ -439,6 +465,7 @@ export class ChangeElementCommand extends Command {
         }
         if (attr === 'transform') { bChangedTransform = true }
       })
+      if (this.oldContent) restoreContent(this.elem, this.oldContent)
       // relocate rotational transform, if necessary
       if (!bChangedTransform) {
         relocateRotationCenter(this.elem, Object.keys(this.oldValues))
@@ -771,16 +798,22 @@ export class UndoManager {
     const p = ++this.undoChangeStackPointer
     let i = elems.length
     const oldValues = new Array(i); const elements = new Array(i)
+    // The content of a text, which its lines make: a change of it, or of
+    // its font, lays it out again (texts of several lines).
+    const contents = new Array(i)
+    const layout = attrName === '#text' || LAYOUT_ATTRS.has(attrName)
     while (i--) {
       const elem = elems[i]
       if (!elem) { continue }
       elements[i] = elem
-      oldValues[i] = attrName === '#text' ? elem.textContent : elem.getAttribute(attrName)
+      oldValues[i] = attrName === '#text' ? getTextSource(elem) : elem.getAttribute(attrName)
+      if (layout && elem.localName === 'text') contents[i] = cloneContent(elem)
     }
     this.undoableChangeStack[p] = {
       attrName,
       oldValues,
-      elements
+      elements,
+      contents
     }
   }
 
@@ -803,9 +836,11 @@ export class UndoManager {
       changes[attrName] = changeset.oldValues[i]
       // The content of a text is not an attribute: typing it was never
       // recorded (lot V5).
-      const current = attrName === '#text' ? elem.textContent : elem.getAttribute(attrName)
+      const current = attrName === '#text' ? getTextSource(elem) : elem.getAttribute(attrName)
       if (changes[attrName] !== current) {
-        batchCmd.addSubCommand(new ChangeElementCommand(elem, changes, attrName))
+        const content = changeset.contents?.[i]
+        const laidOut = content && !sameContent(content, elem)
+        batchCmd.addSubCommand(new ChangeElementCommand(elem, changes, attrName, laidOut ? content : undefined))
       }
     }
     this.undoableChangeStack[p] = null

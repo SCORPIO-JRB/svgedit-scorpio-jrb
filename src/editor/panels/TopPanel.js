@@ -454,10 +454,14 @@ class TopPanel {
             elem.getAttribute('letter-spacing') ?? 0
           $id('tool_word_spacing').value =
             elem.getAttribute('word-spacing') ?? 0
+          $id('tool_line_height').value = this.editor.svgCanvas.getLineHeight()
+          // A text of fixed width can become as wide as its lines again
+          $id('tool_text_auto_width').disabled = !this.editor.svgCanvas.getTextWidth()
           $id('tool_text_length').value = elem.getAttribute('textLength') ?? 0
           $id('tool_length_adjust').value =
             elem.getAttribute('lengthAdjust') ?? 0
-          $id('text').value = elem.textContent
+          // The lines of the text, separated by "\n"
+          $id('text').value = this.editor.svgCanvas.getText()
           if (this.editor.svgCanvas.addedNew) {
             // Timeout needed for IE9
             setTimeout(() => {
@@ -1676,6 +1680,13 @@ class TopPanel {
       'change',
       this.changeWordSpacing.bind(this)
     )
+    $id('tool_line_height').addEventListener('change', (e) => {
+      this.editor.svgCanvas.setLineHeight(e.target.value)
+    })
+    $click($id('tool_text_auto_width'), () => {
+      this.editor.svgCanvas.setTextWidth(null)
+      this.updateContextPanel()
+    })
     $id('tool_text_length').addEventListener(
       'change',
       this.changeTextLength.bind(this)

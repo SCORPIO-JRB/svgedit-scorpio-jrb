@@ -7,6 +7,7 @@
  */
 
 import * as hstry from './history.js'
+import { cloneContent, pinLineHeight, changesLayout, layoutText } from './text-lines.js'
 
 const { BatchCommand, ChangeElementCommand } = hstry
 
@@ -193,6 +194,8 @@ const pasteProperties = () => {
   const changed = []
   targets.forEach((target) => {
     const oldValues = {}
+    // A text of several lines is laid out again for its new font.
+    const content = target.localName === 'text' ? cloneContent(target) : null
     Object.entries(groups).forEach(([group, values]) => {
       if (!GROUPS[group]?.elements.has(target.localName) || !values) return
       GROUPS[group].properties.forEach((name) => {
@@ -202,6 +205,7 @@ const pasteProperties = () => {
         const old = target.getAttribute(name)
         if (old === value) return
         oldValues[name] = old
+        if (content && changesLayout(target, name)) pinLineHeight(target)
         if (value === null) {
           target.removeAttribute(name)
         } else {
@@ -210,7 +214,8 @@ const pasteProperties = () => {
       })
     })
     if (Object.keys(oldValues).length) {
-      batchCmd.addSubCommand(new ChangeElementCommand(target, oldValues))
+      const laidOut = content && Object.keys(oldValues).some((name) => changesLayout(target, name)) && layoutText(target)
+      batchCmd.addSubCommand(new ChangeElementCommand(target, oldValues, undefined, laidOut ? content : undefined))
       changed.push(target)
     }
   })

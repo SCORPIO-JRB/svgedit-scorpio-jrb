@@ -315,6 +315,8 @@ export class Selector {
   * @returns {void}
   */
   showGrips (show) {
+    // A text being edited shows its frame only: what is typed is its own.
+    if (show && svgCanvas.getCurrentMode?.() === 'textedit') show = false
     const bShow = show ? 'inline' : 'none'
     selectModule.getSelectorManager().selectorGripsGroup.setAttribute('display', bShow)
     const elem = this.selectedElement

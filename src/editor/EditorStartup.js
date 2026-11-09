@@ -352,6 +352,15 @@ class EditorStartup {
     $id('text').addEventListener('keydown', (evt) => {
       const key = evt.key.toLowerCase()
       const mod = evt.ctrlKey || evt.metaKey
+      // Up and Down go to the line drawn above or below (a line a fixed width
+      // made is one), at the place nearest the caret.
+      if ((key === 'arrowup' || key === 'arrowdown') && !mod && !evt.altKey &&
+        this.svgCanvas.getMode() === 'textedit' &&
+        this.svgCanvas.textActions.moveVertically(key === 'arrowup' ? -1 : 1, evt.shiftKey)) {
+        evt.preventDefault()
+        evt.stopPropagation()
+        return
+      }
       const history = mod && !evt.altKey && (key === 'z' || key === 'y')
       if (key !== 'escape' && !history) return
       const editing = this.svgCanvas.getMode() === 'textedit'

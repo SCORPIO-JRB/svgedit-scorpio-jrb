@@ -7,6 +7,7 @@
  */
 
 import { NS } from './namespaces.js'
+import { getTextWidth } from './text-lines.js'
 import { setUnitAttr, getTypeMap, shortFloat } from './units.js'
 import {
   hasMatrixTransform,
@@ -633,6 +634,22 @@ export const withBBoxCache = (cache, fn) => {
 }
 
 /**
+ * The box of a text of fixed width: as wide as that width, from its anchor
+ * (`x` is its left side, its middle or its right side).
+ * @param {Element} text
+ * @param {module:utilities.BBoxObject} box - Of its glyphs
+ * @returns {module:utilities.BBoxObject}
+ */
+const fixedWidthBox = (text, box) => {
+  const width = getTextWidth(text)
+  const x = Number.parseFloat(text.getAttribute('x'))
+  if (!width || !Number.isFinite(x)) return box
+  const anchor = window.getComputedStyle(text).textAnchor
+  const factor = anchor === 'middle' ? 0.5 : anchor === 'end' ? 1 : 0
+  return { x: x - factor * width, y: box.y, width, height: box.height }
+}
+
+/**
  * Get the given/selected element's bounding box object, convert it to be more
  * usable when necessary.
  * @function module:utilities.getBBox
@@ -659,6 +676,7 @@ export const getBBox = (elem) => {
       } else if (selected.getBBox) {
         ret = selected.getBBox()
       }
+      ret = ret && fixedWidthBox(selected, ret)
       break
     case 'path':
     case 'g':

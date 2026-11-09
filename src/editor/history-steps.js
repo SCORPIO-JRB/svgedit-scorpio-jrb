@@ -114,6 +114,8 @@ const ATTRIBUTES = {
   'font-style': 'font',
   'letter-spacing': 'letter_spacing',
   'text-anchor': 'text_anchor',
+  'se:width': 'text_width',
+  'se:line-height': 'line_height',
   'text-decoration': 'text_decoration',
   '#text': 'text',
   rx: 'radius',

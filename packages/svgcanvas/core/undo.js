@@ -5,6 +5,7 @@
  * @copyright 2011 Jeff Schiller
  */
 import * as draw from './draw.js'
+import { NS } from './namespaces.js'
 import * as hstry from './history.js'
 import { BBOX_AFFECTING_ATTRS } from './history.js'
 import {
@@ -13,6 +14,7 @@ import {
 import {
   isGecko
 } from '../common/browser.js'
+import { getTextSource, setTextSource, changesLayout, pinLineHeight, layoutText } from './text-lines.js'
 import {
   transformPoint, transformListToTransform, getTransformList
 } from './math.js'
@@ -132,22 +134,26 @@ export const getUndoManager = () => {
           if (values.stdDeviation) {
             svgCanvas.setBlurOffsets(cmd.elem.parentNode, values.stdDeviation)
           }
-          if (cmd.elem.tagName === 'text') {
-            const [dx, dy] = [cmd.newValues.x - cmd.oldValues.x,
-              cmd.newValues.y - cmd.oldValues.y]
-
+          // The spans of a text follow a change of its x or y; a step that
+          // put back the content of the text (its lines) has nothing to move.
+          const delta = (name) => {
+            if (!(name in cmd.oldValues)) return 0
+            const d = Number(cmd.newValues[name]) - Number(cmd.oldValues[name])
+            return Number.isFinite(d) ? d : 0
+          }
+          const [dx, dy] = [delta('x'), delta('y')]
+          if (cmd.elem.tagName === 'text' && !cmd.oldContent && (dx || dy)) {
             const tspans = cmd.elem.children
 
-            for (let i = 0; i < tspans.length; i++) {
-              let x = Number(tspans[i].getAttribute('x'))
-              let y = Number(tspans[i].getAttribute('y'))
-
-              const unapply = (eventType === EventTypes.AFTER_UNAPPLY)
-              x = unapply ? x - dx : x + dx
-              y = unapply ? y - dy : y + dy
-
-              tspans[i].setAttribute('x', x)
-              tspans[i].setAttribute('y', y)
+            const sign = eventType === EventTypes.AFTER_UNAPPLY ? -1 : 1
+            for (const tspan of tspans) {
+              // Only the places a span has (a span without x follows the text)
+              for (const [name, d] of [['x', dx], ['y', dy]]) {
+                const value = Number(tspan.getAttribute(name))
+                if (d && tspan.hasAttribute(name) && Number.isFinite(value)) {
+                  tspan.setAttribute(name, value + sign * d)
+                }
+              }
             }
           }
         }
@@ -228,12 +234,21 @@ export const changeSelectedAttributeNoUndoMethod = (attr, newValue, elems) => {
       continue
     }
 
-    let oldval = attr === '#text' ? elem.textContent : elem.getAttribute(attr)
+    let oldval = attr === '#text' ? getTextSource(elem) : elem.getAttribute(attr)
     if (!oldval) { oldval = '' }
     if (oldval !== String(newValue)) {
+      // A text of several lines, or of a fixed width, is laid out again after
+      // a change of its font, place or width: its line height is read from
+      // its lines before (texts of several lines).
+      const relayout = changesLayout(elem, attr)
+      if (relayout) pinLineHeight(elem)
       if (attr === '#text') {
         // const oldW = utilsGetBBox(elem).width;
-        elem.textContent = newValue
+        if (elem.localName === 'text') {
+          setTextSource(elem, newValue)
+        } else {
+          elem.textContent = newValue
+        }
 
         // FF bug occurs on on rotated elements
         if ((/rotate/).test(elem.getAttribute('transform'))) {
@@ -243,6 +258,13 @@ export const changeSelectedAttributeNoUndoMethod = (attr, newValue, elems) => {
         // but this doesn't actually fix it. Hopefully on the right track, though. -Fyrd
       } else if (attr === '#href') {
         setHref(elem, newValue)
+      } else if (attr.startsWith('se:')) {
+        // An attribute of the editor (the width of a text, its line height)
+        if (newValue || typeof newValue === 'number') {
+          elem.setAttributeNS(NS.SE, attr, String(newValue))
+        } else {
+          elem.removeAttributeNS(NS.SE, attr.slice(3))
+        }
       } else if (newValue) {
         // Number(), unlike parseFloat(), rejects a value with a trailing unit suffix
         // (e.g. "10pt", "2px") instead of silently truncating it to a bare number.
@@ -253,6 +275,7 @@ export const changeSelectedAttributeNoUndoMethod = (attr, newValue, elems) => {
       } else {
         elem.removeAttribute(attr)
       }
+      if (relayout && attr !== '#text') layoutText(elem)
 
       // Go into "select" mode for text changes
       // NOTE: Important that this happens AFTER elem.setAttribute() or else attributes like

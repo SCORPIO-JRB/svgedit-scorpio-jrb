@@ -185,6 +185,31 @@ const addToSelectionMethod = (elemsToAdd, showGrips) => {
   }
 }
 /**
+ * A text of the current layer or group whose box holds the pointer: the
+ * space between its lines, an empty line, are the text too (a block of text
+ * is taken anywhere, as its frame shows it).
+ * @param {MouseEvent} evt
+ * @returns {Element|null}
+ */
+const textAt = (evt) => {
+  if (!Number.isFinite(evt.clientX) || !Number.isFinite(evt.clientY)) return null
+  const context = svgCanvas.getCurrentGroup() || svgCanvas.getCurrentDrawing().getCurrentLayer()
+  // Blocks only (lines, or a fixed width): a text of one line is hit on its
+  // glyphs, and the pointer moving over the page reads no other box.
+  const texts = [...(context?.children ?? [])].filter((el) => el.localName === 'text' &&
+    (el.firstElementChild?.localName === 'tspan' || el.hasAttributeNS(NS.SE, 'width')))
+  for (const text of texts.reverse()) {
+    if (svgCanvas.isLocked?.(text) || text.getAttribute('display') === 'none') continue
+    const box = text.getBoundingClientRect()
+    if (box.width && evt.clientX >= box.left && evt.clientX <= box.right &&
+      evt.clientY >= box.top && evt.clientY <= box.bottom) {
+      return text
+    }
+  }
+  return null
+}
+
+/**
  * @name module:svgcanvas.SvgCanvas#getMouseTarget
  * @type {module:path.EditorContext#getMouseTarget}
  */
@@ -220,7 +245,7 @@ const getMouseTargetMethod = (evt) => {
   const container = svgCanvas.getDOMContainer()
   const content = svgCanvas.getSvgContent()
   if ([svgRoot, container, content, currentLayer].includes(mouseTarget)) {
-    return svgCanvas.getSvgRoot()
+    return textAt(evt) ?? svgCanvas.getSvgRoot()
   }
 
   // A locked object lets the pointer through to what lies below it (lot V7;

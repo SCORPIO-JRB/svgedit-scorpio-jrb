@@ -17,6 +17,7 @@ import { getParents } from '../common/util.js'
 import { isSafeHref } from './sanitize.js'
 import { warn } from '../common/logger.js'
 import { InsertElementCommand } from './history.js'
+import { getTextSource, getLineHeight, getTextWidth } from './text-lines.js'
 
 let svgCanvas = null
 
@@ -35,6 +36,10 @@ export const init = (canvas) => {
   svgCanvas.addTextDecoration = addTextDecorationMethod // Adds the given value to the text decoration
   svgCanvas.removeTextDecoration = removeTextDecorationMethod // Removes the given value from the text decoration
   svgCanvas.setTextAnchor = setTextAnchorMethod // Set the new text anchor.
+  svgCanvas.getLineHeight = getLineHeightMethod // The line height of the selected text
+  svgCanvas.setLineHeight = setLineHeightMethod // Sets the line height of the selected texts
+  svgCanvas.getTextWidth = getTextWidthMethod // The fixed width of the selected text, or 0
+  svgCanvas.setTextWidth = setTextWidthMethod // Sets or removes the fixed width of the selected texts
   svgCanvas.setLetterSpacing = setLetterSpacingMethod // Set the new letter spacing.
   svgCanvas.setWordSpacing = setWordSpacingMethod // Set the new word spacing.
   svgCanvas.setTextLength = setTextLengthMethod // Set the new text length.
@@ -777,7 +782,7 @@ const getSelectedTextElements = () => {
 const getChangedTextElements = (textElements, attr, newValue) => {
   const normalizedValue = String(newValue)
   return textElements.filter((elem) => {
-    const oldValue = attr === '#text' ? elem.textContent : elem.getAttribute(attr)
+    const oldValue = attr === '#text' ? getTextSource(elem) : elem.getAttribute(attr)
     return (oldValue || '') !== normalizedValue
   })
 }
@@ -915,7 +920,83 @@ const setTextAnchorMethod = (value) => {
   const textElements = getSelectedTextElements()
   const changedTextElements = getChangedTextElements(textElements, 'text-anchor', value)
   if (changedTextElements.length > 0) {
-    svgCanvas.changeSelectedAttribute('text-anchor', value, changedTextElements)
+    // The block stays where it is and its lines align in it: its anchor,
+    // `x`, moves to its left side, its middle or its right side.
+    const { undoMgr } = svgCanvas
+    const moves = changedTextElements.map((elem) => {
+      const x = elem.getAttribute('x')
+      if (x === null || !/^\s*-?[\d.]+(e-?\d+)?\s*$/i.test(x)) return null
+      const width = getTextWidth(elem) || elem.getBBox?.().width || 0
+      const from = ANCHOR_FACTORS[window.getComputedStyle(elem).textAnchor] ?? 0
+      const to = ANCHOR_FACTORS[value] ?? 0
+      return width ? [elem, Math.round((Number(x) + (to - from) * width) * 1000) / 1000] : null
+    }).filter(Boolean)
+    // One step, named by its alignment: the moves of the anchors join it.
+    undoMgr.beginUndoableChange('text-anchor', changedTextElements)
+    svgCanvas.changeSelectedAttributeNoUndo('text-anchor', value, changedTextElements)
+    const batch = undoMgr.finishUndoableChange()
+    moves.forEach(([elem, x]) => {
+      undoMgr.beginUndoableChange('x', [elem])
+      svgCanvas.changeSelectedAttributeNoUndo('x', x, [elem])
+      batch.addSubCommand(undoMgr.finishUndoableChange())
+    })
+    if (!batch.isEmpty()) svgCanvas.addCommandToHistory(batch)
+  }
+  notifyTextChange(changedTextElements)
+}
+
+const ANCHOR_FACTORS = { start: 0, middle: 0.5, end: 1 }
+
+/**
+ * @function module:svgcanvas.SvgCanvas#getLineHeight
+ * @returns {number} The line height of the selected text, in font sizes
+ */
+const getLineHeightMethod = () => {
+  const [text] = getSelectedTextElements()
+  return text ? getLineHeight(text) : 1.2
+}
+
+/**
+ * Sets the line height of the selected texts, in font sizes.
+ * @function module:svgcanvas.SvgCanvas#setLineHeight
+ * @param {number|string} value
+ * @returns {void}
+ */
+const setLineHeightMethod = (value) => {
+  const n = Number.parseFloat(value)
+  if (!Number.isFinite(n) || n <= 0) return
+  const textElements = getSelectedTextElements()
+  const changedTextElements = textElements.filter((elem) => getLineHeight(elem) !== n || !elem.hasAttributeNS(NS.SE, 'line-height'))
+  if (changedTextElements.length > 0) {
+    svgCanvas.changeSelectedAttribute('se:line-height', String(n), changedTextElements)
+  }
+  notifyTextChange(changedTextElements)
+}
+
+/**
+ * @function module:svgcanvas.SvgCanvas#getTextWidth
+ * @returns {number} The fixed width of the selected text, or 0 for a text
+ *   as wide as its lines
+ */
+const getTextWidthMethod = () => {
+  const [text] = getSelectedTextElements()
+  return text ? getTextWidth(text) : 0
+}
+
+/**
+ * Gives the selected texts a fixed width, their lines breaking to fit in
+ * it, or (0, null) takes it away.
+ * @function module:svgcanvas.SvgCanvas#setTextWidth
+ * @param {number|null} value
+ * @returns {void}
+ */
+const setTextWidthMethod = (value) => {
+  const n = Number.parseFloat(value)
+  const width = Number.isFinite(n) && n > 0 ? String(Math.round(n * 100) / 100) : ''
+  const textElements = getSelectedTextElements()
+  const changedTextElements = textElements.filter((elem) => (elem.getAttribute('se:width') || '') !== width)
+  if (changedTextElements.length > 0) {
+    svgCanvas.changeSelectedAttribute('se:width', width, changedTextElements)
   }
   notifyTextChange(changedTextElements)
 }
@@ -1073,7 +1154,7 @@ const setFontSizeMethod = (val) => {
 const getTextMethod = () => {
   const selectedElements = svgCanvas.getSelectedElements()
   const selected = selectedElements[0]
-  return (selected) ? selected.textContent : ''
+  return (selected) ? getTextSource(selected) : ''
 }
 
 /**
