@@ -21,7 +21,8 @@ import {
   getStrokedBBoxDefaultVisible,
   getBBox as utilsGetBBox,
   remapTimingIds,
-  withoutStyleProperty
+  withoutStyleProperty,
+  isInsideDefinition
 } from './utilities.js'
 import {
   transformPoint,
@@ -842,7 +843,8 @@ const setSvgString = (xmlString, preventUndo) => {
 
     // For Firefox: Put all paint elems in defs. A file without any gets no
     // <defs>: an empty one is written as a blank line, which moved from one
-    // save to the next (V5).
+    // save to the next (V5). Those already there stay in their place: moved
+    // to the end, they changed the order of a saved drawing at each opening.
     if (isGecko()) {
       const findElems = content.querySelectorAll(
         'linearGradient, radialGradient, pattern'
@@ -850,7 +852,7 @@ const setSvgString = (xmlString, preventUndo) => {
       if (findElems.length) {
         const svgDefs = findDefs()
         Array.prototype.forEach.call(findElems, ele => {
-          svgDefs.appendChild(ele)
+          if (ele.parentNode !== svgDefs) svgDefs.appendChild(ele)
         })
       }
     }
@@ -860,7 +862,15 @@ const setSvgString = (xmlString, preventUndo) => {
     // TODO: This should also be done if the object is re-added through "redo"
     svgCanvas.setUseData(content)
 
-    svgCanvas.convertGradients(content)
+    // The gradients keep their units: converting those in user units to
+    // bounding box units changed how they look (a gradient shared by several
+    // shapes, one taking its units from another by href, a slanted one on a
+    // shape that is not square). They follow their shape when it changes
+    // (recalculate.js). The option fidelity.gradientUnits set to false
+    // converts them as before.
+    if (!isFidelityOn(curConfig, 'gradientUnits')) {
+      svgCanvas.convertGradients(content)
+    }
 
     const attrs = {
       id: 'svgcontent',
@@ -915,12 +925,15 @@ const setSvgString = (xmlString, preventUndo) => {
 
     // Give ID for any visible layer children missing one. Not to the lines
     // of a text: they are not selected alone, and a text saved, opened and
-    // saved again stays the same.
+    // saved again stays the same. The content of <defs> and <symbol> (an
+    // imported file), of clip paths, masks, patterns and markers is not an
+    // object of the drawing: it stays as saved, else each opening added
+    // hundreds of identifiers to an import.
     const chiElems = content.children
     Array.prototype.forEach.call(chiElems, chiElem => {
       const visElems = chiElem.querySelectorAll(svgCanvas.getVisElems())
       Array.prototype.forEach.call(visElems, elem => {
-        if (!elem.id && elem.localName !== 'tspan') {
+        if (!elem.id && elem.localName !== 'tspan' && !isInsideDefinition(elem, content)) {
           elem.id = svgCanvas.getNextId()
         }
       })
@@ -1023,6 +1036,9 @@ const cancelGroupTransform = (parent, layer) => {
   return `matrix(${[a, b, c, d, e, f].map((n) => Number(n.toFixed(6))).join(',')})`
 }
 
+// Attributes of the root of an imported file that the <symbol> does not take
+const ROOT_ONLY = new Set(['version', 'baseProfile', 'enable-background'])
+
 /**
  * Builds the <symbol> of an imported SVG in the <defs> of the drawing (see
  * importSvgString), its changes added to a batch command.
@@ -1079,6 +1095,8 @@ const buildImportedSymbol = (xmlString, batchCmd) => {
   for (const attr of svg.attributes) {
     if (attr.namespaceURI === NS.XMLNS) continue
     if (!attr.namespaceURI && ['x', 'y', 'width', 'height'].includes(attr.localName)) continue
+    // Attributes of a root only, without effect on a <symbol>
+    if (!attr.namespaceURI && ROOT_ONLY.has(attr.localName)) continue
     symbol.setAttributeNS(attr.namespaceURI, attr.nodeName, attr.value)
   }
   // In the drawing before any new identifier is chosen: the identifiers of
@@ -1609,7 +1627,12 @@ const removeUnusedDefElemsMethod = () => {
   return numRemoved
 }
 /**
- * Converts gradients from userSpaceOnUse to objectBoundingBox.
+ * Converts gradients from userSpaceOnUse to objectBoundingBox. The editor no
+ * longer calls it when it opens a file or ungroups an import, unless the
+ * option fidelity.gradientUnits is false: the conversion is wrong for a
+ * gradient shared by several shapes, for one that takes its units from
+ * another by href, and for a slanted one on a shape that is not square. A
+ * gradient in user units follows its shape instead.
  * @function module:svgcanvas.SvgCanvas#convertGradients
  * @param {Element} elem
  * @returns {void}

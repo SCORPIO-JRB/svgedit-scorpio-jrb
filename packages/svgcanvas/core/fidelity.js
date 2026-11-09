@@ -13,9 +13,10 @@
  * - `attributes`: `paint-order`, `vector-effect`, `pointer-events`,
  *   `mix-blend-mode`, `isolation`, `pathLength`, `dx` and `dy` of a text,
  *   `target` of a link are kept.
- * - `gradientUnits`: a gradient in `userSpaceOnUse` that several objects use
- *   keeps its units (it was converted after the first one, which changed the
- *   others).
+ * - `gradientUnits`: a gradient in `userSpaceOnUse` keeps its units when a
+ *   file is opened, and follows its shape when it changes (converted to the
+ *   box of its first object, it changed the others, and a slanted one on a
+ *   shape that is not square).
  * - `layerOrder`: the objects outside any layer go into a layer at their
  *   place, not into a new layer at the end of the drawing.
  * - `emptyValues`: an empty attribute of another application

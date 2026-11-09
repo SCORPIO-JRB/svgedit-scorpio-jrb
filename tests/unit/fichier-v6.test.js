@@ -136,9 +136,9 @@ describe('file fidelity (V6)', () => {
       expect(saved(SHARED)).toContain('gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="200" y2="0"')
     })
 
-    it('still converts a gradient that one object alone uses', () => {
+    it('keeps the units of a gradient that one object alone uses', () => {
       const out = saved(SHARED.replace('fill="url(#hot)"/>', 'fill="#000"/>'))
-      expect(out).not.toContain('userSpaceOnUse')
+      expect(out).toContain('gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="200" y2="0"')
     })
 
     it('converts them as before when the correction is off', () => {
