@@ -104,7 +104,7 @@ Le changement compte un module nouveau, des retouches dans le canevas et l'édit
 
 - **Tests unitaires** : 995/995, dont les 15 de `texte-multiligne.test.js`.
 - **De bout en bout, mise en page canevas** : 516/516, dont les 9 de `texte-multiligne.spec.js`. Après la limite posée sur la prise dans le cadre (ci-dessous), les suites touchées ont été rejouées : 32/32.
-- **De bout en bout, mise en page classique** : en cours au moment de ce commit.
+- **De bout en bout, mise en page classique** : 374/374, dont les 9 de `texte-multiligne.spec.js`.
 - **Sortie comparée à V7** (`tests/output/compare-output.mjs`) :
   - scénarios : 73/73 identiques ;
   - allers-retours : 23/23 identiques.
