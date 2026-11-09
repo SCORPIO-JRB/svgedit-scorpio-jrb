@@ -8,7 +8,7 @@ import { visitAndApproveStorage } from './helpers.js'
 // - The inventory records what the editor offers today: the commands of the
 //   registry and their shortcuts, the toolbar, the document, zoom and "…"
 //   menus, the controls of the Text section. S1 and S3 update it on purpose
-//   (S0_UPDATE=1 rewrites it); nothing else may change it. S1 did so.
+//   (S0_UPDATE=1 rewrites it); nothing else may change it. S1 and S3 did so.
 //   The canvas layout only: simplification-s1.spec.js checks that the
 //   classic layout stays as it was.
 // - Every family of element these lots touch (square, circle, polygons, star,
@@ -110,7 +110,7 @@ test.describe('Simplification net (S0)', () => {
     expect(inventory).toEqual(JSON.parse(fs.readFileSync(INVENTORY_FILE, 'utf8')))
   })
 
-  test('a shortcut shared by two commands is one of those known', async ({ page }) => {
+  test('no shortcut is shared by two commands', async ({ page }) => {
     const shared = await page.evaluate(() => {
       const byShortcut = {}
       for (const command of window.svgEditor.commands.list()) {
@@ -121,15 +121,11 @@ test.describe('Simplification net (S0)', () => {
         .map(([shortcut, ids]) => [shortcut, ids.sort()])
         .sort(([a], [b]) => a.localeCompare(b)))
     })
-    expect(shared).toEqual({
-      // The same action registered twice: merged in S3.
-      backspace: ['delete', 'tool_delete', 'tool_delete_multi'],
-      delete: ['delete', 'tool_delete', 'tool_delete_multi'],
-      'mod+shift+[': ['move_back', 'tool_move_bottom'],
-      'mod+shift+]': ['move_front', 'tool_move_top']
-      // Ctrl+Shift+L is the lock alone since S1, which took the layer view
-      // out of the default extensions of the canvas layout.
-    })
+    // None since S3, which left Delete, Ctrl+Shift+] and Ctrl+Shift+[ to
+    // the commands delete, move_front and move_back; Ctrl+Shift+L is the
+    // lock alone since S1, which took the layer view out of the default
+    // extensions of the canvas layout.
+    expect(shared).toEqual({})
   })
 
   test('Ctrl+Shift+L locks the selection and leaves the layers as they are', async ({ page }) => {

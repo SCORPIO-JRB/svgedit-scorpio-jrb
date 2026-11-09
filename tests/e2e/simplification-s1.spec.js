@@ -19,11 +19,15 @@ import { visitAndApproveStorage, clickControl, chooseTool, screenPoint } from '.
 // - The classic layout, reference of the user test of V4, does not change:
 //   what it offers is compared with a record made on master
 //   (S1_CLASSIC_UPDATE=1 against a build of master rewrites it, see the
-//   audit, section 7).
+//   audit, section 7). Only its registry lost, in S3, the four commands
+//   that repeated delete, move_front and move_back; their buttons stay.
 
 const DIR = path.join(process.cwd(), 'tests/fixtures/simplification')
 const read = (name) => fs.readFileSync(path.join(DIR, name), 'utf8')
 const CLASSIC_FILE = path.join(DIR, 'classique.json')
+// Merged in S3 into delete, move_front and move_back, which had the same
+// shortcuts and ran first: the buttons show them and do the same.
+const MERGED_IN_S3 = ['tool_delete', 'tool_delete_multi', 'tool_move_bottom', 'tool_move_top']
 
 async function loadDrawing (page, svg = read('familles.svg')) {
   await page.evaluate((svg) => {
@@ -367,8 +371,15 @@ test.describe('Classic layout (S1)', () => {
       record.topBar[ids.join('+') || 'none'] = await page.evaluate(readTopBar)
     }
     if (process.env.S1_CLASSIC_UPDATE === '1') {
+      // A record of master, which still has the commands S3 merged.
       fs.writeFileSync(CLASSIC_FILE, JSON.stringify(record, null, 2) + '\n')
+      return
     }
-    expect(record).toEqual(JSON.parse(fs.readFileSync(CLASSIC_FILE, 'utf8')))
+    const onMaster = JSON.parse(fs.readFileSync(CLASSIC_FILE, 'utf8'))
+    for (const id of MERGED_IN_S3) {
+      expect(onMaster.commands).toHaveProperty(id)
+      delete onMaster.commands[id]
+    }
+    expect(record).toEqual(onMaster)
   })
 })

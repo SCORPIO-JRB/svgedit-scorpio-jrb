@@ -221,8 +221,7 @@ export class EditorLayout {
     }
     // The handle of the old side panel has no use here: Ctrl+\ and the view
     // group show and hide the panel. #sidepanels and #sidepanel_content stay,
-    // for the layer menus and the extensions that add to the side panel
-    // (ext-overview_window).
+    // for the layer menus and the extensions that add to the side panel.
     sidepanels.querySelector('#sidepanel_handle')?.remove()
     sidepanels.querySelector('#layersLabel')?.remove()
     // The tree takes the place of the table of layers, which stays hidden

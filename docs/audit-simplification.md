@@ -3,7 +3,7 @@
 Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier des synoptiques techniques GTB. Il ne doit pas devenir un outil de dessin général. Une règle s'applique partout : moins de fonctions inutiles, une meilleure expérience, aucune régression sur l'existant.
 
 - **Mesures** : relevées dans l'éditeur compilé depuis `master` (b2a1dbd5), qui contient V0 à V7 et les textes de plusieurs lignes. Disposition « canevas », fichiers réels de `tests/fixtures/import/scorpio/`.
-- **État** : décidé le 9 novembre 2026. Les lots S0, S1 et S2 sont livrés (section 7) ; S3 reste à faire. Les sections 2 et 3 décrivent l'éditeur avant S1 et S2.
+- **État** : décidé le 9 novembre 2026. Les lots S0 à S3 sont livrés (section 7). Les sections 2 et 3 décrivent l'éditeur avant eux.
 
 ## 1. Décisions
 
@@ -11,7 +11,7 @@ Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier d
 | --- | --- | --- |
 | Outils que le plan v2 garde (Main, Étoile, Crayon, Pipette, Loupe) | Gardés | Le menu Formes devient celui de la section 4.2 du plan v2 : rectangle, ellipse, ligne, polygone, étoile |
 | Couleur ou police d'un objet stylé par classe | La modification change la règle de la classe, avec un avertissement | Voir le lot S2 |
-| Langues | Français et anglais | 57 fichiers de langue sont retirés en S3 |
+| Langues | Français et anglais | 55 des 57 langues sont retirées en S3 |
 | Export | Tel quel | PNG, JPEG, BMP, WEBP et PDF restent, ainsi que jsPDF et svg2pdf.js |
 | Éditeur toujours intégré à SCorp-io ? | Non | L'enregistrement dans le navigateur et son bandeau de consentement restent, comme le bouton Accueil, le fil d'Ariane et le bouton Enregistrer de l'hôte |
 | Lots S0 à S3 avant V4 ? | Non, après V4 | V4 est livré. Son test utilisateur, qui compare les deux dispositions, reste à mener : d'ici là, l'interface de l'ancienne disposition (`layout: 'classic'`) ne change pas, et S1 ne touche que la disposition « canevas ». S2, qui corrige des valeurs fausses, s'applique aux deux : la tâche 4 du test réussit ainsi dans l'une comme dans l'autre |
@@ -89,7 +89,9 @@ Section Texte : barré, surligné, espacement des mots, longueur du texte et son
 
 ### 3.5 Poids mort
 
-- 59 fichiers de langue (1 Mo), alors que les préférences n'en proposent que 24.
+Retiré par S3 (section 7).
+
+- 57 langues (870 Ko), alors que les préférences n'en proposent que 23.
 - La bibliothèque de formes de SVG-Edit (372 Ko) : animaux, jeux, musique, objets… Le tiroir Bibliothèque la lit pour son onglet Formes (`LibraryDrawer.js`). Seules les catégories basic, arrow, flowchart et electronics (environ 40 Ko) servent à un synoptique.
 - Deux extensions jamais chargées.
 - L'ancienne vue à défilement (`view: 'scroll'`), qui devait rester « jusqu'à la fin de V3 ». V3 est livré.
@@ -136,7 +138,7 @@ Les deux sont faites (lot S2).
 | Jointures, extrémités, espacement des lettres | Repliés sous « Plus d'options » | Outil | Sections plus courtes |
 | Aligner sur la page | Fusionné avec le menu Aligner, qui s'ouvre aussi pour un seul objet | Outil | Une seule façon d'aligner |
 | Propriétés du document (Maj+D) | Retirée une fois le choix « images incorporées ou liées » et « Ajuster au contenu » déplacés dans la section Document | Outil | Une seule place pour le document |
-| Langues | Français et anglais seulement | Outil | 57 fichiers en moins (environ 1 Mo) |
+| Langues | Français et anglais seulement | Outil | 55 langues en moins (870 Ko) |
 | Bibliothèque de formes de SVG-Edit | Réduite aux catégories basic, arrow, flowchart et electronics | Création | Onglet Formes du tiroir lisible ; environ 330 Ko en moins |
 
 ### Supprimer
@@ -155,7 +157,7 @@ Les deux sont faites (lot S2).
 
 ### Gains attendus
 
-| Mesure | Avant | Après S1 (mesuré) | Après S3 (prévu) |
+| Mesure | Avant | Après S1 | Après S3 |
 | --- | --- | --- | --- |
 | Outils de la barre | 22 | 17 | 17 |
 | Entrées du menu Formes | 9 | 5 | 5 |
@@ -163,9 +165,9 @@ Les deux sont faites (lot S2).
 | Entrées du menu Document | 10 | 8 | 8 |
 | Commandes du registre | 118 | 110 | 106 |
 | Raccourcis attribués à deux commandes | 5 | 4 | aucun |
-| Fichiers de langue | 59 | 59 | 2 |
+| Langues | 57 | 57 | 2 |
 
-À cela s'ajoutent environ 330 Ko de formes hors sujet et deux extensions en moins. Surtout, depuis S2, l'inspecteur affiche la vraie valeur des objets stylés par classe.
+Les deux dernières colonnes sont mesurées. À cela s'ajoutent, depuis S3, 313 Ko de formes hors sujet, deux extensions et la vue à défilement en moins. Surtout, depuis S2, l'inspecteur affiche la vraie valeur des objets stylés par classe.
 
 ## 5. Risques et dépendances des retraits
 
@@ -187,7 +189,7 @@ Pour chaque retrait, il faut faire trois vérifications :
 | Vue à défilement | `view.js`, option `view` | Aucun. Une configuration qui demande `view: 'scroll'` aura la vue sans bordure |
 | Extensions jamais chargées | Aucune | Aucun |
 
-**Ancienne disposition.** Elle reste telle quelle jusqu'au test utilisateur de V4, dont elle est la référence. S1 n'y touche pas. S2 y corrige les mêmes valeurs que dans la nouvelle, sans changer ses contrôles. S3 ne retire rien de ce qu'elle emploie (jPicker, jGraduate).
+**Ancienne disposition.** Elle reste telle quelle jusqu'au test utilisateur de V4, dont elle est la référence. S1 n'y touche pas. S2 y corrige les mêmes valeurs que dans la nouvelle, sans changer ses contrôles. S3 ne retire aucun de ses contrôles et rien de ce qu'elle emploie (jPicker, jGraduate). Elle perd seulement, comme la nouvelle, les langues retirées et les catégories hors sujet de son bouton Formes : aucune tâche du test ne s'en sert.
 
 ## 6. Interface proposée
 
@@ -232,7 +234,7 @@ Le repère « ← .fond » s'inspire des styles partagés de Figma : le titre de
 | S0 Filet | Tests seulement ; l'éditeur ne change pas | Inchangée | Livré |
 | S1 Masquer | Retraits d'interface, réglages conditionnels et repliés, fusion d'« Aligner sur la page », Propriétés du document | Identique à l'octet | Livré |
 | S2 Corriger | Objets stylés par classe ; X, Y, L, H des polygones ; les deux dispositions | Change volontairement : la règle modifiée, rien d'autre | Livré |
-| S3 Nettoyer (3 à 5 j, après deux semaines d'usage de S1) | Langues, catégories de formes, extensions jamais chargées, vue à défilement, enregistrements en double | Identique | À faire |
+| S3 Nettoyer | Langues, catégories de formes, extensions jamais chargées, vue à défilement, enregistrements en double | Identique | Livré |
 
 ### S0 Filet (livré)
 
@@ -397,18 +399,48 @@ Les deux dispositions changent : c'est une correction (section 1).
 
 Firefox tourne en CI.
 
-### S3 Nettoyer
+### S3 Nettoyer (livré)
 
-Chaque retrait passe par les mêmes vérifications :
-- recherche des usages ;
-- suite complète, unitaire et de bout en bout, sous Chromium et Firefox ;
-- rapport de fidélité ;
-- bench.
+Les deux dispositions sont concernées, mais ce que fait l'éditeur ne change pas : S3 retire des fichiers et du code dont plus rien ne se sert. 109 fichiers sont supprimés.
 
-| Retrait | Vérification propre |
-| --- | --- |
-| 57 fichiers de langue | Le repli vers l'anglais fonctionne et aucun test ne lit une autre langue |
-| Catégories de formes hors sujet | Le tiroir et l'extension lisent la même liste réduite |
-| Extensions helloworld et overview_window | Aucune configuration de l'hôte ne les charge |
-| Vue à défilement | L'option `view: 'scroll'` retombe sur la vue sans bordure |
-| `tool_delete`, `tool_delete_multi`, `tool_move_top`, `tool_move_bottom` | Fusionnés avec `delete`, `move_front` et `move_back` ; les boutons gardent leur effet ; plus aucun raccourci partagé |
+**Ce qui est retiré :**
+- **Langues** : 55 des 57 langues (870 Ko), avec les 35 traductions des extensions dans ces langues. Restent l'anglais et le français, dans les préférences comme dans les extensions. `lang.test.js` reste pour les tests unitaires de `locale.js`.
+  - Une autre langue, demandée par l'adresse ou gardée dans les préférences d'un navigateur, donne l'anglais.
+  - **Correction en passant** : la préférence prend alors la valeur « en ». Les extensions chargent leurs textes dans la langue de la préférence. Pour une langue que l'éditeur n'avait pas, leurs libellés affichaient leurs clés, par exemple « buttons.0.title ». Sans cette correction, S3 aurait cassé ces libellés pour toute personne qui avait choisi une langue retirée.
+- **Formes** : les catégories basic, arrow, flowchart et electronics restent (36 Ko). Les dix autres partent (313 Ko), avec la licence des icônes Raphaël, propre à deux d'entre elles. Le tiroir et le bouton de `ext-shapes` lisent la même liste, `shapelib/index.json`. Dans l'ancienne disposition, ce bouton ne propose plus que ces quatre catégories.
+- **Extensions** : `ext-helloworld` et `ext-overview_window` (8 fichiers, 17 Ko). Si l'option `extensions` ou l'adresse en demande une, elle ne se charge pas, la console le note comme pour toute extension introuvable, et l'éditeur fonctionne. L'icône `hello_world.svg` reste, car l'exemple de `packages/react-test` s'en sert. Le guide des extensions renvoie à l'exemple du dépôt d'origine.
+- **Vue à défilement** : la vue sans bordure est la seule depuis S3, et environ 220 lignes disparaissent de `view.js`, `Editor.js`, `EditorStartup.js` et `Rulers.js`.
+  - Les options `view` et `canvas_expansion` ne sont plus lues : `view: 'scroll'` donne la vue sans bordure.
+  - `view.borderless` vaut toujours vrai, pour une extension qui le lirait.
+- **Commandes en double** : `tool_delete`, `tool_delete_multi`, `tool_move_top` et `tool_move_bottom` ne s'enregistrent plus.
+  - Leurs boutons portent `shortcut-hint-only`, comme `tool_move_top_multi` : ils gardent leur icône, leur effet et leur raccourci affiché.
+  - Suppr, Ctrl+Maj+] et Ctrl+Maj+[ n'appartiennent plus qu'à `delete`, `move_front` et `move_back`. Ces commandes passaient déjà en premier, donc le clavier fait la même chose qu'avant.
+  - Le registre passe de 110 à 106 commandes, et aucun raccourci n'est plus partagé.
+
+**Piège** : le chargeur des gabarits HTML retire les retours à la ligne. Un attribut sans valeur placé en fin de ligne se colle donc au suivant (`shortcut-hint-onlysrc`), et le bouton perd son icône. Ces attributs sont écrits avant une valeur entre guillemets, et un test vérifie l'icône des quatre boutons.
+
+**Tests :**
+- `tests/e2e/simplification-s3.spec.js`, 6 tests :
+  - les préférences proposent l'anglais et le français ; en français, l'éditeur et ses extensions sont traduits ;
+  - l'allemand, demandé par l'adresse ou gardé dans les préférences, donne l'anglais, extensions comprises ;
+  - les quatre catégories de formes, les mêmes dans le tiroir et dans le bouton de l'ancienne disposition ;
+  - les deux extensions demandées par l'adresse : elles ne se chargent pas, et l'éditeur fonctionne ;
+  - Suppr, Ctrl+Maj+] et Ctrl+Maj+[ : une commande chacun, sur un objet et sur plusieurs ;
+  - les quatre boutons, dans l'ancienne disposition : icône, raccourci affiché, effet.
+
+  Sur `master`, les six échouent.
+- Mises à jour voulues :
+  - l'inventaire de S0, réécrit par `S0_UPDATE=1` : quatre commandes en moins, rien d'autre ;
+  - les raccourcis partagés de S0 : aucun ;
+  - la comparaison de l'ancienne disposition retire les quatre commandes du relevé de `master`, en vérifiant qu'il les contenait. `classique.json` ne change pas : refait sur `master`, il est identique ;
+  - le test unitaire de `locale.js` : le français remplace l'allemand, et une langue retirée donne l'anglais ;
+  - la vue à défilement, dans les tests unitaires et de bout en bout de V2 : l'option donne la vue sans bordure.
+
+**Mesures à la livraison** (Chromium) :
+- tests unitaires : 1 023 réussis ;
+- `simplification-s3.spec.js` : 6 tests réussis ; `simplification-s0.spec.js` : 21 ; `simplification-s1.spec.js` : 12 ; `simplification-s2.spec.js` : 13 ; vue de V2 : 12 ;
+- `classique.json`, refait sur `master` : identique ;
+- éditeur compilé, comparé à `master` : `Editor.js` passe de 3,42 à 2,58 Mo malgré S1 et S2, et le dossier des extensions de 718 à 323 Ko ;
+- `standard`, contrôles des couleurs et des libellés, `remark` : réussis.
+
+Firefox tourne en CI.

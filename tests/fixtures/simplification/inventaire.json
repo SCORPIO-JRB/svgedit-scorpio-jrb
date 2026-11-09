@@ -201,14 +201,6 @@
     "tool_clear": [
       "n"
     ],
-    "tool_delete": [
-      "backspace",
-      "delete"
-    ],
-    "tool_delete_multi": [
-      "backspace",
-      "delete"
-    ],
     "tool_ellipse": [
       "e"
     ],
@@ -232,12 +224,6 @@
     ],
     "tool_line": [
       "l"
-    ],
-    "tool_move_bottom": [
-      "mod+shift+["
-    ],
-    "tool_move_top": [
-      "mod+shift+]"
     ],
     "tool_path": [
       "p"
