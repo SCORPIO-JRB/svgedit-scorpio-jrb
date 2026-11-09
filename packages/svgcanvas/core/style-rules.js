@@ -616,10 +616,42 @@ export const getStyledValue = (elem, prop, rules) => {
   let value = source.value
   const plain = !source.shorthand && !/\bvar\(|\benv\(|^(?:inherit|initial|unset|revert|revert-layer|currentcolor)$/i.test(value)
   if (!plain || (LENGTHS.has(prop) && !NUMBER.test(value) && !/^[-+]?[\d.]+px$/i.test(value))) {
-    const computed = elem.ownerDocument?.defaultView?.getComputedStyle?.(elem)?.getPropertyValue(prop)
-    if (computed) value = computed.trim()
+    const computed = computedValue(elem, prop)
+    if (computed) value = computed
   }
-  if (LENGTHS.has(prop) && /^[-+]?[\d.]+px$/i.test(value)) value = String(Number.parseFloat(value))
-  if (COLORS.has(prop)) value = toHex(value.replace(/^url\(\s*(["']?)(#[^"')]+)\1\s*\)/i, 'url($2)'))
-  return { ...source, value }
+  return { ...source, value: asAttribute(prop, value) }
+}
+
+const computedValue = (elem, prop) => elem.ownerDocument?.defaultView?.getComputedStyle?.(elem)?.getPropertyValue(prop)?.trim() ?? ''
+
+/**
+ * A value of CSS written as its attribute would be: a length in pixels as a
+ * number, a colour in hexadecimal.
+ * @param {string} prop
+ * @param {string} value
+ * @returns {string}
+ */
+const asAttribute = (prop, value) => {
+  if (LENGTHS.has(prop) && /^[-+]?[\d.]+px$/i.test(value)) return String(Number.parseFloat(value))
+  if (prop === 'stroke-dasharray' && /^[-+]?[\d.]+px(?:[\s,]+[-+]?[\d.]+px)*$/i.test(value)) {
+    return value.split(/[\s,]+/).map((length) => String(Number.parseFloat(length))).join(' ')
+  }
+  if (COLORS.has(prop)) return toHex(value.replace(/^url\(\s*(["']?)(#[^"')]+)\1\s*\)/i, 'url($2)'))
+  return value
+}
+
+/**
+ * The value an element shows for a property, whatever gives it (a rule, its
+ * `style` attribute, its attribute, a parent, or nothing: the initial
+ * value), written as its attribute would be. "Copy properties" and the
+ * eyedropper take it for a property their source does not set, to give it
+ * where the target gets the property from a rule (lot S4).
+ * @function module:style-rules.getShownValue
+ * @param {Element} elem
+ * @param {string} prop
+ * @returns {string|null} Null outside a document that computes styles
+ */
+export const getShownValue = (elem, prop) => {
+  const computed = computedValue(elem, prop)
+  return computed ? asAttribute(prop, computed) : null
 }

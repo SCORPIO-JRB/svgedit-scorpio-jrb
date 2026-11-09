@@ -204,16 +204,22 @@ export const ffClone = (elem) => {
 * again (several lines, a fixed width) are laid out, whichever they are.
 * The editor is told which rules changed (`styleRulesChanged`), to have them
 * confirmed.
+* A change that makes its own step ("Paste properties", the eyedropper) gives
+* `record`, which receives the commands instead (lot S4).
+* @function module:svgcanvas.SvgCanvas#changeStyledProperty
 * @param {string} attr
 * @param {string|Float} newValue
 * @param {Element[]} elems
+* @param {(cmd: module:history.Command) => void} [record] - The change being
+*   recorded by default
 * @fires module:svgcanvas.SvgCanvas#event:styleRulesChanged
 * @returns {Element[]} The elements whose attribute is still to be written
 */
-const changeStyledProperty = (attr, newValue, elems) => {
+export const changeStyledProperty = (attr, newValue, elems, record) => {
   const { undoMgr } = svgCanvas
-  if (!STYLED_PROPERTIES.has(attr) || !undoMgr.isRecordingChange() ||
+  if (!STYLED_PROPERTIES.has(attr) || (!record && !undoMgr.isRecordingChange()) ||
     newValue === '' || newValue === null || newValue === undefined) return elems
+  record ??= (cmd) => undoMgr.recordInChange(cmd)
   const content = svgCanvas.getSvgContent()
   const rules = readStyleRules(content)
   if (!rules.length && !elems.some((elem) => elem?.hasAttribute?.('style'))) return elems
@@ -227,7 +233,7 @@ const changeStyledProperty = (attr, newValue, elems) => {
       if (!source.shorthand && sameCssValue(attr, source.value, newValue)) continue
       const old = elem.getAttribute('style')
       setStyleProperty(elem, attr, cssValueOf(attr, newValue) + (source.important ? ' !important' : ''))
-      if (elem.getAttribute('style') !== old) undoMgr.recordInChange(new ChangeElementCommand(elem, { style: old }, 'style'))
+      if (elem.getAttribute('style') !== old) record(new ChangeElementCommand(elem, { style: old }, 'style'))
     } else if (source.shorthand || !sameCssValue(attr, source.value, newValue)) {
       if (!ruled.has(source.rule)) ruled.set(source.rule, source.selector)
     }
@@ -249,12 +255,12 @@ const changeStyledProperty = (attr, newValue, elems) => {
     if (text === oldText) continue
     setStyleSheetText(style, text)
     const cmd = new ChangeStyleSheetCommand(style, oldText, `Change ${attr}`)
-    undoMgr.recordInChange(cmd)
+    record(cmd)
     commands.push(cmd)
   }
   texts.forEach((text, i) => {
     layoutText(text)
-    if (!sameContent(contents[i], text)) undoMgr.recordInChange(new ChangeElementCommand(text, {}, attr, contents[i]))
+    if (!sameContent(contents[i], text)) record(new ChangeElementCommand(text, {}, attr, contents[i]))
   })
   const selected = svgCanvas.getSelectedElements().filter(Boolean)
   setTimeout(() => {

@@ -272,4 +272,91 @@ describe('a change of the canvas goes to the rule', () => {
     assert.deepEqual(svgCanvas.getSelectedElements().filter(Boolean).map((elem) => elem.id), ['fond'])
     assert.equal(svgCanvas.undoMgr.withdraw(notices[0].commands[0]), false)
   })
+
+  // Lot S4: "Copy / Paste properties" read and write as the panel does.
+  describe('copy and paste properties (lot S4)', () => {
+    beforeEach(() => sessionStorage.clear())
+
+    it('copies the values of the rules, not the attributes they hide', () => {
+      $('d1').setAttribute('stroke', '#000000')
+      select('d1')
+      assert.equal(svgCanvas.copySelectedProperties(), true)
+      const { fill, stroke } = svgCanvas.getCopiedProperties()
+      assert.equal(fill.fill, 'none')
+      assert.equal(stroke.stroke, '#4F465F')
+      assert.equal(stroke['stroke-width'], '1.5')
+      assert.equal(stroke['stroke-linecap'], 'round')
+    })
+
+    it('changes the rule of a target, the attribute of the others, in one step', () => {
+      $('libre').setAttribute('fill', '#123456')
+      select('libre')
+      svgCanvas.copySelectedProperties()
+      const before = sheet()
+      const steps = svgCanvas.undoMgr.getUndoStackSize()
+      $('fond').insertAdjacentHTML('afterend', '<rect id="autre" width="10" height="10" fill="#ffffff"/>')
+      select('fond', 'autre')
+      assert.ok(svgCanvas.pasteProperties())
+      assert.ok(sheet().includes('.fond { fill: #123456; }'))
+      assert.equal($('fond').hasAttribute('fill'), false)
+      assert.equal($('autre').getAttribute('fill'), '#123456')
+      assert.equal(svgCanvas.undoMgr.getUndoStackSize(), steps + 1)
+      assert.deepEqual(notices.map(({ property, rules }) => ({ property, rules })),
+        [{ property: 'fill', rules: [{ selector: '.fond', count: 1 }] }])
+      svgCanvas.undoMgr.undo()
+      assert.equal(sheet(), before)
+      assert.equal($('autre').getAttribute('fill'), '#ffffff')
+      svgCanvas.undoMgr.redo()
+      assert.ok(sheet().includes('.fond { fill: #123456; }'))
+      // The step that was not confirmed goes, the attributes with it.
+      assert.equal(svgCanvas.undoMgr.withdraw(notices[0].commands[0]), true)
+      assert.equal(sheet(), before)
+      assert.equal($('autre').getAttribute('fill'), '#ffffff')
+    })
+
+    it('writes in the style attribute of a target that has the value there, without a notice', () => {
+      $('libre').setAttribute('fill', '#123456')
+      select('libre')
+      svgCanvas.copySelectedProperties()
+      select('vanne')
+      svgCanvas.pasteProperties()
+      const style = $('vanne').getAttribute('style')
+      assert.ok(style.includes('fill:#123456') && !style.includes('#00ff00'), style)
+      assert.equal($('vanne').hasAttribute('fill'), false)
+      assert.deepEqual(notices, [])
+    })
+
+    it('reads the rule of a group, and a property written as an attribute, which it writes so', () => {
+      svgCanvas.setSvgString(`<svg xmlns="${NS}" width="640" height="480">` +
+        '<style>.centre { text-anchor: middle; } .libelles { fill: #9B92AA; font-size: 15px; }</style>' +
+        '<g class="layer"><title>Calque</title><text id="s" class="centre" x="0" y="10">A</text>' +
+        '<g class="libelles"><text id="u" x="0" y="50">C</text></g>' +
+        '<text id="t" x="0" y="30">B</text></g></svg>')
+      select('s')
+      svgCanvas.copySelectedProperties()
+      select('t')
+      svgCanvas.pasteProperties()
+      assert.equal($('t').getAttribute('text-anchor'), 'middle')
+      assert.ok(sheet().includes('.centre { text-anchor: middle; }'))
+      // A text of a group styled by a class
+      select('u')
+      svgCanvas.copySelectedProperties()
+      select('t')
+      svgCanvas.pasteProperties()
+      assert.deepEqual([$('t').getAttribute('fill'), $('t').getAttribute('font-size')], ['#9B92AA', '15'])
+      assert.deepEqual(notices, [])
+    })
+
+    it('leaves a drawing without rules as before', () => {
+      svgCanvas.setSvgString(`<svg xmlns="${NS}" width="640" height="480"><g class="layer"><title>Calque</title>` +
+        '<g fill="#00ff00"><rect id="a" width="10" height="10" stroke="#000"/></g>' +
+        '<rect id="b" width="10" height="10" fill="#fff" stroke="#f00" stroke-width="4"/></g></svg>')
+      select('a')
+      svgCanvas.copySelectedProperties()
+      select('b')
+      svgCanvas.pasteProperties()
+      const attributes = [...$('b').attributes].filter(({ name }) => name !== 'style').map(({ name, value }) => `${name}=${value}`)
+      assert.deepEqual(attributes, ['id=b', 'width=10', 'height=10', 'fill=#00ff00', 'stroke=#000'])
+    })
+  })
 })

@@ -28,7 +28,7 @@ export default {
     const svgEditor = this
     const { svgCanvas } = svgEditor
     await loadExtensionTranslation(svgEditor)
-    const { ChangeElementCommand } = svgCanvas.history
+    const { ChangeElementCommand, BatchCommand } = svgCanvas.history
     // svgdoc = S.svgroot.parentNode.ownerDocument,
     const addToHistory = (cmd) => { svgCanvas.undoMgr.addCommandToHistory(cmd) }
     const currentStyle = {}
@@ -71,6 +71,16 @@ export default {
       }
     }
 
+    // The properties the eyedropper takes
+    const PROPERTIES = [
+      'fill', 'fill-opacity', 'stroke', 'stroke-opacity', 'stroke-width', 'opacity',
+      'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray'
+    ]
+
+    // On an object styled by a class (lot S4), the value as drawn: a rule or
+    // the `style` attribute wins over the attribute.
+    const read = (elem, attr) => svgCanvas.getStyledValue?.(elem, attr)?.value ?? elem.getAttribute(attr)
+
     /**
      *
      * @param {module:svgcanvas.SvgCanvas#event:ext_selectedChanged|module:svgcanvas.SvgCanvas#event:ext_elementChanged} opts
@@ -83,15 +93,18 @@ export default {
       ) {
         elem = opts.elems[0]
         // grab the current style
-        currentStyle.fillPaint = elem.getAttribute('fill') || 'black'
-        currentStyle.fillOpacity = elem.getAttribute('fill-opacity') || 1.0
-        currentStyle.strokePaint = elem.getAttribute('stroke')
-        currentStyle.strokeOpacity = elem.getAttribute('stroke-opacity') || 1.0
-        currentStyle.strokeWidth = elem.getAttribute('stroke-width')
-        currentStyle.strokeDashArray = elem.getAttribute('stroke-dasharray')
-        currentStyle.strokeLinecap = elem.getAttribute('stroke-linecap')
-        currentStyle.strokeLinejoin = elem.getAttribute('stroke-linejoin')
-        currentStyle.opacity = elem.getAttribute('opacity') || 1.0
+        currentStyle.fillPaint = read(elem, 'fill') || 'black'
+        currentStyle.fillOpacity = read(elem, 'fill-opacity') || 1.0
+        currentStyle.strokePaint = read(elem, 'stroke')
+        currentStyle.strokeOpacity = read(elem, 'stroke-opacity') || 1.0
+        currentStyle.strokeWidth = read(elem, 'stroke-width')
+        currentStyle.strokeDashArray = read(elem, 'stroke-dasharray')
+        currentStyle.strokeLinecap = read(elem, 'stroke-linecap')
+        currentStyle.strokeLinejoin = read(elem, 'stroke-linejoin')
+        currentStyle.opacity = read(elem, 'opacity') || 1.0
+        // What it shows for a property it does not set, for a target that
+        // gets the property from a rule (lot S4)
+        currentStyle.shown = Object.fromEntries(PROPERTIES.map((attr) => [attr, svgCanvas.getShownValue?.(elem, attr) ?? null]))
       }
     }
 
@@ -159,27 +172,48 @@ export default {
 
             // If some style is picked - applies it to the target, if no style - picks it from the target
             if (Object.keys(currentStyle).length > 0) {
+              // A property the target gets from a rule or its `style`
+              // attribute changes there, as by a field of the panel, and
+              // the editor asks before keeping a rule changed (lot S4).
+              const styled = new BatchCommand('Change attributes')
+              const record = (cmd) => styled.addSubCommand(cmd)
+              const where = function (elem, attrname, newvalue) {
+                // The value the source showed, for one it did not set
+                const value = newvalue || currentStyle.shown?.[attrname]
+                if (!value || !svgCanvas.changeStyledProperty) return true
+                if (!newvalue && svgCanvas.getShownValue(elem, attrname) === value) return true
+                return svgCanvas.changeStyledProperty(attrname, value, [elem], record).length > 0
+              }
               const change = function (elem, attrname, newvalue) {
+                if (!where(elem, attrname, newvalue) || !newvalue) return
                 changes[attrname] = elem.getAttribute(attrname)
                 elem.setAttribute(attrname, newvalue)
               }
 
-              if (currentStyle.fillPaint) { change(target, 'fill', currentStyle.fillPaint) }
-              if (currentStyle.fillOpacity) { change(target, 'fill-opacity', currentStyle.fillOpacity) }
-              if (currentStyle.strokePaint) { change(target, 'stroke', currentStyle.strokePaint) }
-              if (currentStyle.strokeOpacity) { change(target, 'stroke-opacity', currentStyle.strokeOpacity) }
-              if (currentStyle.strokeWidth) { change(target, 'stroke-width', currentStyle.strokeWidth) }
-              if (currentStyle.opacity) { change(target, 'opacity', currentStyle.opacity) }
-              if (currentStyle.strokeLinecap) { change(target, 'stroke-linecap', currentStyle.strokeLinecap) }
-              if (currentStyle.strokeLinejoin) { change(target, 'stroke-linejoin', currentStyle.strokeLinejoin) }
+              change(target, 'fill', currentStyle.fillPaint)
+              change(target, 'fill-opacity', currentStyle.fillOpacity)
+              change(target, 'stroke', currentStyle.strokePaint)
+              change(target, 'stroke-opacity', currentStyle.strokeOpacity)
+              change(target, 'stroke-width', currentStyle.strokeWidth)
+              change(target, 'opacity', currentStyle.opacity)
+              change(target, 'stroke-linecap', currentStyle.strokeLinecap)
+              change(target, 'stroke-linejoin', currentStyle.strokeLinejoin)
 
               if (currentStyle.strokeDashArray) {
                 change(target, 'stroke-dasharray', currentStyle.strokeDashArray)
-              } else {
+              } else if (where(target, 'stroke-dasharray', null) && target.hasAttribute('stroke-dasharray')) {
+                // Removed as one undo step with the rest (it was not undone)
+                changes['stroke-dasharray'] = target.getAttribute('stroke-dasharray')
                 target.removeAttribute('stroke-dasharray')
               }
 
-              addToHistory(new ChangeElementCommand(target, changes))
+              if (styled.isEmpty()) {
+                addToHistory(new ChangeElementCommand(target, changes))
+              } else {
+                if (Object.keys(changes).length) styled.addSubCommand(new ChangeElementCommand(target, changes))
+                addToHistory(styled)
+                svgCanvas.call('changed', [target])
+              }
             } else {
               getStyle({ elems: [target] })
             }
