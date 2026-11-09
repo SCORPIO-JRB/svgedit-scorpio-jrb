@@ -434,10 +434,13 @@ export class SeCMenuDialog extends HTMLElement {
       }
     })
     const onMenuClickHandler = (e, action) => {
-      // The clicked item takes the focus: give it back to the page, or the
-      // keyboard shortcuts (Mod+V, Delete...) stop working until the canvas
-      // is clicked.
-      this._shadowRoot.activeElement?.blur()
+      // A choice closes the menu. It stayed open over the drawing, often over
+      // the object the command had just changed: "Copy properties" seemed to
+      // do nothing. Only a click on the drawing closed it, and the menu is
+      // not inside the drawing area.
+      // close() also gives the focus back to the page, or the keyboard
+      // shortcuts (Mod+V, Delete...) stop working until the canvas is clicked.
+      current.close()
       const triggerEvent = new CustomEvent('change', {
         detail: {
           trigger: action
@@ -464,7 +467,6 @@ export class SeCMenuDialog extends HTMLElement {
     Object.entries(this.$similarLinks).forEach(([action, link]) => {
       svgEditor.$click(link, (evt) => {
         evt.preventDefault()
-        current.$dialog.style.display = 'none'
         onMenuClickHandler(evt, action)
       })
     })
