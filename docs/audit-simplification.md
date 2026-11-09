@@ -440,7 +440,17 @@ Les deux dispositions sont concernées, mais ce que fait l'éditeur ne change pa
 - tests unitaires : 1 023 réussis ;
 - `simplification-s3.spec.js` : 6 tests réussis ; `simplification-s0.spec.js` : 21 ; `simplification-s1.spec.js` : 12 ; `simplification-s2.spec.js` : 13 ; vue de V2 : 12 ;
 - `classique.json`, refait sur `master` : identique ;
-- éditeur compilé, comparé à `master` : `Editor.js` passe de 3,42 à 2,58 Mo malgré S1 et S2, et le dossier des extensions de 718 à 323 Ko ;
+- suite complète de bout en bout, sous quatre processus : 575 tests sur 577. Les deux autres échouent quand la machine est chargée et passent seuls, sur S3 comme sur `master` (trois fois sur trois chacun) :
+  - « 5 000 objects… under 50 ms » (`layout-v3.spec.js`), la mesure de temps déjà notée pendant S1 et S2 ;
+  - « Enter makes a line » (`texte-multiligne.spec.js`), déjà noté pendant S1 ;
+- sortie comparée à `master` : 25 allers-retours sur 25 et 73 scénarios sur 73 identiques ;
+- rapport de fidélité des 25 fichiers du dépôt : le même que sur `master` ;
+- éditeur compilé, comparé à S2 (`81ce50c8`) : `Editor.js` passe de 3,45 à 2,58 Mo, et le dossier des extensions de 718 à 323 Ko ;
+- bench (`canvas-bench.mjs`), comparé à S2 en alternant les passages : aucune régression établie.
+  - Deux passages complets et six à 500 objets se recouvrent, sauf une mesure. Le premier mouvement de rotation de la séquence, à 500 objets, prend 28 à 48 ms sur S3 contre 19 à 27 sur S2, sur huit passages chacun.
+  - Une seconde rotation mesurée dans la même séquence prend 17 à 19 ms sur S3 contre 18 à 27 sur S2. Huit rotations répétées hors de la séquence prennent environ 20 ms des deux côtés.
+  - Avec un ramasse-miettes forcé avant la mesure, l'écart n'est plus systématique : 22 à 47 ms sur S3, 24 à 49 sur S2. La cause la plus probable est un ramasse-miettes placé ailleurs, la mémoire de S3 étant plus petite ; elle n'est pas prouvée.
+  - Sur cette machine, S2, S3 et `master` dépassent tous trois des budgets de `budgets.json`, par exemple « tout sélectionner » à 2 000 objets : 207 à 281 ms pour 150 ;
 - `standard`, contrôles des couleurs et des libellés, `remark` : réussis.
 
 Firefox tourne en CI.
