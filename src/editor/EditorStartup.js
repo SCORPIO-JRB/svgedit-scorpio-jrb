@@ -13,6 +13,7 @@ import { ViewController } from './view.js'
 import { GridLayer } from './grid.js'
 import { FrameLayer } from './frames.js'
 import { initStructure } from './structure.js'
+import { initClassStyles } from './class-styles.js'
 import { SymbolLibrary, SymbolPanel } from './symbols.js'
 import { LibraryDrawer } from './panels/LibraryDrawer.js'
 import { ConnectorTool, ConnectorPanel } from './connectors.js'
@@ -174,6 +175,8 @@ class EditorStartup {
     this.commands.register({ id: 'preview', label: 'preview.open', run: () => this.preview.open() })
     // Lock and visibility of objects (lot V7)
     initStructure(this)
+    // Values given by a rule of the style sheets: changed there, after asking (lot S2)
+    this.classStyles = initClassStyles(this)
     // Symbol libraries (lot V7), in both layouts
     this.symbols = new SymbolLibrary(this)
     // Orthogonal connectors: ports, tool, route, elbows, fluids (lot V7)

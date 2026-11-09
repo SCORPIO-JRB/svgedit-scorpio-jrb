@@ -3,7 +3,7 @@
 Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier des synoptiques techniques GTB. Il ne doit pas devenir un outil de dessin général. Une règle s'applique partout : moins de fonctions inutiles, une meilleure expérience, aucune régression sur l'existant.
 
 - **Mesures** : relevées dans l'éditeur compilé depuis `master` (b2a1dbd5), qui contient V0 à V7 et les textes de plusieurs lignes. Disposition « canevas », fichiers réels de `tests/fixtures/import/scorpio/`.
-- **État** : décidé le 9 novembre 2026. Les lots S0 et S1 sont livrés (section 7) ; S2 et S3 restent à faire. Les sections 2 et 3 décrivent l'éditeur avant S1.
+- **État** : décidé le 9 novembre 2026. Les lots S0, S1 et S2 sont livrés (section 7) ; S3 reste à faire. Les sections 2 et 3 décrivent l'éditeur avant S1 et S2.
 
 ## 1. Décisions
 
@@ -14,7 +14,7 @@ Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier d
 | Langues | Français et anglais | 57 fichiers de langue sont retirés en S3 |
 | Export | Tel quel | PNG, JPEG, BMP, WEBP et PDF restent, ainsi que jsPDF et svg2pdf.js |
 | Éditeur toujours intégré à SCorp-io ? | Non | L'enregistrement dans le navigateur et son bandeau de consentement restent, comme le bouton Accueil, le fil d'Ariane et le bouton Enregistrer de l'hôte |
-| Lots S0 à S3 avant V4 ? | Non, après V4 | V4 est livré. Son test utilisateur, qui compare les deux dispositions, reste à mener : d'ici là, l'ancienne disposition (`layout: 'classic'`) ne change pas, et S1 ne touche que la disposition « canevas » |
+| Lots S0 à S3 avant V4 ? | Non, après V4 | V4 est livré. Son test utilisateur, qui compare les deux dispositions, reste à mener : d'ici là, l'interface de l'ancienne disposition (`layout: 'classic'`) ne change pas, et S1 ne touche que la disposition « canevas ». S2, qui corrige des valeurs fausses, s'applique aux deux : la tâche 4 du test réussit ainsi dans l'une comme dans l'autre |
 | Fichiers réels du correctif d'import dans le corpus ? | Pas pour l'instant | Le corpus du lot S0 se limite aux fichiers du dépôt et aux fichiers construits pour lui |
 
 ## 2. Inventaire
@@ -40,6 +40,8 @@ Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier d
 
 ### 3.1 L'inspecteur est faux pour un objet stylé par classe
 
+Corrigé par S2 (section 7).
+
 Les synoptiques SCorp-io sont stylés par des classes CSS : `synoptique-chaufferie.svg` compte 209 attributs `class`, dont des états comme `en-marche` ou `arret`.
 
 | Objet | Rendu | L'inspecteur affiche | Après modification |
@@ -51,10 +53,12 @@ Les synoptiques SCorp-io sont stylés par des classes CSS : `synoptique-chauffer
 Une règle CSS qui vise l'objet l'emporte sur ses attributs de présentation. L'utilisateur lit donc une valeur fausse, sa modification ne fait rien à l'écran, et le fichier garde des attributs inutiles. Une valeur seulement héritée d'un groupe, elle, se modifie bien : l'attribut l'emporte sur l'héritage.
 
 Deux conséquences :
-- **Test utilisateur de V4.** Sa tâche 4 (« passer l'épaisseur d'une tuyauterie à 3 et sa couleur à `#F08A62` », sur ce synoptique) ne peut pas réussir aujourd'hui, dans aucune des deux dispositions. Avec la décision 2, après S2, elle changera la règle `.tuyau.arret`, donc toutes les tuyauteries à l'arrêt, après un avertissement. Il faut soit mener S2 avant le test, soit choisir pour cette tâche un objet qui n'est pas stylé par classe.
-- **Styles de texte (V4).** Ils écrivent les mêmes attributs (`font-family`, `font-size`, `font-weight`, `fill`). Sur un texte stylé par classe, ils sont sans doute masqués de la même façon ; S2 commence par le vérifier.
+- **Test utilisateur de V4.** Sa tâche 4 (« passer l'épaisseur d'une tuyauterie à 3 et sa couleur à `#F08A62` », sur ce synoptique) ne pouvait réussir dans aucune des deux dispositions. Depuis S2, elle réussit dans les deux : elle change la règle `.tuyau.arret`, donc toutes les tuyauteries à l'arrêt, après un avertissement qui le dit.
+- **Styles de texte (V4).** Ils écrivent les mêmes attributs (`font-family`, `font-size`, `font-weight`, `fill`). Sur un texte stylé par classe, ils étaient masqués de la même façon. Depuis S2, ils changent les règles, après un seul avertissement.
 
 ### 3.2 Un polygone n'a pas de champs X, Y, L, H
+
+Corrigé par S2 (section 7).
 
 Seul l'angle s'affiche (`TopPanel.js`, `['line', 'circle', 'ellipse', 'polygon']`). Le code suppose que tout polygone a ses propres champs. Ce n'est vrai que pour les polygones de l'extension Étoile/Polygone, qui portent un attribut `shape`. La pompe de `repr-pompe.svg` contient un polygone ordinaire. La PR n° 5 a réglé le même problème pour les imports (`<use>`) : on peut suivre la même voie.
 
@@ -122,6 +126,8 @@ Aucune recommandation ne touche la lecture.
 | Remplissage, contour, police, taille d'un objet stylé par classe | Afficher la valeur réelle et la règle qui la donne. Une modification change cette règle, après un avertissement qui nomme le sélecteur et le nombre d'objets touchés | L'inspecteur dit vrai ; les états SCorp-io restent pilotés par classe |
 | X, Y, L, H d'un polygone | Un polygone sans attribut `shape` se place et se dimensionne comme une polyligne | Les polygones des fichiers réels se placent au clavier |
 
+Les deux sont faites (lot S2).
+
 ### Simplifier
 
 | Fonction | Changement | Touche | Gain |
@@ -159,7 +165,7 @@ Aucune recommandation ne touche la lecture.
 | Raccourcis attribués à deux commandes | 5 | 4 | aucun |
 | Fichiers de langue | 59 | 59 | 2 |
 
-À cela s'ajoutent environ 330 Ko de formes hors sujet et deux extensions en moins. Surtout, l'inspecteur affiche la vraie valeur des objets stylés par classe.
+À cela s'ajoutent environ 330 Ko de formes hors sujet et deux extensions en moins. Surtout, depuis S2, l'inspecteur affiche la vraie valeur des objets stylés par classe.
 
 ## 5. Risques et dépendances des retraits
 
@@ -181,7 +187,7 @@ Pour chaque retrait, il faut faire trois vérifications :
 | Vue à défilement | `view.js`, option `view` | Aucun. Une configuration qui demande `view: 'scroll'` aura la vue sans bordure |
 | Extensions jamais chargées | Aucune | Aucun |
 
-**Ancienne disposition.** Elle reste telle quelle jusqu'au test utilisateur de V4, dont elle est la référence. S1 n'y touche pas, et S3 ne retire rien de ce qu'elle emploie (jPicker, jGraduate).
+**Ancienne disposition.** Elle reste telle quelle jusqu'au test utilisateur de V4, dont elle est la référence. S1 n'y touche pas. S2 y corrige les mêmes valeurs que dans la nouvelle, sans changer ses contrôles. S3 ne retire rien de ce qu'elle emploie (jPicker, jGraduate).
 
 ## 6. Interface proposée
 
@@ -204,7 +210,7 @@ Plus ▾ (Loupe Z, Pipette Ctrl+I)
 ```
 Géométrie     X  Y  L  H  angle
 Apparence     opacité
-Remplissage   ■ #160F23   ← classe .fond
+Remplissage ← .fond   ■ 160F23
 Contour       couleur · épaisseur · style · marqueurs        [Plus d'options : jointures, extrémités]
 Texte         police · taille · gras · italique · souligné · alignement · interligne · largeur automatique
               [Plus d'options : espacement des lettres]
@@ -213,7 +219,7 @@ Effets        (seulement si l'objet a un flou)
 Identité      id · classe · titre · liaison
 ```
 
-Le repère « ← classe .fond » s'inspire des styles partagés de Figma. Modifier la valeur ouvre un avertissement, par exemple : « Cette couleur vient de la règle `.fond`, qui s'applique à 12 objets. Modifier la règle ? ». Si l'utilisateur confirme, la règle est modifiée en une seule étape d'annulation. La barre contextuelle, qui emploie les mêmes champs, suit d'elle-même.
+Le repère « ← .fond » s'inspire des styles partagés de Figma : le titre de la section nomme les règles qui donnent ses valeurs. Modifier une valeur montre le résultat sur le dessin et ouvre un avertissement, par exemple : « Cette couleur vient de la règle .fond, qui s'applique à 12 objets. Modifier la règle ? ». Confirmée, la modification forme une seule étape d'annulation. Refusée, elle disparaît sans laisser d'étape. La barre contextuelle, qui emploie les mêmes champs, suit d'elle-même.
 
 **Barre du haut, menus Document et Zoom** : inchangés, sauf « Page d'accueil SVG-Edit », « Propriétés du document » et « Vue du calque seul », qui disparaissent.
 
@@ -225,7 +231,7 @@ Le repère « ← classe .fond » s'inspire des styles partagés de Figma. Modif
 | --- | --- | --- | --- |
 | S0 Filet | Tests seulement ; l'éditeur ne change pas | Inchangée | Livré |
 | S1 Masquer | Retraits d'interface, réglages conditionnels et repliés, fusion d'« Aligner sur la page », Propriétés du document | Identique à l'octet | Livré |
-| S2 Corriger (3 à 5 j) | Objets stylés par classe ; X, Y, L, H des polygones | Change volontairement | À faire ; avant le test utilisateur de V4 si sa tâche 4 reste telle quelle (section 3.1) |
+| S2 Corriger | Objets stylés par classe ; X, Y, L, H des polygones ; les deux dispositions | Change volontairement : la règle modifiée, rien d'autre | Livré |
 | S3 Nettoyer (3 à 5 j, après deux semaines d'usage de S1) | Langues, catégories de formes, extensions jamais chargées, vue à défilement, enregistrements en double | Identique | À faire |
 
 ### S0 Filet (livré)
@@ -237,13 +243,13 @@ Le repère « ← classe .fond » s'inspire des styles partagés de Figma. Modif
   - les attributs propres à la famille sont gardés (`shape`, `text-decoration`, `filter`…) ;
   - annuler les cinq étapes rend le texte d'origine ;
   - le dessin modifié, rouvert, s'enregistre à l'identique.
-- **Ce que S2 corrige**, tel que c'est aujourd'hui (`styles-classe.svg`) :
+- **Ce que S2 corrige**, tel que c'était avant lui (`styles-classe.svg`) :
   - le remplissage affiché « 000000 » et la couleur masquée ;
   - la taille affichée « null » et la police masquée ;
   - la valeur héritée d'un groupe, qui se modifie bien et doit le rester ;
   - le polygone sans X, Y, L, H, et l'étoile qui garde son panneau.
 
-  S2 retourne ces tests.
+  S2 a retourné ces tests.
 
 Les deux fichiers entrent aussi dans le corpus des tests existants : allers-retours de `compare-output.mjs`, rapport de fidélité, tests du corpus de V6.
 
@@ -320,31 +326,73 @@ Firefox tourne en CI.
 S1_CLASSIC_UPDATE=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8010 npx playwright test tests/e2e/simplification-s1.spec.js -g "Classic"
 ```
 
-### S2 Corriger
+### S2 Corriger (livré)
 
-- **Objets stylés par classe** :
-  - Trouver la règle qui donne la valeur : la plus spécifique, puis la dernière, parmi celles de la feuille `<style>` qui visent l'objet et fixent la propriété. La fenêtre couleur lit déjà les feuilles de style du document (`src/editor/color/color.js`).
-  - L'afficher dans l'inspecteur ; la barre contextuelle, qui partage ses champs, suit.
-  - À la modification, demander confirmation, puis réécrire la propriété dans cette règle, en une seule étape d'annulation.
-  - Une valeur seulement héritée d'un parent continue de s'écrire sur l'objet.
-  - Les feuilles des fichiers importés sont confinées à leur import (`css-scope.js`) : la recherche doit les lire sous leur forme confinée.
-  - Les styles de texte de V4 suivent la même règle.
-- **Polygones** : un polygone sans attribut `shape` rejoint les éléments placés et dimensionnés par leur boîte, comme la polyligne. Ceux de l'extension gardent leur panneau.
-- **Tests unitaires** de la recherche de règle :
+Les deux dispositions changent : c'est une correction (section 1).
+
+**Objets stylés par classe :**
+- **Recherche** (`packages/svgcanvas/core/style-rules.js`). Ce qui donne une propriété à un objet, dans l'ordre de la cascade CSS :
+  1. une déclaration `!important` de son attribut `style` ;
+  2. une règle `!important` ;
+  3. son attribut `style` ;
+  4. la règle la plus spécifique qui le vise et fixe la propriété, la dernière écrite à égalité.
+
+  Les règles de `@media`, `@supports` et `@layer` comptent, comme le raccourci `font`. Une règle que le navigateur ne lit pas est écartée. Une valeur seulement héritée d'un parent ne vient d'aucune règle de l'objet : son attribut continue de l'emporter. Les feuilles des fichiers importés sont lues sous leur forme confinée, et leurs sélecteurs s'affichent comme le fichier les écrit.
+- **Affichage**. Ces champs montrent la valeur de la règle :
+  - remplissage et opacité ;
+  - contour : couleur, épaisseur, style, jointures, extrémités ;
+  - police, taille, gras, italique, espacements.
+
+  Dans la disposition canevas, le titre de la section nomme les règles : « Contour ← .tuyau.arret, .tuyau ». L'ancienne disposition n'a pas de place pour ce repère : seules les valeurs de ses champs changent.
+- **Écriture**. Une modification de ces propriétés va là où se trouve la valeur :
+  - une règle est réécrite dans le texte de sa feuille, valeur seule, le reste tel quel. `!important` est gardé, `px` est ajouté là où CSS l'exige, et une déclaration est ajoutée après un raccourci `font` ;
+  - l'attribut `style` d'un objet est réécrit de la même façon.
+
+  Aucun attribut n'est ajouté. La réécriture fait partie de l'étape d'annulation de la modification. Les textes de plusieurs lignes que la règle touche sont remis en page dans la même étape.
+- **Avertissement** (`src/editor/class-styles.js`). La modification se voit sur le dessin, puis l'éditeur demande : « Cette couleur vient de la règle .fond, qui s'applique à 12 objets. Modifier la règle ? ».
+  - Refusée, l'étape est retirée : la feuille revient, il n'y a rien à rétablir, la sélection reste.
+  - Acceptée, les mêmes règles ne sont plus demandées tant que la sélection ne change pas : l'épaisseur puis la couleur d'une tuyauterie ne posent qu'une question.
+  - Un style de texte qui touche plusieurs règles pose une seule question, qui les liste.
+- **Aperçu de la fenêtre couleur**. Sur un objet stylé, il passe par l'attribut `style`, rendu tel quel à la fin.
+- **Écart avec le plan**. La règle est réécrite avant la question, qui s'affiche sur le résultat ; un refus la retire. Une question posée avant l'écriture aurait coupé en deux les étapes composées, comme une peinture avec son dégradé ou un style de texte : la question ne peut pas attendre au milieu d'elles.
+- **Ce qui ne change pas** :
+  - la décoration et l'ancrage du texte, les marqueurs et la géométrie s'écrivent toujours en attributs ;
+  - une valeur héritée d'un groupe s'affiche comme avant : l'attribut de l'objet, ou la valeur par défaut ;
+  - la liste des polices n'affiche que ses propres polices, comme avant ;
+  - « Copier / Coller les propriétés » et la Pipette lisent et écrivent toujours les attributs : sur un objet stylé par classe, ils restent sans effet visible, comme avant S2. Les faire passer par les règles est un lot à part.
+
+**Polygones** : un polygone sans attribut `shape` a X, Y, L, H, comme une polyligne. Il se déplace et se redimensionne par sa boîte, et ses points sont réécrits. Ceux de l'outil Étoile/Polygone gardent leur panneau.
+
+**Tests :**
+- `tests/unit/style-rules.test.js`, 19 tests :
   - une classe ;
-  - plusieurs classes (`titre titre-page` : la taille vient de `.titre-page`, la police de `.titre`) ;
-  - un état (`.tuyau.arret`) ;
-  - un sélecteur qui n'est pas une classe (`svg.synoptique`) ;
+  - plusieurs classes (`titre titre-page`) ;
+  - un état : `.tuyau.arret`, et `.tuyau.en-marche.chaud.depart` qui l'emporte par sa spécificité ;
+  - des sélecteurs qui ne sont pas une classe : `svg.synoptique text.mesure`, et `svg.synoptique`, qui ne donne la police que par héritage ;
   - une feuille d'import confinée ;
   - une valeur héritée d'un groupe ;
-  - `!important` et attribut `style`.
-- **Tests de bout en bout** :
-  - les tests « ce que S2 corrige » de S0, retournés ;
-  - après confirmation, l'écran change, la règle est réécrite et aucun attribut n'est ajouté ;
-  - une annulation rend la feuille d'origine ;
-  - l'avertissement donne le bon nombre d'objets ;
-  - un polygone de `repr-pompe.svg` se déplace et se redimensionne par X, Y, L, H.
-- **Rapport de fidélité** : les seuls changements sont les règles modifiées.
+  - `!important` et l'attribut `style` ;
+  - le raccourci `font`, une règle illisible, `@media` ;
+  - le décompte des objets, la réécriture ;
+  - sur le canevas : une étape sans attribut, annulée et rétablie ; l'attribut `style` ; une valeur inchangée ; le retrait d'une étape refusée.
+- `tests/e2e/simplification-s2.spec.js`, 13 tests ; les cinq premiers tournent dans les deux dispositions :
+  - le remplissage et la police montrent les valeurs des règles, nommées dans la disposition canevas ;
+  - après confirmation, l'écran change, la règle est réécrite et aucun attribut n'est ajouté ; une annulation rend la feuille d'origine ;
+  - un refus ne laisse rien ;
+  - une valeur héritée s'écrit sur l'objet, sans question ;
+  - la tâche 4 du test de V4, sur `synoptique-chaufferie.svg` : l'avertissement donne le bon nombre de tuyauteries, l'épaisseur et la couleur ne posent qu'une question, et le fichier enregistré ne diffère de l'original que par la règle ;
+  - un style de texte de V4 : une question pour les deux règles, une étape ;
+  - le polygone de `repr-pompe.svg` se déplace et se redimensionne par X, Y, L, H ; l'étoile garde son panneau.
+- Les quatre tests « ce que S2 corrige » de S0, retournés.
+
+**Mesures à la livraison** (Chromium) :
+- tests unitaires : 1 022 réussis, dont 19 nouveaux ;
+- `simplification-s2.spec.js` : 13 tests réussis ; `simplification-s0.spec.js` : 21 ; `simplification-s1.spec.js` : 12, dont la comparaison de l'ancienne disposition à `classique.json`, inchangé ;
+- sortie comparée à `master` : 25 allers-retours sur 25 et 73 scénarios sur 73 identiques. Un fichier ouvert puis enregistré sans modification ne change pas ;
+- rapport de fidélité des fichiers du lot et des fichiers SCorp-io : le même que sur `master` ;
+- `standard`, contrôles des couleurs et des libellés, `remark` : réussis.
+
+Firefox tourne en CI.
 
 ### S3 Nettoyer
 

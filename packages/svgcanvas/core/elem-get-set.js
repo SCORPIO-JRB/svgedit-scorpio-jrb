@@ -18,6 +18,7 @@ import { isSafeHref } from './sanitize.js'
 import { warn } from '../common/logger.js'
 import { InsertElementCommand } from './history.js'
 import { getTextSource, getLineHeight, getTextWidth } from './text-lines.js'
+import { readStyleRules, findStyleSource, getStyledValue } from './style-rules.js'
 
 let svgCanvas = null
 
@@ -653,19 +654,30 @@ const previewPaintMethod = (type, paint) => {
   if (!preview) {
     const { selected, colored } = paintTargets(type)
     const opacity = `${type}-opacity`
+    // An element whose paint a rule or its style attribute gives shows the
+    // preview by its style attribute, which wins over both (lot S2).
+    const rules = readStyleRules(svgCanvas.getSvgContent())
+    const styledBy = (name) => (elem) => Boolean(findStyleSource(elem, name, rules))
+    const styled = {
+      opacity: selected.filter(styledBy(opacity)),
+      paint: colored.filter(styledBy(type))
+    }
     preview = {
       type,
       selected,
       colored,
+      styled,
       saved: [
         ...selected.map((elem) => ({ elem, name: opacity, value: elem.getAttribute(opacity) })),
-        ...colored.map((elem) => ({ elem, name: type, value: elem.getAttribute(type) }))
+        ...colored.map((elem) => ({ elem, name: type, value: elem.getAttribute(type) })),
+        ...[...new Set([...styled.opacity, ...styled.paint])].map((elem) => ({ elem, name: 'style', value: elem.getAttribute('style') }))
       ],
       grad: null,
       defs: svgCanvas.getSvgContent().getElementsByTagNameNS(NS.SVG, 'defs')[0] ?? null
     }
   }
   for (const elem of preview.selected) elem.setAttribute(`${type}-opacity`, String(p.alpha / 100))
+  for (const elem of preview.styled.opacity) elem.style.setProperty(`${type}-opacity`, String(p.alpha / 100), 'important')
   let value = 'none'
   if (p.type === 'solidColor' && p.solidColor && p.solidColor !== 'none') {
     value = `#${p.solidColor}`
@@ -678,6 +690,7 @@ const previewPaintMethod = (type, paint) => {
     value = `url(#${grad.id})`
   }
   for (const elem of preview.colored) elem.setAttribute(type, value)
+  for (const elem of preview.styled.paint) elem.style.setProperty(type, value, 'important')
 }
 
 /**
@@ -775,6 +788,15 @@ const setStrokeAttrMethod = (attr, val) => {
   }
 }
 
+/**
+ * The value of a property of an element: from the rule or the style
+ * attribute that gives it, else its attribute (lot S2).
+ * @param {Element} elem
+ * @param {string} name
+ * @returns {string|null}
+ */
+const styledAttribute = (elem, name) => getStyledValue(elem, name)?.value ?? elem.getAttribute(name)
+
 const getSelectedTextElements = () => {
   return svgCanvas.getSelectedElements().filter(el => el?.tagName === 'text')
 }
@@ -800,7 +822,7 @@ const notifyTextChange = (textElements) => {
  */
 const getBoldMethod = () => {
   const textElements = getSelectedTextElements()
-  return textElements.every(el => el.getAttribute('font-weight') === 'bold')
+  return textElements.every(el => styledAttribute(el, 'font-weight') === 'bold')
 }
 
 /**
@@ -889,7 +911,7 @@ const removeTextDecorationMethod = (value) => {
  */
 const getItalicMethod = () => {
   const textElements = getSelectedTextElements()
-  return textElements.every(el => el.getAttribute('font-style') === 'italic')
+  return textElements.every(el => styledAttribute(el, 'font-style') === 'italic')
 }
 
 /**

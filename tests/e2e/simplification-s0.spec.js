@@ -14,8 +14,8 @@ import { visitAndApproveStorage } from './helpers.js'
 // - Every family of element these lots touch (square, circle, polygons, star,
 //   shape of the library, freehand path, blur, rare text settings) still
 //   opens, moves, resizes, rotates, groups, undoes and saves as before.
-// - The behaviour S2 corrects (objects styled by a class, X Y W H of a
-//   polygon) is recorded as it is today, so that S2 changes it on purpose.
+// - The behaviour S2 corrected (objects styled by a class, X Y W H of a
+//   polygon) was recorded before it; S2 turned these tests round.
 
 const DIR = path.join(process.cwd(), 'tests/fixtures/simplification')
 const read = (name) => fs.readFileSync(path.join(DIR, name), 'utf8')
@@ -217,7 +217,7 @@ test.describe('Simplification net (S0)', () => {
     })
   }
 
-  test.describe('What S2 corrects, as it is today', () => {
+  test.describe('What S2 corrected', () => {
     const field = (page, id) => page.evaluate((id) => {
       const el = document.getElementById(id)
       return el.shadowRoot?.querySelector('input')?.value ?? String(el.value)
@@ -228,39 +228,46 @@ test.describe('Simplification net (S0)', () => {
       const box = el.getBoundingClientRect()
       return box.width > 0 && box.height > 0 && getComputedStyle(el).visibility !== 'hidden'
     }, id)
+    // The warning of S2, accepted: the rule changes (simplification-s2.spec.js)
+    const accept = async (page) => {
+      const dialog = page.locator('se-elix-alert-dialog')
+      await dialog.locator('[part~="choice-button"]').first().click()
+      await expect(dialog).toHaveCount(0)
+    }
 
-    test('the fill of an object styled by a class: shown black, changed out of sight', async ({ page }) => {
+    test('the fill of an object styled by a class: shown as drawn, changed in its rule', async ({ page }) => {
       await loadDrawing(page, read('styles-classe.svg'))
       await select(page, ['fond'])
-      // S2: the field shows 160F23 and the rule .fond that gives it.
-      expect(await field(page, 'fill_color')).toBe('000000')
+      // Before S2: "000000", and the attribute written out of sight.
+      expect((await field(page, 'fill_color')).toUpperCase()).toBe('160F23')
+      await page.evaluate(() => window.svgEditor.svgCanvas.setColor('fill', '#00ff00'))
+      await accept(page)
       const after = await page.evaluate(() => {
-        window.svgEditor.svgCanvas.setColor('fill', '#00ff00')
         const el = document.getElementById('fond')
         return { attribute: el.getAttribute('fill'), drawn: getComputedStyle(el).fill }
       })
-      // S2: the rule .fond is changed after a warning; no attribute is added.
-      expect(after).toEqual({ attribute: '#00ff00', drawn: 'rgb(22, 15, 35)' })
+      expect(after).toEqual({ attribute: null, drawn: 'rgb(0, 255, 0)' })
     })
 
-    test('the font of a text styled by its classes: size shown "null", changed out of sight', async ({ page }) => {
+    test('the font of a text styled by its classes: size shown, changed in its rules', async ({ page }) => {
       await loadDrawing(page, read('styles-classe.svg'))
       await select(page, ['titre'])
-      // S2: the field shows 34, given by .titre-page; the family, by .titre.
-      expect(await field(page, 'font_size')).toBe('null')
+      // Before S2: "null", and the attributes written out of sight.
+      expect(await field(page, 'font_size')).toBe('34')
+      await page.evaluate(() => window.svgEditor.svgCanvas.setFontSize(48))
+      await accept(page)
+      await page.evaluate(() => window.svgEditor.svgCanvas.setFontFamily('Courier New'))
+      await accept(page)
       const after = await page.evaluate(() => {
-        const c = window.svgEditor.svgCanvas
-        c.setFontSize(48)
-        c.setFontFamily('Courier New')
         const el = document.getElementById('titre')
         const style = getComputedStyle(el)
-        return { size: el.getAttribute('font-size'), family: el.getAttribute('font-family'), drawnSize: style.fontSize, drawnFamily: style.fontFamily.startsWith('"Space Grotesk"') }
+        return { size: el.getAttribute('font-size'), family: el.getAttribute('font-family'), drawnSize: style.fontSize, drawnFamily: style.fontFamily }
       })
-      expect(after).toEqual({ size: '48', family: 'Courier New', drawnSize: '34px', drawnFamily: true })
+      expect(after).toEqual({ size: null, family: null, drawnSize: '48px', drawnFamily: '"Courier New"' })
     })
 
     test('a value inherited from a group: written on the object, it shows', async ({ page }) => {
-      // S2 keeps this: an attribute wins over an inherited value.
+      // S2 kept this: an attribute wins over an inherited value.
       await loadDrawing(page, read('styles-classe.svg'))
       await select(page, ['libelle-pompe'])
       const drawn = await page.evaluate(() => {
@@ -270,12 +277,12 @@ test.describe('Simplification net (S0)', () => {
       expect(drawn).toBe('rgb(0, 255, 0)')
     })
 
-    test('a polygon of a file has no X, Y, W, H; a polygon of the extension has its panel', async ({ page }) => {
+    test('a polygon of a file has X, Y, W, H; a polygon of the extension has its panel', async ({ page }) => {
       await loadDrawing(page, read('familles.svg'))
       await select(page, ['pompe-corps'])
-      // S2: X, Y, W and H of its box, as for a polyline.
-      expect(await visible(page, 'selected_x')).toBe(false)
-      expect(await visible(page, 'selected_w')).toBe(false)
+      // Before S2: the angle alone. Now the box, as for a polyline.
+      expect(await visible(page, 'selected_x')).toBe(true)
+      expect(await visible(page, 'selected_w')).toBe(true)
       expect(await visible(page, 'angle')).toBe(true)
       await select(page, ['etoile'])
       expect(await visible(page, 'star_panel')).toBe(true)

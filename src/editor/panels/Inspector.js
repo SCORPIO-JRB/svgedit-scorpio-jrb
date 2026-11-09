@@ -129,7 +129,7 @@ export const isShown = (el) => !el.hidden && el.style?.display !== 'none' && !el
 export const RARE_SETTINGS = {
   tool_text_decoration_linethrough: (el) => decorationOf(el).includes('line-through'),
   tool_text_decoration_overline: (el) => decorationOf(el).includes('overline'),
-  tool_word_spacing: (el) => hasValue(el, 'word-spacing', ['0', 'normal']),
+  tool_word_spacing: (el, canvas) => hasValue(el, 'word-spacing', ['0', 'normal'], canvas),
   tool_text_length: (el) => hasValue(el, 'textLength', ['0']),
   tool_length_adjust: (el) => hasValue(el, 'textLength', ['0']) || hasValue(el, 'lengthAdjust'),
   // The group of the blur, in Effects.
@@ -150,11 +150,13 @@ const decorationOf = (el) => `${el.getAttribute?.('text-decoration') ?? ''} ${el
 /**
  * @param {Element} el
  * @param {string} name An attribute, or a property of the style attribute
+ *   or of a rule of the style sheets (lot S2)
  * @param {string[]} [none] Values that count as none
+ * @param {object} [canvas]
  * @returns {boolean}
  */
-const hasValue = (el, name, none = []) => {
-  const value = (el.getAttribute?.(name) ?? el.style?.getPropertyValue?.(name) ?? '').trim()
+const hasValue = (el, name, none = [], canvas = null) => {
+  const value = (canvas?.getStyledValue?.(el, name)?.value ?? el.getAttribute?.(name) ?? el.style?.getPropertyValue?.(name) ?? '').trim()
   return value !== '' && !none.includes(value) && !none.includes(String(Number.parseFloat(value)))
 }
 
@@ -415,7 +417,7 @@ export class Inspector {
       target?.classList.toggle('se-inspector-off', !this.rareShown.has(id))
     }
     for (const [name, settings] of Object.entries(MORE_SETTINGS)) {
-      const set = selected.some((el) => Object.values(settings).some(([attr, none]) => hasValue(el, attr, none)))
+      const set = selected.some((el) => Object.values(settings).some(([attr, none]) => hasValue(el, attr, none, canvas)))
       this.root.querySelector(`[data-more="${name}"] .se-more-toggle`)?.classList.toggle('se-more-set', set)
     }
     this.root.querySelector('#tool_align_popup')?.toggleAttribute('data-single', selected.length === 1)

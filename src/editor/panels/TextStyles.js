@@ -17,6 +17,7 @@
  */
 import { escapeHtml } from './TopBar.js'
 import { DEFAULT_TEXT_STYLES } from '../text-styles.js'
+import { styledAttribute } from './panelValues.js'
 
 export { DEFAULT_TEXT_STYLES }
 
@@ -293,10 +294,12 @@ export class TextStyles {
     if (this.button?.isConnected) this.syncButton(this.button)
     if (!text) return
     const values = valuesOf(text)
-    const family = firstFamily(text.getAttribute('font-family') || values.fontFamily)
+    // A rule of the style sheets wins over the attributes (lot S2)
+    const styled = (name) => styledAttribute(this.editor.svgCanvas, text, name)
+    const family = firstFamily(styled('font-family') || values.fontFamily)
     const option = [...this.$font.options].find((item) => firstFamily(item.value) === family)
     if (option) this.$font.value = option.value
-    this.$weight.value = String(numericWeight(text.getAttribute('font-weight') ?? values.fontWeight))
+    this.$weight.value = String(numericWeight(styled('font-weight') ?? values.fontWeight))
     for (const field of this.$custom.querySelectorAll('se-spin-input')) {
       const original = document.getElementById(field.dataset.original)
       if (original) field.value = original.value

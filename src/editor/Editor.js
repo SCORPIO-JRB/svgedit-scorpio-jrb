@@ -996,6 +996,8 @@ class Editor extends EditorStartup {
     // Deal with pathedit mode
     this.topPanel.togglePathEditMode(isNode, elems)
     this.topPanel.updateContextPanel()
+    // The rules of the style sheets that give the values shown (lot S2)
+    this.classStyles?.refresh()
     this.svgCanvas.runExtensions(
       'selectedChanged',
       /** @type {module:svgcanvas.SvgCanvas#event:ext_selectedChanged} */ {
@@ -1077,8 +1079,10 @@ class Editor extends EditorStartup {
         // This occurs for the text elements in Firefox. Not for a
         // multi-selection: the panel would show the last changed element alone
         // (and, in the angle field, its own angle).
-      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode && !elem.closest?.('metadata')) {
-        // Not the frames to export, nor other data of the editor (lot V5).
+      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode && !elem.closest?.('metadata') &&
+        elem.localName !== 'style') {
+        // Not the frames to export, nor other data of the editor (lot V5),
+        // nor a style sheet whose rule a step changed (lot S2).
         this.selectedElement = elem
       }
     })
@@ -1100,6 +1104,7 @@ class Editor extends EditorStartup {
     if (this.selectedElement && mode === 'select') {
       this.bottomPanel.updateColorpickers()
     }
+    this.classStyles?.refresh()
 
     this.svgCanvas.runExtensions(
       'elementChanged',

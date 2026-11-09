@@ -60,3 +60,16 @@ export const shapesOf = (elements) => elements.flatMap((elem) => {
   }
   return SHAPES.has(elem.tagName) ? [elem] : []
 })
+
+/**
+ * The value of a property of an element as it is drawn when a rule of the
+ * style sheets or its `style` attribute gives it (lot S2), else its
+ * attribute. A field showed the attribute, which these two override: on an
+ * object styled by a class, the fill read black.
+ * @param {object} svgCanvas
+ * @param {Element} elem
+ * @param {string} name - A property, in lower case
+ * @returns {string|null}
+ */
+export const styledAttribute = (svgCanvas, elem, name) =>
+  svgCanvas?.getStyledValue?.(elem, name)?.value ?? elem.getAttribute(name)

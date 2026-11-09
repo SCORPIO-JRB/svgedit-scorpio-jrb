@@ -559,13 +559,72 @@ export class BatchCommand extends Command {
 }
 
 /**
-*
+ * Sets the text of a style sheet. A sheet written as one text or CDATA node
+ * keeps that node: a CDATA section stays one when saved.
+ * @function module:history.setStyleSheetText
+ * @param {Element} style - A `<style>` element
+ * @param {string} text
+ * @returns {void}
+ */
+export const setStyleSheetText = (style, text) => {
+  const [node] = style.childNodes
+  if (style.childNodes.length === 1 && (node.nodeType === 3 || node.nodeType === 4)) {
+    node.nodeValue = text
+  } else {
+    style.textContent = text
+  }
+}
+
+/**
+* History command for a change of the text of a style sheet: a rule of the
+* drawing rewritten (lot S2 of the simplification audit).
+* @implements {module:history.HistoryCommand}
 */
+export class ChangeStyleSheetCommand extends Command {
+  /**
+  * @param {Element} style - The `<style>` element, its new text already set
+  * @param {string} oldText - Its text before the change
+  * @param {string} [text] - An optional string visible to user related to this change
+  */
+  constructor (style, oldText, text) {
+    super()
+    this.elem = style
+    this.oldText = oldText
+    this.newText = style.textContent
+    this.text = text || 'Change style sheet'
+  }
+
+  /**
+  * @param {module:history.HistoryEventHandler} handler
+  * @returns {void}
+  */
+  apply (handler) {
+    super.apply(handler, () => setStyleSheetText(this.elem, this.newText))
+  }
+
+  /**
+  * @param {module:history.HistoryEventHandler} handler
+  * @returns {void}
+  */
+  unapply (handler) {
+    super.unapply(handler, () => setStyleSheetText(this.elem, this.oldText))
+  }
+}
+
+/**
+* @param {Command} step
+* @param {Command} cmd
+* @returns {boolean} Whether the step is the command or holds it
+*/
+const holds = (step, cmd) => step === cmd ||
+  (step instanceof BatchCommand && step.stack.some((sub) => holds(sub, cmd)))
+
 for (const [cls, name] of [
   [MoveElementCommand, 'MoveElementCommand'],
   [InsertElementCommand, 'InsertElementCommand'],
   [RemoveElementCommand, 'RemoveElementCommand'],
   [ChangeElementCommand, 'ChangeElementCommand'],
+  [ChangeStyleSheetCommand, 'ChangeStyleSheetCommand'],
   [BatchCommand, 'BatchCommand']
 ]) {
   Object.defineProperty(cls, 'commandType', { value: name })
@@ -785,6 +844,54 @@ export class UndoManager {
   }
 
   /**
+  * Takes back the last step, when it holds `cmd`, as if it had never been
+  * added: it is undone without the history handler (the selection stays)
+  * and cannot be redone. A change the user did not confirm goes this way
+  * (lot S2). In a step that merged others, only the last of them goes.
+  * @param {Command} cmd
+  * @returns {boolean} False when the last step does not hold it, or was undone
+  */
+  withdraw (cmd) {
+    const last = this.undoStack[this.undoStack.length - 1]
+    if (!last || this.undoStackPointer !== this.undoStack.length) return false
+    if (last.mergeKey && last instanceof BatchCommand && last.stack.length > 1) {
+      const sub = last.stack[last.stack.length - 1]
+      if (!holds(sub, cmd)) return false
+      last.stack.pop()
+      sub.unapply(null)
+      return true
+    }
+    if (!holds(last, cmd)) return false
+    this.undoStack.pop()
+    this.undoStackPointer = this.undoStack.length
+    last.unapply(null)
+    return true
+  }
+
+  /**
+  * Adds a command to the change being recorded between
+  * `beginUndoableChange()` and `finishUndoableChange()`: the batch that
+  * the latter returns holds it, after the changes of the attribute. A rule
+  * of a style sheet rewritten instead of an attribute goes this way (lot S2).
+  * @param {Command} cmd
+  * @returns {boolean} False when no change is being recorded
+  */
+  recordInChange (cmd) {
+    const changeset = this.undoableChangeStack[this.undoChangeStackPointer]
+    if (!changeset) return false
+    changeset.extra.push(cmd)
+    return true
+  }
+
+  /**
+  * @returns {boolean} Whether a change is being recorded, between
+  *   `beginUndoableChange()` and `finishUndoableChange()`
+  */
+  isRecordingChange () {
+    return Boolean(this.undoableChangeStack[this.undoChangeStackPointer])
+  }
+
+  /**
   * This function tells the canvas to remember the old values of the
   * `attrName` attribute for each element sent in.  The elements and values
   * are stored on a stack, so the next call to `finishUndoableChange()` will
@@ -813,7 +920,9 @@ export class UndoManager {
       attrName,
       oldValues,
       elements,
-      contents
+      contents,
+      // Commands added by recordInChange()
+      extra: []
     }
   }
 
@@ -843,6 +952,7 @@ export class UndoManager {
         batchCmd.addSubCommand(new ChangeElementCommand(elem, changes, attrName, laidOut ? content : undefined))
       }
     }
+    changeset.extra.forEach((cmd) => batchCmd.addSubCommand(cmd))
     this.undoableChangeStack[p] = null
     return batchCmd
   }
