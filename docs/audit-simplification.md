@@ -388,6 +388,9 @@ Les deux dispositions changent : c'est une correction (section 1).
 **Mesures à la livraison** (Chromium) :
 - tests unitaires : 1 022 réussis, dont 19 nouveaux ;
 - `simplification-s2.spec.js` : 13 tests réussis ; `simplification-s0.spec.js` : 21 ; `simplification-s1.spec.js` : 12, dont la comparaison de l'ancienne disposition à `classique.json`, inchangé ;
+- suite complète de bout en bout, sous quatre processus : 569 tests sur 571. Les deux autres échouent quand la machine est chargée et passent seuls, sur S2 comme sur `master` (trois fois sur trois chacun) :
+  - « 5 000 objects… under 50 ms » (`layout-v3.spec.js`), une mesure de temps qui échouait déjà ainsi pendant S1 ;
+  - « Ctrl+click reaches the objects an open group dims » (`selection-m6.spec.js`), dont le fichier entier passe trois fois sous quatre processus ;
 - sortie comparée à `master` : 25 allers-retours sur 25 et 73 scénarios sur 73 identiques. Un fichier ouvert puis enregistré sans modification ne change pas ;
 - rapport de fidélité des fichiers du lot et des fichiers SCorp-io : le même que sur `master` ;
 - `standard`, contrôles des couleurs et des libellés, `remark` : réussis.
