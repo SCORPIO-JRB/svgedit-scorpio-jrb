@@ -223,6 +223,68 @@ export class SeCMenuDialog extends HTMLElement {
   }
 
   /**
+   * The entries that apply to the target of the menu (lot V4): the verbs of
+   * its contextual bar, at the top of the menu.
+   * @param {{id: string, label: string, hint?: string, run: () => void}[]} items
+   * @returns {void}
+   */
+  renderTargetItems (items) {
+    this.$dialog.querySelectorAll('li.se-target').forEach((li) => li.remove())
+    const first = this.$dialog.firstElementChild
+    items.forEach((item, i) => {
+      const li = document.createElement('li')
+      li.className = 'se-target'
+      if (i === items.length - 1) li.classList.add('se-target-last')
+      const link = document.createElement('a')
+      link.href = `#target-${item.id}`
+      link.textContent = item.label
+      if (item.hint) {
+        const hint = document.createElement('span')
+        hint.className = 'shortcut'
+        hint.textContent = item.hint
+        link.append(hint)
+      }
+      link.dataset.target = item.id
+      link.addEventListener('click', (evt) => {
+        evt.preventDefault()
+        this.close()
+        item.run()
+      })
+      li.append(link)
+      this.$dialog.insertBefore(li, first)
+    })
+  }
+
+  /** @returns {HTMLAnchorElement[]} The entries that can be chosen */
+  items () {
+    return [...this.$dialog.querySelectorAll('li:not(.disabled) > a')]
+      .filter((link) => link.offsetParent !== null)
+  }
+
+  /**
+   * @param {number} index
+   * @returns {void}
+   */
+  focusItem (index) {
+    this.items()[index]?.focus()
+  }
+
+  /**
+   * Hides the menu.
+   * @param {object} [options]
+   * @param {boolean} [options.restoreFocus] Back to what opened it
+   * @returns {void}
+   */
+  close ({ restoreFocus = false } = {}) {
+    this.$dialog.style.display = 'none'
+    this._shadowRoot.activeElement?.blur()
+    if (restoreFocus) {
+      const opener = svgEditor.layout?.contextBar?.menuOpener
+      if (opener?.isConnected && opener !== document.body) opener.focus?.()
+    }
+  }
+
+  /**
    * Adds a menu item registered by an extension (see `contextmenu.add`). A
    * click dispatches `change` with the item id, which the editor routes to the
    * extension's action. The label is inserted as text, never as markup.
@@ -309,8 +371,13 @@ export class SeCMenuDialog extends HTMLElement {
       }
       current.$dialog.style.top = y + 'px'
       current.$dialog.style.left = x + 'px'
+      // The entries of the target first (lot V4), then those of every object.
+      current.renderTargetItems(svgEditor.layout?.contextBar?.menuItems?.() ?? [])
       current.refreshShortcuts()
       current.$dialog.style.display = 'block'
+      // Opened from the keyboard (Shift+F10, "…" of the contextual bar):
+      // the focus goes to the first entry.
+      if (e.button !== 2) current.focusItem(0)
       // Inside the window, which may be smaller than the screen.
       const box = current.$dialog.getBoundingClientRect()
       const margin = 8
@@ -326,6 +393,46 @@ export class SeCMenuDialog extends HTMLElement {
         current.$dialog.style.display = 'none'
       }
     }
+    // Escape closes the menu however it opened, and only the menu: the
+    // selection stays.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || current.$dialog.style.display !== 'block') return
+      e.preventDefault()
+      e.stopPropagation()
+      current.close({ restoreFocus: true })
+    }, true)
+    // Arrows, Home and End move between the entries, Enter and Space choose,
+    // Escape closes and gives the focus back.
+    this.$dialog.addEventListener('keydown', (e) => {
+      const items = current.items()
+      const index = items.indexOf(current._shadowRoot.activeElement)
+      const go = (i) => {
+        e.preventDefault()
+        e.stopPropagation()
+        current.focusItem((i + items.length) % items.length)
+      }
+      switch (e.key) {
+        case 'ArrowDown': go(index + 1); break
+        case 'ArrowUp': go(index < 0 ? items.length - 1 : index - 1); break
+        case 'Home': go(0); break
+        case 'End': go(items.length - 1); break
+        case 'Enter':
+        case ' ': {
+          e.preventDefault()
+          e.stopPropagation()
+          const item = current._shadowRoot.activeElement
+          current.close({ restoreFocus: true })
+          item?.click()
+          break
+        }
+        case 'Escape':
+        case 'Tab':
+          e.preventDefault()
+          e.stopPropagation()
+          current.close({ restoreFocus: true })
+          break
+      }
+    })
     const onMenuClickHandler = (e, action) => {
       // The clicked item takes the focus: give it back to the page, or the
       // keyboard shortcuts (Mod+V, Delete...) stop working until the canvas

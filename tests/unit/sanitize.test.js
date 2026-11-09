@@ -39,7 +39,8 @@ describe('sanitize', function () {
     assert.equal(rect.getAttribute('stroke'), 'blue')
     assert.equal(rect.getAttribute('stroke-width'), '40')
     assert.equal(rect.hasAttribute('style'), false)
-    assert.equal(rect.hasAttribute('vector-effect'), false)
+    // An attribute since V6 (section 7, option fidelity.attributes)
+    assert.equal(rect.getAttribute('vector-effect'), 'non-scaling-stroke')
   })
 
   it('sanitizeSvg() removes disallowed attributes but keeps data-*', function () {

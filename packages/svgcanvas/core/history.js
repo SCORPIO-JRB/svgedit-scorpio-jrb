@@ -9,6 +9,7 @@
 import { NS } from './namespaces.js'
 import { getHref, setHref, getRotationAngle, getBBox } from './utilities.js'
 import { getTransformList, transformListToTransform, transformPoint } from './math.js'
+import { getTextSource, setTextSource, cloneContent, restoreContent, sameContent, LAYOUT_ATTRS } from './text-lines.js'
 
 // Attributes that affect an element's bounding box. Only these require
 // recalculating the rotation center when changed.
@@ -116,10 +117,12 @@ export class Command {
   }
 
   /**
-    * @returns {string} String with element associated with this command
+    * @returns {string} Name of the class of this command
   */
   type () {
-    return this.constructor.name
+    // Written out: a minifier renames the classes, and the handlers of the
+    // history compare this name (lot V5).
+    return this.constructor.commandType ?? this.constructor.name
   }
 }
 
@@ -340,6 +343,21 @@ export class RemoveElementCommand extends Command {
 */
 
 /**
+* Sets the content of an element: the lines of a text are laid out.
+* @param {Element} elem
+* @param {string|null} value
+* @returns {void}
+*/
+const setText = (elem, value) => {
+  const content = value === null || value === undefined ? '' : String(value)
+  if (elem.localName === 'text') {
+    setTextSource(elem, content)
+  } else {
+    elem.textContent = content
+  }
+}
+
+/**
 * History command to make a change to an element.
 * Usually an attribute change, but can also be textcontent.
 * @implements {module:history.HistoryCommand}
@@ -349,16 +367,25 @@ export class ChangeElementCommand extends Command {
   * @param {Element} elem - The DOM element that was changed
   * @param {module:history.CommandAttributes} attrs - Attributes to be changed with the values they had *before* the change
   * @param {string} text - An optional string visible to user related to this change
+  * @param {{nodes: Node[], attrs: Array<string|null>}} [oldContent] - The
+  *   content of the element before the change (from `cloneContent`), when
+  *   the change laid it out again (a text of several lines): the step puts
+  *   back that content and the one after, exactly
    */
-  constructor (elem, attrs, text) {
+  constructor (elem, attrs, text, oldContent) {
     super()
     this.elem = elem
     this.text = text ? `Change ${elem.tagName} ${text}` : `Change ${elem.tagName}`
     this.newValues = {}
     this.oldValues = attrs
+    if (oldContent) {
+      this.oldContent = oldContent
+      this.newContent = cloneContent(elem)
+    }
     for (const attr in attrs) {
       if (attr === '#text') {
-        this.newValues[attr] = (elem) ? elem.textContent : ''
+        // The content as typed: the lines of a text separated by "\n"
+        this.newValues[attr] = (elem) ? getTextSource(elem) : ''
       } else if (attr === '#href') {
         this.newValues[attr] = getHref(elem)
       } else {
@@ -379,7 +406,7 @@ export class ChangeElementCommand extends Command {
       Object.entries(this.newValues).forEach(([attr, value]) => {
         const isNullishOrEmpty = value === null || value === undefined || value === ''
         if (attr === '#text') {
-          this.elem.textContent = value === null || value === undefined ? '' : String(value)
+          if (!this.newContent) setText(this.elem, value)
         } else if (attr === '#href') {
           if (isNullishOrEmpty) {
             this.elem.removeAttribute('href')
@@ -390,12 +417,17 @@ export class ChangeElementCommand extends Command {
         } else if (isNullishOrEmpty) {
           this.elem.setAttribute(attr, '')
           this.elem.removeAttribute(attr)
+        } else if (attr.startsWith('se:') && !this.elem.hasAttribute(attr)) {
+          // An attribute of the editor namespace (a lock, lot V7) is created
+          // in that namespace, as the parser of a saved file would.
+          this.elem.setAttributeNS(NS.SE, attr, value)
         } else {
           this.elem.setAttribute(attr, value)
         }
 
         if (attr === 'transform') { bChangedTransform = true }
       })
+      if (this.newContent) restoreContent(this.elem, this.newContent)
 
       // relocate rotational transform, if necessary
       if (!bChangedTransform) {
@@ -416,7 +448,7 @@ export class ChangeElementCommand extends Command {
       Object.entries(this.oldValues).forEach(([attr, value]) => {
         const isNullishOrEmpty = value === null || value === undefined || value === ''
         if (attr === '#text') {
-          this.elem.textContent = value === null || value === undefined ? '' : String(value)
+          if (!this.oldContent) setText(this.elem, value)
         } else if (attr === '#href') {
           if (isNullishOrEmpty) {
             this.elem.removeAttribute('href')
@@ -426,11 +458,14 @@ export class ChangeElementCommand extends Command {
           }
         } else if (isNullishOrEmpty) {
           this.elem.removeAttribute(attr)
+        } else if (attr.startsWith('se:') && !this.elem.hasAttribute(attr)) {
+          this.elem.setAttributeNS(NS.SE, attr, value)
         } else {
           this.elem.setAttribute(attr, value)
         }
         if (attr === 'transform') { bChangedTransform = true }
       })
+      if (this.oldContent) restoreContent(this.elem, this.oldContent)
       // relocate rotational transform, if necessary
       if (!bChangedTransform) {
         relocateRotationCenter(this.elem, Object.keys(this.oldValues))
@@ -526,6 +561,37 @@ export class BatchCommand extends Command {
 /**
 *
 */
+for (const [cls, name] of [
+  [MoveElementCommand, 'MoveElementCommand'],
+  [InsertElementCommand, 'InsertElementCommand'],
+  [RemoveElementCommand, 'RemoveElementCommand'],
+  [ChangeElementCommand, 'ChangeElementCommand'],
+  [BatchCommand, 'BatchCommand']
+]) {
+  Object.defineProperty(cls, 'commandType', { value: name })
+}
+
+/**
+ * Two steps of the same kind on the same elements, added closer than this
+ * (in ms), form a single step: nudges with the arrows, characters typed in a
+ * text (lot V5, S4).
+ */
+export const MERGE_DELAY = 1000
+
+/** Steps kept by default; the oldest go first. */
+export const HISTORY_LIMIT = 1000
+
+/**
+ * @param {Element[]} a
+ * @param {Element[]} b
+ * @returns {boolean} The same elements, in any order
+ */
+const sameElements = (a, b) => {
+  if (!a || !b || a.length !== b.length) return false
+  const set = new Set(a)
+  return b.every((elem) => set.has(elem))
+}
+
 export class UndoManager {
   /**
   * @param {module:history.HistoryEventHandler} historyEventHandler
@@ -534,6 +600,12 @@ export class UndoManager {
     this.handler_ = historyEventHandler || null
     this.undoStackPointer = 0
     this.undoStack = []
+    /** Steps kept; 0 keeps them all. */
+    this.limit = HISTORY_LIMIT
+    /** Clock of the merges, replaceable in tests. */
+    this.now = () => Date.now()
+    this.mergeKey_ = null
+    this.mergeDelay_ = MERGE_DELAY
 
     // this is the stack that stores the original values, the elements and
     // the attribute name for begin/finish
@@ -624,8 +696,92 @@ export class UndoManager {
     if (this.undoStackPointer < this.undoStack.length && this.undoStack.length > 0) {
       this.undoStack = this.undoStack.splice(0, this.undoStackPointer)
     }
+    const now = this.now()
+    const key = this.mergeKey_
+    if (key) {
+      const elements = cmd.elements()
+      const last = this.undoStack[this.undoStack.length - 1]
+      if (last && last.mergeKey === key && now - last.addedAt <= this.mergeDelay_ &&
+        sameElements(last.mergeElements, elements)) {
+        let batch = last
+        if (!(last instanceof BatchCommand)) {
+          batch = new BatchCommand(last.text)
+          batch.addSubCommand(last)
+          batch.mergeKey = key
+          batch.mergeElements = last.mergeElements
+          this.undoStack[this.undoStack.length - 1] = batch
+        }
+        batch.addSubCommand(cmd)
+        batch.addedAt = now
+        this.undoStackPointer = this.undoStack.length
+        return
+      }
+      cmd.mergeKey = key
+      cmd.mergeElements = elements
+    }
+    cmd.addedAt = now
     this.undoStack.push(cmd)
+    if (this.limit > 0 && this.undoStack.length > this.limit) {
+      this.undoStack.splice(0, this.undoStack.length - this.limit)
+    }
     this.undoStackPointer = this.undoStack.length
+  }
+
+  /**
+  * Runs `fn`; each step it adds joins the previous step if that one was added
+  * under the same key, on the same elements, less than `MERGE_DELAY` ago.
+  * @param {string} key - Kind of step, such as "nudge" or "text"
+  * @param {() => any} fn
+  * @param {number} [delay=MERGE_DELAY] - In ms; Infinity joins the steps
+  *   until `endMerge()`
+  * @returns {any} What `fn` returns
+  */
+  merging (key, fn, delay = MERGE_DELAY) {
+    const previous = [this.mergeKey_, this.mergeDelay_]
+    this.mergeKey_ = key
+    this.mergeDelay_ = delay
+    try {
+      return fn()
+    } finally {
+      [this.mergeKey_, this.mergeDelay_] = previous
+    }
+  }
+
+  /**
+  * Puts `cmd` before the last step, the two forming one step: a creation
+  * recorded once what is typed in it already is (lot V5).
+  * @param {Command} cmd
+  * @returns {boolean} False when there is no last step, or it was undone
+  */
+  prependToLast (cmd) {
+    const last = this.undoStack[this.undoStack.length - 1]
+    if (!last || this.undoStackPointer !== this.undoStack.length) return false
+    const batch = new BatchCommand(cmd.text)
+    batch.addSubCommand(cmd)
+    batch.addSubCommand(last)
+    batch.mergeKey = last.mergeKey
+    batch.mergeElements = last.mergeElements
+    batch.addedAt = last.addedAt
+    this.undoStack[this.undoStack.length - 1] = batch
+    return true
+  }
+
+  /**
+  * The next step will not join the last one, whatever its key: the editing
+  * of a text ends, for instance.
+  * @returns {void}
+  */
+  endMerge () {
+    const last = this.undoStack[this.undoStack.length - 1]
+    if (last) last.mergeKey = null
+  }
+
+  /**
+  * @returns {Command[]} The steps, oldest first; those from
+  *   `getUndoStackSize()` on can be redone
+  */
+  getSteps () {
+    return [...this.undoStack]
   }
 
   /**
@@ -642,16 +798,22 @@ export class UndoManager {
     const p = ++this.undoChangeStackPointer
     let i = elems.length
     const oldValues = new Array(i); const elements = new Array(i)
+    // The content of a text, which its lines make: a change of it, or of
+    // its font, lays it out again (texts of several lines).
+    const contents = new Array(i)
+    const layout = attrName === '#text' || LAYOUT_ATTRS.has(attrName)
     while (i--) {
       const elem = elems[i]
       if (!elem) { continue }
       elements[i] = elem
-      oldValues[i] = elem.getAttribute(attrName)
+      oldValues[i] = attrName === '#text' ? getTextSource(elem) : elem.getAttribute(attrName)
+      if (layout && elem.localName === 'text') contents[i] = cloneContent(elem)
     }
     this.undoableChangeStack[p] = {
       attrName,
       oldValues,
-      elements
+      elements,
+      contents
     }
   }
 
@@ -672,8 +834,13 @@ export class UndoManager {
       if (!elem) { continue }
       const changes = {}
       changes[attrName] = changeset.oldValues[i]
-      if (changes[attrName] !== elem.getAttribute(attrName)) {
-        batchCmd.addSubCommand(new ChangeElementCommand(elem, changes, attrName))
+      // The content of a text is not an attribute: typing it was never
+      // recorded (lot V5).
+      const current = attrName === '#text' ? getTextSource(elem) : elem.getAttribute(attrName)
+      if (changes[attrName] !== current) {
+        const content = changeset.contents?.[i]
+        const laidOut = content && !sameContent(content, elem)
+        batchCmd.addSubCommand(new ChangeElementCommand(elem, changes, attrName, laidOut ? content : undefined))
       }
     }
     this.undoableChangeStack[p] = null

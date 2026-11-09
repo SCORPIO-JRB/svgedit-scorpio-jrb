@@ -1,4 +1,5 @@
 import { jGraduate } from './jgraduate/jQuery.jGraduate.js'
+import { parseColor, toHex } from '../color/color.js'
 /**
  *
  */
@@ -88,6 +89,10 @@ class PaintBox {
       }
     } else if (color.startsWith('#')) {
       opts.solidColor = color.substr(1)
+    } else {
+      // A named or functional colour (red, rgb(…), hsl(…)) is shown too.
+      const parsed = parseColor(color)
+      if (parsed) opts.solidColor = toHex(parsed)
     }
     return new jGraduate.Paint(opts)
   }

@@ -524,3 +524,40 @@ export const snapPoint = (index, x, y, options) => {
   const result = snapMove(index, frame, 0, 0, { ...options, spacing: false })
   return { x: x + result.dx, y: y + result.dy, guides: result.guides }
 }
+
+/**
+ * Ports are magnets first (lot V7; plan v2, 2.11): when a port of what moves
+ * comes within reach of a port of a symbol that does not, the move puts one
+ * on the other, whatever the alignments and the grid would give.
+ * @param {Array<{x: number, y: number}>} moving The ports of what moves, at
+ *   the start of the gesture
+ * @param {Array<{x: number, y: number}>} targets The ports of the other symbols
+ * @param {number} dx The move asked by the pointer
+ * @param {number} dy
+ * @param {number} tolerance In units of the drawing
+ * @returns {{dx: number, dy: number, guides: Guide[]}|null} Null when no
+ *   port is within reach
+ */
+export const snapPorts = (moving, targets, dx, dy, tolerance) => {
+  let best = null
+  for (const p of moving) {
+    const x = p.x + dx
+    const y = p.y + dy
+    for (const t of targets) {
+      const d = Math.hypot(t.x - x, t.y - y)
+      if (d <= tolerance && (!best || d < best.d)) best = { d, dx: t.x - p.x, dy: t.y - p.y, at: t }
+    }
+  }
+  if (!best) return null
+  const { at } = best
+  // A cross on the port reached
+  const arm = tolerance * 2
+  return {
+    dx: best.dx,
+    dy: best.dy,
+    guides: [
+      { type: 'line', axis: 'x', at: at.x, from: at.y - arm, to: at.y + arm },
+      { type: 'line', axis: 'y', at: at.y, from: at.x - arm, to: at.x + arm }
+    ]
+  }
+}

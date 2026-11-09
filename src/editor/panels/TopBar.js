@@ -89,6 +89,9 @@ export class TopBar {
         <div role="menuitem" data-target="tool_export"><span>${t('layout.export_image')}</span></div>
         <div role="menuitem" data-target="tool_save_as" hidden><span>${t('layout.export_svg')}</span></div>
       </se-popover>`
+    // The SVG of each frame, or of the content (lot V5): entries written when
+    // the menu opens.
+    this.exportRuns = []
     this.initHost()
     this.$exportMenu = root.querySelector('#se-export-menu')
     root.querySelector('#se-export').addEventListener('click', (e) => {
@@ -96,6 +99,11 @@ export class TopBar {
       this.$exportMenu.toggle(e.currentTarget)
     })
     this.$exportMenu.addEventListener('click', (e) => {
+      const frameItem = e.target.closest('[data-export]')
+      if (frameItem) {
+        this.exportRuns[Number(frameItem.dataset.export)]?.()
+        return
+      }
       const item = e.target.closest('[data-target]')
       if (item) this.byId(item.dataset.target)?.click()
     })
@@ -205,6 +213,23 @@ export class TopBar {
     for (const item of this.$exportMenu.querySelectorAll('[data-target]')) {
       item.hidden = !this.byId(item.dataset.target)
     }
+    for (const item of this.$exportMenu.querySelectorAll('[data-export], .se-export-sep')) item.remove()
+    const entries = this.editor.frames?.exportEntries() ?? []
+    this.exportRuns = entries.map((entry) => entry.run)
+    if (!entries.length) return
+    const separator = document.createElement('div')
+    separator.setAttribute('role', 'separator')
+    separator.className = 'se-export-sep'
+    this.$exportMenu.prepend(separator)
+    entries.reverse().forEach((entry, i) => {
+      const item = document.createElement('div')
+      item.setAttribute('role', 'menuitem')
+      item.dataset.export = String(entries.length - 1 - i)
+      const label = document.createElement('span')
+      label.textContent = entry.label
+      item.append(label)
+      this.$exportMenu.prepend(item)
+    })
   }
 
   /**

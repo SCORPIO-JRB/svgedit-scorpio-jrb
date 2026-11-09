@@ -85,6 +85,11 @@
   --se-grid-major: rgb(128 128 128 / 42%);
   --se-guide: #e0115f;
   --se-guide-text: #fff;
+  /* Frames to export (lot V5): a grey outline and its name, above it. */
+  --se-frame: #8c8c8c;
+  --se-frame-label: #a3a3a3;
+  /* The page under the file in the preview (V6), white as in the canvas */
+  --se-preview-page: #fff;
 
   /*
    * Markers drawn over a colour being picked (gradient stops, opacity bar):
@@ -92,6 +97,11 @@
    */
   --se-marker-dark: #000;
   --se-marker-light: #fff;
+  /* Ring of the cursors of the colour window, and the checkerboard shown
+     under a transparent colour: the same in both themes. */
+  --se-thumb-shadow: rgb(0 0 0 / 45%);
+  --se-checker-light: #fff;
+  --se-checker-dark: #cbcbcb;
 
   /*
    * The drawing does not inherit the interface: a text without font-family
@@ -218,6 +228,9 @@
   --se-grid-major: rgb(96 96 96 / 38%);
   --se-guide: #e0115f;
   --se-guide-text: #fff;
+  --se-frame: #767676;
+  --se-frame-label: #5e5e5e;
+  --se-preview-page: #fff;
 
   --se-shadow-float: 0 4px 16px rgb(0 0 0 / 12%);
   --se-shadow-menu: 0 8px 24px rgb(0 0 0 / 16%);

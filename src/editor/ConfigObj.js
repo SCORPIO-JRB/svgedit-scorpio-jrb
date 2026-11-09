@@ -19,7 +19,7 @@ export const regexEscape = function (str) {
  * in the top bar.
  * @type {string[]}
  */
-export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins', 'homeUrl', 'breadcrumb']
+export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins', 'homeUrl', 'breadcrumb', 'colorLibraries', 'symbolLibraries', 'fluids', 'templates']
 
 /**
  * Tells whether a configuration key must be ignored when it comes from the URL.
@@ -86,7 +86,13 @@ export default class ConfigObj {
       // (240 to 420), and the tab open.
       panel_open: 'true',
       panel_width: '280',
-      panel_tab: 'properties'
+      panel_tab: 'properties',
+      // Contextual bar above the selection (lot V4), on unless turned off.
+      context_bar: 'true',
+      // Colour window (canvas layout): the format of its fields (hex, rgb,
+      // hsl) and the recent colours, hexadecimal, most recent first.
+      color_format: 'hex',
+      recent_colors: ''
     }
     /**
       * @tutorial ConfigOptions
@@ -121,6 +127,12 @@ export default class ConfigObj {
       * @property {"canvas"|"classic"} [layout="canvas"] The layout of the editor (lot V3): "canvas" puts the canvas under a top bar of 40 px, the tools in a floating bar and properties, layers and code in a right panel that Ctrl+\ hides; "classic" is the layout of SVG-Edit, kept until the end of V4. Read at start; `?layout=classic` in the URL.
       * @property {string} [homeUrl=""] Link of the home button of the top bar, given by the host application (canvas layout); http(s) only, never from the URL.
       * @property {Array<string|{label: string, href?: string}>} [breadcrumb=[]] Breadcrumb of the host application before the name of the document, such as `["Le Perreux", {label: "Synoptiques", href: "/synoptiques"}]` (canvas layout); never from the URL.
+      * @property {Array<{id: string, label: string, fontFamily: string, fontSize: number, fontWeight: number, fill: string}>|null} [textStyles=null] Named text styles of the Style ▾ window (lot V4): each writes font-family, font-size, font-weight and fill, and is recognised by these values. Null for the styles of the SCorp-io synoptics; never from the URL.
+      * @property {Array<{id: string, name: string, groups: Array<{name: string, colors: Array<{value: string, name?: string, step?: string}>}>}>|null} [colorLibraries=null] Colour libraries of the Libraries tab of the colour window (canvas layout). A name is a translation key or a text; a colour of a scale may give a step, shown after the name of its group. Null for the colours of the Scorp-io synoptics and of the Scorp-io design system; never from the URL.
+      * @property {Array<{id: string, name: string, categories: Array<{id: string, name: string}>, symbols: Array<object>}>|null} [symbolLibraries=null] Symbol libraries of the Library drawer (lot V7): each symbol has an id, a version, a name (translation key or text), a category, keywords, a viewBox and size, the markup of its drawing, its ports and the attributes of a new instance (see gtb-symbols.js). Null for the GTB symbols of the editor; never from the URL.
+      * @property {Array<{id: string, name: string, stroke: string, width: number, dash?: string, arrow?: boolean, className?: string}>|null} [fluids=null] Styles of the orthogonal connectors (lot V7), one per fluid; the first is that of the first connector. Null for the fluids of the editor (fluids.js); never from the URL.
+      * @property {"auto"|"orthogonal"|"straight"} [connectorRouting="auto"] Route of a new connector (lot V7): orthogonal from a port of a symbol and straight between two plain objects ("auto"), always orthogonal, or always straight.
+      * @property {Array<{id: string, name: string, description?: string, width?: number, height?: number, layers: Array<{name: string, locked?: boolean, content?: string}>, current?: string, frames?: Array<object>, grid?: {show?: boolean, snap?: boolean, step?: number}}>|null} [templates=null] Templates of the document menu (lot V7). Null for blank, technical diagram and synoptic 1 920 × 1 080; never from the URL.
       * @property {"borderless"|"scroll"} [view="borderless"] The view of the drawing (lot V2): "borderless" has no edge and no scroll bar, the wheel scrolls it and Ctrl+wheel zooms from 1 % to 6 400 %; "scroll" is the canvas of SVG-Edit with scroll bars, kept until the end of V3. Read at start.
       * @property {PlainObject} [initFill] Init fill properties
       * @property {string} [initFill.color="FF0000"] The initial fill color. Must be a hex code string. Defaults to solid red.
@@ -137,6 +149,7 @@ export default class ConfigObj {
       * @property {module:SVGEditor.XYDimensions} [dimensions=[640, 480]] The default width/height of a new document. Use an array in `setConfig` (e.g., `[800, 600]`) and comma separated numbers in the URL.
       * @property {boolean} [gridSnapping=false] Snap to the grid: the edges and middles of what is moved, resized or drawn come to its lines within 6 pixels of the screen. Set in Editor Options. Apart from `showGrid` since V2.
       * @property {string} [gridColor=""] A colour, e.g. '#000', for the lines of the grid; empty, those of the theme (since V2). Set in Editor Options.
+      * @property {Object<string, boolean>} [fidelity={}] The corrections of section 7 of the plan v2 (lot V6) that the editor makes to a file, each on unless set to false: `rawValues`, `styleProperties`, `attributes`, `gradientUnits`, `layerOrder`, `emptyValues`, `nestedSvg`, `stableSave`.
       * @property {string} [baseUnit="px"] Set in Editor Options.
       * @property {Float} [snappingStep=10] The step of the grid: where its lines are and where the drawing snaps. Set in Editor Options.
       * @property {Integer} [gridSubdivisions=10] A major line of the grid every so many steps (lot V2). Set in Editor Options.
@@ -166,6 +179,12 @@ export default class ConfigObj {
       layout: 'canvas',
       homeUrl: '',
       breadcrumb: [],
+      textStyles: null,
+      colorLibraries: null,
+      symbolLibraries: null,
+      fluids: null,
+      templates: null,
+      connectorRouting: 'auto',
       initFill: {
         color: 'FF0000', // solid red
         opacity: 1
@@ -210,6 +229,12 @@ export default class ConfigObj {
       shiftWheelZoom: false,
       // SOURCE OUTPUT BEHAVIOR
       dynamicOutput: false,
+      // The corrections of the rewrites of a file (plan v2, section 7, lot
+      // V6), each on unless set to false: rawValues, styleProperties,
+      // attributes, gradientUnits, layerOrder, emptyValues, nestedSvg,
+      // stableSave (see
+      // packages/svgcanvas/core/fidelity.js)
+      fidelity: {},
       // URL BEHAVIOR CONFIGURATION
       preventAllURLConfig: false,
       preventURLContentLoading: false,

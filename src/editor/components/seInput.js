@@ -88,6 +88,8 @@ export class SEInput extends HTMLElement {
     switch (name) {
       case 'title':
         this.$div.setAttribute('title', `${t(newValue)}`)
+        // The field says what it is to a screen reader, as se-spin-input
+        this.$input.setAttribute('aria-label', t(newValue))
         break
       case 'src':
         this.$img.setAttribute('src', newValue)
@@ -99,6 +101,7 @@ export class SEInput extends HTMLElement {
       case 'label':
         this.$label.textContent = t(newValue)
         this.$img.remove()
+        if (!this.hasAttribute('title')) this.$input.setAttribute('aria-label', t(newValue))
         break
       case 'value':
         this.$input.value = newValue

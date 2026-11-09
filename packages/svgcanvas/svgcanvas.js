@@ -27,7 +27,9 @@ import {
   init as undoInit,
   changeSelectedAttributeNoUndoMethod,
   changeSelectedAttributeMethod,
-  changeSelectedAttributeEachMethod
+  changeSelectedAttributeEachMethod,
+  changeSelectedAttributesMethod,
+  groupHistoryMethod
 } from './core/undo.js'
 import { init as selectionInit } from './core/selection.js'
 import { init as textActionsInit, textActionsMethod } from './core/text-actions.js'
@@ -35,6 +37,11 @@ import { init as eventInit } from './core/event.js'
 import { init as multiTransformInit } from './core/multi-transform.js'
 import { init as scaleToolInit } from './core/scale-tool.js'
 import { init as selectionNavInit } from './core/selection-nav.js'
+import { init as framesInit } from './core/frames.js'
+import { init as structureInit } from './core/structure.js'
+import { init as portsInit } from './core/ports.js'
+import { init as symbolsInit } from './core/symbols.js'
+import { init as connectorsInit } from './core/connectors.js'
 import {
   init as jsonInit,
   getJsonFromSvgElements,
@@ -279,6 +286,11 @@ class SvgCanvas {
     svgInit(this)
     draw.init(this)
     elemGetSet.init(this)
+    framesInit(this)
+    structureInit(this)
+    portsInit(this)
+    symbolsInit(this)
+    connectorsInit(this)
 
     // prevent links from being followed in the canvas
     const handleLinkInCanvas = e => {
@@ -1421,7 +1433,8 @@ class SvgCanvas {
     this.cleanupElement = cleanupElement
     this.remapElement = remapElement
     this.recalculateDimensions = recalculateDimensions
-    this.sanitizeSvg = sanitizeSvg
+    // The corrections of section 7 (V6) follow the option fidelity
+    this.sanitizeSvg = (node, removed) => sanitizeSvg(node, removed, this.curConfig.fidelity)
     this.pasteElements = pasteElementsMethod // Remembers the current selected elements on the clipboard.
     this.identifyLayers = draw.identifyLayers
     this.createLayer = draw.createLayer
@@ -1440,6 +1453,8 @@ class SvgCanvas {
     this.changeSelectedAttributeNoUndo = changeSelectedAttributeNoUndoMethod // This function makes the changes to the elements. It does not add the change to the history stack.
     this.changeSelectedAttribute = changeSelectedAttributeMethod // Change the given/selected element and add the original value to the history stack.
     this.changeSelectedAttributeEach = changeSelectedAttributeEachMethod // Give each element its own new value, as one undo step.
+    this.changeSelectedAttributes = changeSelectedAttributesMethod // Several attributes, as one undo step.
+    this.groupHistory = groupHistoryMethod // The changes of a function, as one undo step.
     this.setBlurNoUndo = setBlurNoUndo // Sets the `stdDeviation` blur value on the selected element without being undoable.
     this.setBlurOffsets = setBlurOffsets // Sets the `x`, `y`, `width`, `height` values of the filter element in order to make the blur not be clipped. Removes them if not neeeded.
     this.setBlur = setBlur // Adds/updates the blur filter to the selected element.

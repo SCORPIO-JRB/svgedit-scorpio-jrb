@@ -82,12 +82,13 @@ describe('Importing an SVG file (lot 4)', () => {
     const file = `<svg xmlns="${NS.SVG}" width="10" height="10"><style>.a { fill: red }</style>` +
       '<rect id="t" class="a" style="fill: blue; stroke: green" width="5" height="5"/></svg>'
 
+    // As the file wrote it, since V6 (option fidelity.styleProperties)
     const rect = symbolOf(svgCanvas.importSvgString(file)).querySelector('rect')
-    assert.equal(rect.getAttribute('style'), 'fill:blue')
+    assert.equal(rect.getAttribute('style'), 'fill: blue')
     assert.equal(rect.getAttribute('stroke'), 'green')
 
     svgCanvas.setSvgString(file)
-    assert.equal(document.getElementById('t').getAttribute('style'), 'fill:blue')
+    assert.equal(document.getElementById('t').getAttribute('style').replace(/;pointer-events:inherit$/, ''), 'fill: blue')
     // Without a rule for it, a property becomes an attribute, as before
     svgCanvas.setSvgString(`<svg xmlns="${NS.SVG}" width="10" height="10"><rect id="t" style="fill: blue" width="5" height="5"/></svg>`)
     assert.equal(document.getElementById('t').getAttribute('style'), null)

@@ -12,6 +12,7 @@ import { transformListToTransform, transformBox, transformPoint, matrixMultiply,
 import { NS } from './namespaces'
 import { warn } from '../common/logger.js'
 import { convertUnit } from './units.js'
+import { CONTOUR_TAGS, contourPath, baselinesPath, matrixBetween, matrixAttribute } from './outline.js'
 import {
   CORNER_ANGLES, GRIP_ANGLES, formatAngle, formatLength, formatPosition, formatSize, gripLayout,
   namedResizeCursors, resizeCursor, rotateCursor
@@ -314,6 +315,8 @@ export class Selector {
   * @returns {void}
   */
   showGrips (show) {
+    // A text being edited shows its frame only: what is typed is its own.
+    if (show && svgCanvas.getCurrentMode?.() === 'textedit') show = false
     const bShow = show ? 'inline' : 'none'
     selectModule.getSelectorManager().selectorGripsGroup.setAttribute('display', bShow)
     const elem = this.selectedElement
@@ -536,8 +539,28 @@ export class SelectorManager {
   }
 
   /**
-  * Outlines the element a click would select, with the frame that click
-  * would draw. Null hides the outline.
+  * The outline drawn on hover (lot V4): the real outline of a shape or a
+  * path, the baselines of a text, in the same matrix as the element. Null
+  * for the others, which get the frame of their selector.
+  * @param {Element} elem
+  * @returns {{d: string, transform: string}|null}
+  */
+  hoverGeometry (elem) {
+    let d = null
+    if (CONTOUR_TAGS.has(elem.tagName)) {
+      d = contourPath(elem)
+    } else if (elem.tagName === 'text') {
+      d = baselinesPath(elem)
+    }
+    if (!d) { return null }
+    const m = matrixBetween(elem, this.selectorParentGroup)
+    return m ? { d, transform: matrixAttribute(m) } : null
+  }
+
+  /**
+  * Outlines the element a click would select: the outline of a shape, the
+  * baselines of a text, the frame a click would draw around the others.
+  * Null hides the outline.
   * @param {Element|null} elem
   * @returns {void}
   */
@@ -552,7 +575,12 @@ export class SelectorManager {
     if (elem === this.hoverTarget && !outline.hasAttribute('display')) { return }
     let frame = null
     try {
-      frame = frameGeometry(elem)
+      frame = this.hoverGeometry(elem)
+    } catch (e) {
+      frame = null
+    }
+    try {
+      frame = frame || frameGeometry(elem)
     } catch (e) {
       frame = null
     }
@@ -620,7 +648,9 @@ export class SelectorManager {
       if (sb.y + sb.height > maxY) { maxY = sb.y + sb.height }
     }
     if (minX === Infinity) { return null }
-    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    // During a drag, the frames have moved by the translation of their group.
+    const { dx = 0, dy = 0 } = this.dragOffset ?? {}
+    return { x: minX + dx, y: minY + dy, width: maxX - minX, height: maxY - minY }
   }
 
   /**
@@ -828,6 +858,29 @@ export class SelectorManager {
   }
 
   /**
+  * Moves the frames of the selection, its common frame and its grips by a
+  * translation on the screen, during a drag (lot V5, S1). Each frame was
+  * computed again for each element on each move: 60 ms a move at 5 000
+  * objects. The frames are drawn again once, when the drag ends.
+  * @param {number} dx - Screen pixels
+  * @param {number} dy - Screen pixels
+  * @returns {void}
+  */
+  setDragOffset (dx, dy) {
+    this.dragOffset = { dx, dy }
+    this.selectionGroup?.setAttribute('transform', `translate(${dx},${dy})`)
+  }
+
+  /**
+  * Ends the translation of `setDragOffset`.
+  * @returns {void}
+  */
+  clearDragOffset () {
+    this.dragOffset = null
+    this.selectionGroup?.removeAttribute('transform')
+  }
+
+  /**
   * Keeps the common frame on a box during a gesture on the whole selection,
   * whatever the selectors' boxes; null releases it.
   * @param {module:utilities.BBoxObject|null} box - Screen coordinates
@@ -915,8 +968,8 @@ export class SelectorManager {
       if (selector) { selector.hasGrips = false }
     })
     this.multiGrips = true
-    if (this.selectorGripsGroup.parentNode !== this.selectorParentGroup) {
-      this.selectorParentGroup.append(this.selectorGripsGroup)
+    if (this.selectorGripsGroup.parentNode !== this.selectionGroup) {
+      this.selectionGroup.append(this.selectorGripsGroup)
       Selector.updateGripCursors(0)
     }
     this.showRotateGrip(true)
@@ -984,7 +1037,9 @@ export class SelectorManager {
         id: 'selectorHover',
         fill: 'none',
         stroke: SELECTION_COLOR,
-        'stroke-width': 1,
+        'stroke-width': 1.5,
+        // 1.5 px on the screen whatever the matrix of the outlined element
+        'vector-effect': 'non-scaling-stroke',
         display: 'none',
         style: 'pointer-events:none'
       }
@@ -1010,7 +1065,14 @@ export class SelectorManager {
       }
     })
     this.dimensionLabel.append(this.dimensionBack, this.dimensionText)
-    this.selectorParentGroup.append(this.hoverOutline, this.multiFrame, this.selectorGripsGroup, this.dimensionLabel)
+    // The frames of the selection, its common frame and its grips: a drag
+    // moves them as one, by a single translation of this group (lot V5).
+    this.selectionGroup = svgCanvas.createSVGElement({
+      element: 'g',
+      attr: { id: 'selectorSelectionGroup' }
+    })
+    this.selectionGroup.append(this.multiFrame, this.selectorGripsGroup)
+    this.selectorParentGroup.append(this.hoverOutline, this.selectionGroup, this.dimensionLabel)
     svgCanvas.getSvgRoot().append(this.selectorParentGroup)
     this.multiGrips = false
     this.frameBox = null
@@ -1181,7 +1243,7 @@ export class SelectorManager {
     }
     // if we reached here, no available selectors were found, we create one
     this.selectors[N] = new Selector(N, elem, bbox, exactBBox)
-    this.selectorParentGroup.append(this.selectors[N].selectorGroup)
+    this.selectionGroup.append(this.selectors[N].selectorGroup)
     this.selectorMap[elem.id] = this.selectors[N]
     return this.selectors[N]
   }

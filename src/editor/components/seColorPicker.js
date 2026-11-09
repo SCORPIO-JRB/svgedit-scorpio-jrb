@@ -3,6 +3,7 @@ import { jGraduate, jGraduateMethod } from './jgraduate/jQuery.jGraduate.js'
 import PaintBox from './PaintBox.js'
 import './seIcon.js'
 import { t } from '../locale.js'
+import { parseColor, toHex } from '../color/color.js'
 
 const template = document.createElement('template')
 template.innerHTML = `
@@ -652,6 +653,54 @@ div.jGraduate_Slider img {
   #value, #alpha {
     display: none;
   }
+  /* Typed in, in the inspector of the canvas layout (attribute editable). */
+  .edit {
+    display: none;
+  }
+  :host([editable]) .edit {
+    display: inline-flex;
+  }
+  :host([editable]) #value, :host([editable]) #alpha {
+    display: none !important;
+  }
+  :host([editable]) #block {
+    cursor: pointer;
+  }
+  :host([editable]) #block:focus-visible {
+    outline: 2px solid var(--se-focus-ring);
+    outline-offset: 2px;
+  }
+  input {
+    box-sizing: border-box;
+    min-width: 0;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--se-text);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    outline: none;
+  }
+  #value-field {
+    flex: 1 1 auto;
+    width: 0;
+  }
+  #value-field::placeholder, #alpha-field::placeholder {
+    color: var(--se-text-secondary);
+  }
+  .alpha-wrap {
+    align-items: center;
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--se-text-secondary);
+  }
+  #alpha-field {
+    width: 3.2em;
+    text-align: right;
+    color: var(--se-text-secondary);
+  }
   </style>
   <div id="picker" part="picker">
       <se-icon id="logo" part="logo"></se-icon>
@@ -660,6 +709,8 @@ div.jGraduate_Slider img {
       </div>
       <span id="value" part="value"></span>
       <span id="alpha" part="alpha"></span>
+      <input id="value-field" part="value-field" class="edit" spellcheck="false" autocomplete="off">
+      <span class="edit alpha-wrap" part="alpha-field"><input id="alpha-field" inputmode="numeric" autocomplete="off"><span aria-hidden="true">%</span></span>
   </div>
   <!-- hidden div -->
   <div id="color_picker"></div>
@@ -681,6 +732,8 @@ export class SeColorPicker extends HTMLElement {
     this.$block = this._shadowRoot.getElementById('block')
     this.$value = this._shadowRoot.getElementById('value')
     this.$alpha = this._shadowRoot.getElementById('alpha')
+    this.$valueField = this._shadowRoot.getElementById('value-field')
+    this.$alphaField = this._shadowRoot.getElementById('alpha-field')
     this.paintBox = null
     this.i18next = null
     this.$picker = this._shadowRoot.getElementById('picker')
@@ -703,7 +756,7 @@ export class SeColorPicker extends HTMLElement {
    * @returns {any} observed
    */
   static get observedAttributes () {
-    return ['label', 'src', 'type', 'config-change_xxx_color']
+    return ['label', 'src', 'type', 'config-change_xxx_color', 'editable']
   }
 
   /**
@@ -727,6 +780,12 @@ export class SeColorPicker extends HTMLElement {
         break
       case 'config-change_xxx_color':
         this.$label.setAttribute('title', newValue)
+        break
+      case 'editable':
+        if (this.paintBox) {
+          this.syncEditable()
+          this.showValue()
+        }
         break
       default:
         console.error(`unknown attribute: ${name}`)
@@ -832,6 +891,8 @@ export class SeColorPicker extends HTMLElement {
       // We recreate the color picker popup with the current color of the selected elements
       this.setJGraduateMethod()
     }
+    // The colour window of the canvas layout shows the new paint.
+    if (this.paintPicker?.target === this) this.paintPicker.refresh()
 
     if (paint && apply) {
       this.setPaint(paint)
@@ -872,9 +933,10 @@ export class SeColorPicker extends HTMLElement {
   /**
    * The paint in words: its colour in hexadecimal, none, a gradient or
    * mixed, then its opacity.
+   * @param {boolean} [force] Also in a field being typed in
    * @returns {void}
    */
-  showValue () {
+  showValue (force = false) {
     const { paint, mixed } = this.paintBox ?? {}
     let text = ''
     let alpha = ''
@@ -890,14 +952,156 @@ export class SeColorPicker extends HTMLElement {
     }
     this.$value.textContent = text
     this.$alpha.textContent = alpha
+    if (this.editable) {
+      const solid = !mixed && paint?.type === 'solidColor' && paint.solidColor && paint.solidColor !== 'none'
+      // A field being typed in keeps its text, unless it is given back.
+      const typing = force ? null : this._shadowRoot.activeElement
+      if (typing !== this.$valueField) {
+        this.$valueField.value = solid ? text : ''
+        this.$valueField.placeholder = solid ? '' : text
+      }
+      if (typing !== this.$alphaField) {
+        this.$alphaField.value = alpha ? String(Math.round(Number(paint.alpha))) : ''
+        this.$alphaField.placeholder = mixed ? '–' : ''
+      }
+      this.$alphaField.disabled = !alpha
+    }
+  }
+
+  /** @returns {boolean} The inspector's field, typed in */
+  get editable () {
+    return this.hasAttribute('editable')
+  }
+
+  /**
+   * The colour window of the canvas layout, if the editor has one.
+   * @returns {object|null}
+   */
+  get paintPicker () {
+    return svgEditor.layout?.canvas ? (svgEditor.layout.paintPicker ?? null) : null
+  }
+
+  /**
+   * Opens the colour window: the new one in the canvas layout, jGraduate in
+   * the classic layout.
+   * @returns {void}
+   */
+  openPicker () {
+    if (this.paintPicker) this.paintPicker.open(this)
+    else this.setJGraduateMethod()
+  }
+
+  /**
+   * Shows a paint on the drawing while it is being chosen, outside the
+   * history: the listener of the input event previews it.
+   * @param {object} paint
+   * @returns {void}
+   */
+  previewPaint (paint) {
+    this.dispatchEvent(new CustomEvent('input', { detail: { paint } }))
+  }
+
+  /**
+   * Applies a paint: shown here, then given to the listener of the change
+   * event, as the dialog of the classic layout does.
+   * @param {object} paint
+   * @returns {void}
+   */
+  commitPaint (paint) {
+    this.setPaint(paint)
+    this.dispatchEvent(new CustomEvent('change', { detail: { paint } }))
+  }
+
+  /**
+   * The colour typed in the field.
+   * @returns {void}
+   */
+  valueTyped () {
+    const color = parseColor(this.$valueField.value)
+    const paint = this.paintBox?.paint
+    if (!color) {
+      this.showValue(true)
+      return
+    }
+    const alpha = paint?.type === 'solidColor' && paint.solidColor !== 'none' ? paint.alpha : 100
+    this.commitPaint(new jGraduate.Paint({ solidColor: toHex(color), alpha }))
+  }
+
+  /**
+   * The opacity typed in the field.
+   * @returns {void}
+   */
+  alphaTyped () {
+    const value = Number.parseFloat(this.$alphaField.value)
+    const paint = this.paintBox?.paint
+    if (!Number.isFinite(value) || !paint || paint.type === 'none') {
+      this.showValue(true)
+      return
+    }
+    const copy = new jGraduate.Paint({ copy: paint })
+    copy.alpha = Math.min(100, Math.max(0, value))
+    this.commitPaint(copy)
+  }
+
+  /**
+   * Focus goes to the swatch of the inspector's field, which opens the window.
+   * @param {FocusOptions} [options]
+   * @returns {void}
+   */
+  focus (options) {
+    if (this.editable) this.$block.focus(options)
+    else super.focus(options)
   }
 
   connectedCallback () {
+    if (this.paintBox) return
     this.paintBox = new PaintBox(this.$block, this.type)
     this.paintBox.onchange = () => this.showValue()
-    svgEditor.$click(this.$picker, () => {
-      this.setJGraduateMethod()
+    svgEditor.$click(this.$picker, (e) => {
+      // A press in a field types in it.
+      if (e?.composedPath?.().some((node) => node.localName === 'input')) return
+      this.openPicker()
     })
+    this.$block.addEventListener('keydown', (e) => {
+      if (!this.editable || (e.key !== 'Enter' && e.key !== ' ')) return
+      e.preventDefault()
+      this.openPicker()
+    })
+    for (const [field, typed] of [[this.$valueField, () => this.valueTyped()], [this.$alphaField, () => this.alphaTyped()]]) {
+      field.addEventListener('change', typed)
+      field.addEventListener('focus', () => field.select())
+      field.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          typed()
+          field.select()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          e.stopPropagation()
+          this.showValue(true)
+          field.blur()
+        }
+      })
+    }
+    this.syncEditable()
+  }
+
+  /**
+   * The swatch is a button, and the fields are labelled, in the inspector.
+   * @returns {void}
+   */
+  syncEditable () {
+    const name = this.getAttribute('title') || this.label || ''
+    if (this.editable) {
+      this.$block.tabIndex = 0
+      this.$block.setAttribute('role', 'button')
+      this.$block.setAttribute('aria-label', name)
+      this.$block.setAttribute('aria-haspopup', 'dialog')
+      this.$valueField.setAttribute('aria-label', name)
+      this.$alphaField.setAttribute('aria-label', `${name} · ${t('color.opacity')}`)
+    } else {
+      for (const name of ['tabindex', 'role', 'aria-label', 'aria-haspopup']) this.$block.removeAttribute(name)
+    }
   }
 }
 

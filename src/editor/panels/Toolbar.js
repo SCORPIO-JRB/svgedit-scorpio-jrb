@@ -240,12 +240,17 @@ export class Toolbar {
     // The commands of the layer, as in the bar of the classic Layers panel.
     const count = drawing.getNumLayers()
     const index = editor.svgCanvas.indexCurrentLayer()
-    const action = (name, label, disabled = false) => {
+    const action = (name, label, disabled = false, why = '') => {
       const el = document.createElement('div')
       el.setAttribute('role', 'menuitem')
       el.dataset.action = name
       el.textContent = editor.i18next.t(label)
       el.setAttribute('aria-disabled', String(disabled))
+      // A disabled entry says why (plan v2, 2.6: the last layer stays).
+      if (disabled && why) {
+        el.seTooltip = { label: why }
+        el.setAttribute('aria-description', why)
+      }
       return el
     }
     this.$layerMenu.replaceChildren(
@@ -254,7 +259,7 @@ export class Toolbar {
       action('new', 'layers.new'),
       action('dupe', 'layers.dupe'),
       action('rename', 'layers.rename'),
-      action('delete', 'layers.del', count < 2),
+      action('delete', 'layers.del', count < 2, editor.i18next.t('structure.last_layer')),
       action('up', 'layers.move_up', index >= count - 1),
       action('down', 'layers.move_down', index <= 0),
       separator(),

@@ -109,7 +109,11 @@ export class SePopover extends HTMLElement {
     super()
     this.attachShadow({ mode: 'open' }).append(template.content.cloneNode(true))
     this.anchor = null
+    // keepOpen: a press outside does not close it (the eyedropper of the
+    // colour window picks on the drawing).
+    this.keepOpen = false
     this.onOutside = (event) => {
+      if (this.keepOpen) return
       if (!event.composedPath().some((node) => node === this || node === this.anchor)) this.close()
     }
     this.onKeydown = (event) => this.keydown(event)

@@ -35,7 +35,7 @@ const toPlaywright = (canonical) => {
     : canonical.split('+')
   const key = parts.pop()
   const modifiers = parts.map((m) => ({ alt: 'Alt', ctrl: 'Control', mod: 'Control', shift: 'Shift' })[m])
-  let name = KEYS[key] ?? (/^\d$/.test(key) ? `Digit${key}` : key)
+  let name = KEYS[key] ?? (/^\d$/.test(key) ? `Digit${key}` : /^f\d+$/.test(key) ? key.toUpperCase() : key)
   // "+" without Shift comes from the numeric keypad, with Shift from "=".
   if (key === '+') name = modifiers.includes('Shift') ? 'Equal' : 'NumpadAdd'
   return [...modifiers, name].join('+')

@@ -22,7 +22,7 @@ jobs:
       run: |
         npx vite preview --port 8000 --strictPort --outDir dist/editor &
         for i in $(seq 1 60); do curl -sf http://localhost:8000/index.html > /dev/null && break; sleep 1; done
-        node tests/perf/canvas-bench.mjs --sizes=500,2000 --snap-sizes=10000 --out=bench-results.json --budgets=tests/perf/budgets.json
+        node tests/perf/canvas-bench.mjs --sizes=500,2000 --snap-sizes=10000 --drag-sizes=5000 --out=bench-results.json --budgets=tests/perf/budgets.json
     - name: Keep the results
       if: always()
       uses: actions/upload-artifact@v4

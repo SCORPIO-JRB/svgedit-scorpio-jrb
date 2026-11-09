@@ -130,29 +130,31 @@ test.describe('Hover outline (M5)', () => {
     await loadDrawing(page)
   })
 
-  test('the element under the pointer gets the outline of the frame a click draws', async ({ page }) => {
+  // Since V4, a shape is outlined by its own outline (contexte-v4); groups
+  // and symbols keep the frame of their selection.
+  test('the element under the pointer gets its outline, replaced by the frame once selected', async ({ page }) => {
     const before = await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())
     const point = await center(page, '#r1')
     await page.mouse.move(point.x, point.y)
     const outline = await hover(page)
     expect(outline.shown).toBe(true)
+    expect(outline.d).toBe('M100,100H180V160H100Z')
     // The outline is not part of the drawing.
     expect(await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())).toBe(before)
 
     await page.mouse.down()
     await page.mouse.up()
-    expect(await frameOf(page, 'r1')).toEqual({ d: outline.d, transform: outline.transform })
     // Selected: the frame replaces the outline.
     expect((await hover(page)).shown).toBe(false)
   })
 
-  test('a rotated element: the outline turns like its frame', async ({ page }) => {
+  test('a rotated element: the outline turns like the element', async ({ page }) => {
     const point = await center(page, '#rr')
     await page.mouse.move(point.x, point.y)
     const outline = await hover(page)
-    expect(outline.transform).toMatch(/^rotate\(30,/)
-    await select(page, ['rr'])
-    expect(await frameOf(page, 'rr')).toEqual({ d: outline.d, transform: outline.transform })
+    expect(outline.d).toBe('M400,300H480V340H400Z')
+    const [a, b, c, d] = outline.transform.match(/^matrix\((.*)\)$/)[1].split(',').map(Number)
+    expect([a, b, c, d].map((n) => Math.round(n * 1000) / 1000)).toEqual([0.866, 0.5, -0.5, 0.866])
   })
 
   test('a closed group is outlined as a whole, a child of an opened group alone', async ({ page }) => {
@@ -169,7 +171,7 @@ test.describe('Hover outline (M5)', () => {
     await page.mouse.move(point.x + 1, point.y)
     const inside = await hover(page)
     expect(inside.shown).toBe(true)
-    expect(inside.d).toBe((await frameOf(page, 'ga')).d)
+    expect(inside.d).toBe('M100,300H140V340H100Z')
   })
 
   test('no outline over the selection, the empty canvas, during a drag, outside the canvas or in another tool', async ({ page }) => {

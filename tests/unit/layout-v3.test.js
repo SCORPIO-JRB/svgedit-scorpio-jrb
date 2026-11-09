@@ -161,9 +161,9 @@ describe('layers tree (V3)', () => {
     root.remove()
   })
 
-  it('names an object by its id, else its title', () => {
-    const root = svg('<rect id="a"/><rect><title> Pompe 2 </title></rect><rect/>')
-    expect([...root.children].map(nameOf)).toEqual(['a', 'Pompe 2', ''])
+  it('names an object by its title, else its id (plan v2, 2.6; lot V7)', () => {
+    const root = svg('<rect id="a"/><rect><title> Pompe 2 </title></rect><rect/><rect id="b"><title>Vanne</title></rect>')
+    expect([...root.children].map(nameOf)).toEqual(['a', 'Pompe 2', '', 'Vanne'])
     root.remove()
   })
 })
