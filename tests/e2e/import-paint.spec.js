@@ -14,6 +14,7 @@ const NS = 'http://www.w3.org/2000/svg'
 const FILE = `<svg xmlns="${NS}" viewBox="0 0 800 200"><defs><style>` +
   '.room{fill:rgba(255,255,255,.1);stroke:#fff;stroke-miterlimit:10}.wall{fill:none;stroke:#fff;stroke-width:5px}</style></defs>' +
   '<rect id="room" class="room" x="10" y="10" width="100" height="100"/>' +
+  '<polyline id="corridor" class="room" points="10 130 230 130 230 190 10 190"/>' +
   '<rect id="wall" class="wall" x="130" y="10" width="100" height="100"/>' +
   '<rect id="halved" x="250" y="10" width="100" height="100" fill="rgba(0, 0, 255, .3)" fill-opacity=".5" stroke="rgba(255, 255, 255, 0)"/>' +
   '<rect id="styled" x="370" y="10" width="100" height="100" style="fill:#00ff0080;stroke:rgb(0 0 0 / 40%);stroke-width:2.5"/>' +
@@ -71,19 +72,23 @@ test.describe('Paint of an imported shape', () => {
     expect(await page.locator('#svgcontent g.layer defs').count()).toBe(0)
   })
 
-  test('a new colour keeps the transparency shown', async ({ page }) => {
-    await importAndUngroup(page)
-    await shown(page, 'room')
-    await page.evaluate(() => {
-      const box = document.getElementById('fill_color').paintBox
-      const Paint = box.paint.constructor
-      window.svgEditor.bottomPanel.handleColorPicker('fill', { detail: { paint: new Paint({ solidColor: 'ff0000', alpha: box.paint.alpha }) } })
+  // A room may be drawn by a polyline: it used to keep its colour, and the
+  // opacity went on top of the transparency of that colour.
+  for (const id of ['room', 'corridor']) {
+    test(`a new colour keeps the transparency shown (${id})`, async ({ page }) => {
+      await importAndUngroup(page)
+      expect((await shown(page, id)).fill).toBe('FFFFFF 10 %')
+      await page.evaluate(() => {
+        const box = document.getElementById('fill_color').paintBox
+        const Paint = box.paint.constructor
+        window.svgEditor.bottomPanel.handleColorPicker('fill', { detail: { paint: new Paint({ solidColor: 'ff0000', alpha: box.paint.alpha }) } })
+      })
+      const drawn = await page.evaluate((id) => {
+        const style = getComputedStyle(document.getElementById(id))
+        return [style.fill, Number(style.fillOpacity)]
+      }, id)
+      expect(drawn).toEqual(['rgb(255, 0, 0)', 0.1])
+      expect((await shown(page, id)).fill).toBe('FF0000 10 %')
     })
-    const drawn = await page.evaluate(() => {
-      const style = getComputedStyle(document.getElementById('room'))
-      return [style.fill, Number(style.fillOpacity)]
-    })
-    expect(drawn).toEqual(['rgb(255, 0, 0)', 0.1])
-    expect((await shown(page, 'room')).fill).toBe('FF0000 10 %')
-  })
+  }
 })
