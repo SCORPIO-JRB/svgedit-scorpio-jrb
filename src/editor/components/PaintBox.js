@@ -1,5 +1,37 @@
 import { jGraduate } from './jgraduate/jQuery.jGraduate.js'
 import { parseColor, toHex } from '../color/color.js'
+
+/**
+ * A paint as the box shows it: a colour in six hexadecimal digits, `none` or
+ * `url(#id)`, and its opacity in percent. The alpha a colour carries
+ * (`rgba(255, 255, 255, .1)`, `#ff000080`, `transparent`) is part of the
+ * opacity: an imported drawing writes its transparency so.
+ * @param {string} value A fill or stroke value
+ * @param {number} opacity In percent: the fill-opacity or stroke-opacity
+ * @returns {{color: string, opacity: number}} An unknown value is given as
+ *   written
+ */
+export const shownPaint = (value, opacity) => {
+  const text = String(value).trim()
+  const url = text.match(/^url\(\s*['"]?(#[^'")\s]+)['"]?\s*\)/i)
+  if (url) return { color: `url(${url[1]})`, opacity }
+  if (text === 'none') return { color: 'none', opacity }
+  const parsed = parseColor(text)
+  if (!parsed) return { color: text, opacity }
+  return { color: `#${toHex(parsed)}`, opacity: Math.round(opacity * (parsed.a ?? 1) * 100) / 100 }
+}
+
+/**
+ * The paint drawn, for a value the element does not write itself: inherited
+ * from a group, or `currentColor`.
+ * @param {Element} elem
+ * @param {"fill"|"stroke"} type
+ * @returns {{color: string|undefined, opacity: string|undefined}}
+ */
+const drawnPaint = (elem, type) => {
+  const style = elem.ownerDocument?.defaultView?.getComputedStyle?.(elem)
+  return { color: style?.[type] || undefined, opacity: style?.[`${type}Opacity`] || undefined }
+}
 /**
  *
  */
@@ -87,12 +119,14 @@ class PaintBox {
       } else {
         opts[refElem.tagName] = refElem
       }
-    } else if (color.startsWith('#')) {
-      opts.solidColor = color.substr(1)
-    } else {
-      // A named or functional colour (red, rgb(…), hsl(…)) is shown too.
-      const parsed = parseColor(color)
-      if (parsed) opts.solidColor = toHex(parsed)
+    } else if (color !== 'none') {
+      // A named or functional colour (red, rgb(…), hsl(…)) is shown too,
+      // its alpha with the opacity.
+      const shown = shownPaint(color, opac)
+      if (shown.color.startsWith('#')) {
+        opts.solidColor = shown.color.slice(1)
+        opts.alpha = shown.opacity
+      }
     }
     return new jGraduate.Paint(opts)
   }
@@ -135,15 +169,25 @@ class PaintBox {
             return null
           }
         }
-        return gPaint === null ? null : { color: gPaint, opacity: 100 }
+        return gPaint === null ? null : shownPaint(gPaint, 100)
       }
       default: {
+        // Its own value, or the one it is drawn with: inherited from a
+        // group, currentColor.
+        let drawn
+        let color = elem.getAttribute(type)
+        if (color === null || /^(?:inherit|currentcolor)$/i.test(color.trim())) {
+          drawn = drawnPaint(elem, type)
+          color = drawn.color ?? (type === 'fill' ? 'black' : 'none')
+        }
         let opacity = Number.parseFloat(elem.getAttribute(type + '-opacity'))
+        if (Number.isNaN(opacity)) {
+          opacity = Number.parseFloat((drawn ?? drawnPaint(elem, type)).opacity)
+        }
         if (Number.isNaN(opacity)) {
           opacity = 1.0
         }
-        const defColor = type === 'fill' ? 'black' : 'none'
-        return { color: elem.getAttribute(type) || defColor, opacity: opacity * 100 }
+        return shownPaint(color, opacity * 100)
       }
     }
   }

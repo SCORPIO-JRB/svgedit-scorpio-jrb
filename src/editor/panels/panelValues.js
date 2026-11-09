@@ -44,6 +44,37 @@ export const roundForField = (value) => {
   return Object.is(rounded, -0) ? 0 : rounded
 }
 
+// CSS absolute lengths, in user units
+const LENGTHS = { px: 1, in: 96, cm: 96 / 2.54, mm: 96 / 25.4, q: 96 / 101.6, pt: 96 / 72, pc: 16 }
+
+/**
+ * A length as a field shows it: a number of user units, without its unit
+ * ("5px" is 5, "0.5mm" is 1.89). A length a field cannot show so (a
+ * percentage, em) is given as written.
+ * @param {string|number|null} value
+ * @returns {string|number|null}
+ */
+export const lengthOf = (value) => {
+  if (value === null || value === undefined) return value
+  const match = String(value).trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-z]*)$/i)
+  const factor = match && (match[2] ? LENGTHS[match[2].toLowerCase()] : 1)
+  if (!factor) return value
+  return match[2] ? String(roundForField(Number(match[1]) * factor)) : value
+}
+
+/**
+ * The stroke width of a shape, as its field shows it: its own, or the one it
+ * is drawn with (inherited from a group).
+ * @param {Element} elem
+ * @returns {string|number}
+ */
+export const strokeWidthOf = (elem) => {
+  const own = elem.getAttribute('stroke-width')
+  if (own !== null) return lengthOf(own)
+  const drawn = elem.ownerDocument?.defaultView?.getComputedStyle?.(elem)?.strokeWidth
+  return drawn ? lengthOf(drawn) : '1'
+}
+
 // Elements that carry a stroke and a fill of their own.
 const SHAPES = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'path', 'text'])
 

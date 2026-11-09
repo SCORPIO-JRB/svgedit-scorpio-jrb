@@ -3,7 +3,7 @@
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import topPanelHTML from './TopPanel.html'
-import { commonValueOf, roundForField } from './panelValues.js'
+import { commonValueOf, lengthOf, roundForField, strokeWidthOf } from './panelValues.js'
 import { askText } from '../components/askText.js'
 import { stepTargets } from '../history-steps.js'
 import { renameId, ungroupSelected } from '../binding.js'
@@ -161,7 +161,7 @@ class TopPanel {
           const childs = this.selectedElement.getElementsByTagName('*')
           let gWidth = null
           for (i = 0, len = childs.length; i < len; i++) {
-            const swidth = childs[i].getAttribute('stroke-width')
+            const swidth = lengthOf(childs[i].getAttribute('stroke-width'))
 
             if (i === 0) {
               gWidth = swidth
@@ -177,8 +177,7 @@ class TopPanel {
         default: {
           this.editor.bottomPanel.updateColorpickers(false)
 
-          $id('stroke_width').value =
-            this.selectedElement.getAttribute('stroke-width') || 1
+          $id('stroke_width').value = strokeWidthOf(this.selectedElement)
           $id('stroke_style').value =
             this.selectedElement.getAttribute('stroke-dasharray') || 'none'
           $id('stroke_style').setAttribute('value', $id('stroke_style').value)

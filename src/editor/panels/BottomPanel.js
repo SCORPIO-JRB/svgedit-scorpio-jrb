@@ -1,7 +1,7 @@
 import SvgCanvas from '@svgedit/svgcanvas'
 import { jGraduate } from '../components/jgraduate/jQuery.jGraduate.js'
 import BottomPanelHtml from './BottomPanel.html'
-import { commonValueOf, shapesOf } from './panelValues.js'
+import { commonValueOf, shapesOf, strokeWidthOf } from './panelValues.js'
 
 const { $id } = SvgCanvas
 
@@ -42,7 +42,7 @@ class BottomPanel {
       const { relative } = e.detail
       const shapes = shapesOf(this.editor.svgCanvas.getSelectedElements())
       this.editor.svgCanvas.changeSelectedAttributeEach('stroke-width', (elem) => {
-        const current = Number.parseFloat(elem.getAttribute('stroke-width') ?? 1)
+        const current = Number(strokeWidthOf(elem))
         return Number.isFinite(current) ? relative(current) : undefined
       }, shapes)
       return
@@ -272,7 +272,7 @@ class BottomPanel {
   showCommonValues (elements) {
     const { svgCanvas } = this.editor
     const shapes = shapesOf(elements)
-    const width = commonValueOf(shapes, (elem) => elem.getAttribute('stroke-width') ?? '1')
+    const width = commonValueOf(shapes, strokeWidthOf)
     if (width === undefined) {
       $id('stroke_width').mixed = true
     } else {
