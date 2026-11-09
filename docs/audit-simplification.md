@@ -2,35 +2,39 @@
 
 Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier des synoptiques techniques GTB. Il ne doit pas devenir un outil de dessin général. Une règle s'applique partout : moins de fonctions inutiles, une meilleure expérience, aucune régression sur l'existant.
 
-- **Mesures** : relevées dans l'éditeur compilé depuis `master` (c1793877), disposition « canevas », avec les fichiers réels de `tests/fixtures/import/scorpio/`.
-- **État** : décidé le 9 novembre 2026. Les lots S0 à S3 viennent après V4.
+- **Mesures** : relevées dans l'éditeur compilé depuis `master` (b2a1dbd5), qui contient V0 à V7 et les textes de plusieurs lignes. Disposition « canevas », fichiers réels de `tests/fixtures/import/scorpio/`.
+- **État** : décidé le 9 novembre 2026. Le lot S0 est livré (section 7) ; S1 à S3 restent à faire.
 
 ## 1. Décisions
 
 | Question | Décision | Conséquence |
 | --- | --- | --- |
-| Outils que le plan v2 garde (Main, Étoile, Crayon, Pipette, Loupe) | Gardés | Le menu Formes est celui de la section 4.2 du plan v2 : rectangle, ellipse, ligne, polygone, étoile |
+| Outils que le plan v2 garde (Main, Étoile, Crayon, Pipette, Loupe) | Gardés | Le menu Formes devient celui de la section 4.2 du plan v2 : rectangle, ellipse, ligne, polygone, étoile |
 | Couleur ou police d'un objet stylé par classe | La modification change la règle de la classe, avec un avertissement | Voir le lot S2 |
 | Langues | Français et anglais | 57 fichiers de langue sont retirés en S3 |
 | Export | Tel quel | PNG, JPEG, BMP, WEBP et PDF restent, ainsi que jsPDF et svg2pdf.js |
 | Éditeur toujours intégré à SCorp-io ? | Non | L'enregistrement dans le navigateur et son bandeau de consentement restent, comme le bouton Accueil, le fil d'Ariane et le bouton Enregistrer de l'hôte |
-| Lots S0 à S3 avant V4 ? | Non, après V4 | L'ancienne disposition aura disparu : S1 et S3 ne touchent que la disposition « canevas » |
+| Lots S0 à S3 avant V4 ? | Non, après V4 | V4 est livré. Son test utilisateur, qui compare les deux dispositions, reste à mener : d'ici là, l'ancienne disposition (`layout: 'classic'`) ne change pas, et S1 ne touche que la disposition « canevas » |
 | Fichiers réels du correctif d'import dans le corpus ? | Pas pour l'instant | Le corpus du lot S0 se limite aux fichiers du dépôt et aux fichiers construits pour lui |
 
 ## 2. Inventaire
 
 | Zone | Contenu |
 | --- | --- |
-| Barre d'outils (20 outils) | Calque ▾ · Sélection V, Échelle K, Main H · Texte T · Formes ▾ (9) : rectangle R, carré, rectangle à main levée, ellipse E, cercle, ellipse à main levée, ligne L, étoile, polygone · Chemins ▾ : plume P, crayon Q · Image, Connecteur, Bibliothèque · Plus ▾ : loupe Z, pipette Ctrl+I |
-| Barre du haut | Accueil et fil d'Ariane (fournis par l'hôte) · Annuler, Rétablir · Export ▾ (image, SVG) · Enregistrer (si l'hôte le fournit) |
-| Menu Document (9) | Nouveau N, Ouvrir, Enregistrer Ctrl+S, Enregistrer sous, Importer, Exporter, Propriétés du document Maj+D, Préférences, Page d'accueil SVG-Edit |
-| Menu Zoom (14) | Zoom avant et arrière, tout voir, sélection, page, 25 à 200 %, règles, grille, fil de fer, annuler, rétablir ; plus « Vue du calque seul » Ctrl+Maj+L |
-| Menu contextuel (16) | Couper, copier, coller, coller sur place, copier et coller les propriétés, supprimer, grouper, dégrouper, ordre (4 entrées)… |
-| Propriétés | Menu « … » (14 actions pour un objet seul) · Géométrie · Apparence (opacité) · Remplissage · Contour (couleur, épaisseur, style, jointures, extrémités, 3 marqueurs) · Texte (12 réglages) · Effets (flou) · Identité (id, classe, titre) · Document |
-| Onglets | Propriétés, Calques, Code |
-| Boîtes de dialogue | Préférences (24 langues, thème, fond, grille, magnétisme, règles, unité) · Propriétés du document (titre, taille, résolution, images incorporées ou liées) · Export (PNG, JPEG, BMP, WEBP, PDF) |
-| Commandes | 93 dans le registre, avec leurs raccourcis |
+| Barre d'outils (22 outils) | Calque ▾ · Sélection V, Échelle K, Main H · Texte T, Cadre d'export Maj+F · Formes ▾ (9) : rectangle R, carré, rectangle à main levée, ellipse E, cercle, ellipse à main levée, ligne L, étoile, polygone · Chemins ▾ : plume P, crayon Q · Image, Connecteur, Formes de SVG-Edit, Bibliothèque · Plus ▾ : loupe Z, pipette Ctrl+I |
+| Barre contextuelle (V4) | Au-dessus de la sélection, selon son type (texte, forme, chemin, groupe, symbole, image, multi-sélection, connecteur) ; désactivable |
+| Palette et aide | Ctrl+K cherche une action ; `?` liste les raccourcis |
+| Barre du haut | Accueil et fil d'Ariane (fournis par l'hôte) · Annuler, Rétablir · Export ▾ (image, SVG, un SVG par cadre) · Enregistrer (si l'hôte le fournit) |
+| Menu Document (10) | Nouveau N, Nouveau depuis un modèle, Ouvrir, Enregistrer Ctrl+S, Enregistrer sous, Importer, Exporter, Propriétés du document Maj+D, Préférences, Page d'accueil SVG-Edit |
+| Menu Zoom (16) | Zoom avant et arrière, tout voir, sélection, page, 25 à 200 %, règles, grille, fil de fer, barre contextuelle, historique, annuler, rétablir ; plus « Vue du calque seul » |
+| Menu « … » d'un rectangle (8) | Dupliquer, supprimer, premier plan, arrière-plan, convertir en chemin, retourner (2), aligner sur la page |
+| Propriétés | Géométrie · Apparence · Remplissage · Contour · Texte (14 réglages) · Effets (flou) · Identité et liaison · Symbole, Connecteur ou Cadre selon la sélection · sans sélection : Calque, Cadres d'export, Document |
+| Onglets | Propriétés, Calques (arbre complet, œil, verrou), Code |
+| Fenêtres | Préférences · Propriétés du document · Export (PNG, JPEG, BMP, WEBP, PDF) · Couleur (V4) · Styles de texte (V4) · Bibliothèque en tiroir : Symboles GTB, Formes, Images (V7) · Aperçu (V6) |
+| Commandes | 118 dans le registre, avec leurs raccourcis |
 | Extensions | 10 chargées : connector, eyedropper, grid, markers, panning, shapes, polystar, storage, opensave, layer_view ; 2 jamais chargées : helloworld, overview_window |
+
+`tests/fixtures/simplification/inventaire.json` garde ce relevé (section 7).
 
 ## 3. Constats
 
@@ -40,19 +44,25 @@ Les synoptiques SCorp-io sont stylés par des classes CSS : `synoptique-chauffer
 
 | Objet | Rendu | L'inspecteur affiche | Après modification |
 | --- | --- | --- | --- |
-| Rectangle `.fond` | rempli de `#160F23` | Remplissage « Aucun » | `fill="#00ff00"` est écrit, l'écran ne change pas |
+| Rectangle `.fond` | rempli de `#160F23` | Remplissage « 000000 », du noir | `fill="#00ff00"` est écrit, l'écran ne change pas |
 | Titre `.titre .titre-page` | 34 px, Space Grotesk | Taille « null », police vide | `font-size="48"` et `font-family="Courier New"` sont écrits, l'écran ne change pas |
+| Tuyauterie `.tuyau.chaud.depart.arret` | trait `#4F465F` de 1,5 | Contour vide, épaisseur 1 | `stroke="#F08A62"` et `stroke-width="3"` sont écrits, l'écran ne change pas |
 
-Une règle CSS qui vise l'objet l'emporte sur ses attributs de présentation. L'utilisateur lit donc une valeur fausse, sa modification ne fait rien à l'écran, et le fichier garde des attributs inutiles. Pour notre usage, c'est le premier défaut d'ergonomie.
+Une règle CSS qui vise l'objet l'emporte sur ses attributs de présentation. L'utilisateur lit donc une valeur fausse, sa modification ne fait rien à l'écran, et le fichier garde des attributs inutiles. Une valeur seulement héritée d'un groupe, elle, se modifie bien : l'attribut l'emporte sur l'héritage.
+
+Deux conséquences :
+- **Test utilisateur de V4.** Sa tâche 4 (« passer l'épaisseur d'une tuyauterie à 3 et sa couleur à `#F08A62` », sur ce synoptique) ne peut pas réussir aujourd'hui, dans aucune des deux dispositions. Avec la décision 2, après S2, elle changera la règle `.tuyau.arret`, donc toutes les tuyauteries à l'arrêt, après un avertissement. Il faut soit mener S2 avant le test, soit choisir pour cette tâche un objet qui n'est pas stylé par classe.
+- **Styles de texte (V4).** Ils écrivent les mêmes attributs (`font-family`, `font-size`, `font-weight`, `fill`). Sur un texte stylé par classe, ils sont sans doute masqués de la même façon ; S2 commence par le vérifier.
 
 ### 3.2 Un polygone n'a pas de champs X, Y, L, H
 
-Seul l'angle s'affiche (`TopPanel.js`, `['line', 'circle', 'ellipse', 'polygon']`). Le code suppose que tout polygone a ses propres champs. Ce n'est vrai que pour les polygones de l'extension Étoile/Polygone, qui portent un attribut `shape`. La pompe de `repr-pompe.svg` contient un polygone ordinaire. La PR n° 5 vient de régler le même problème pour les imports (`<use>`) : on peut suivre la même voie.
+Seul l'angle s'affiche (`TopPanel.js`, `['line', 'circle', 'ellipse', 'polygon']`). Le code suppose que tout polygone a ses propres champs. Ce n'est vrai que pour les polygones de l'extension Étoile/Polygone, qui portent un attribut `shape`. La pompe de `repr-pompe.svg` contient un polygone ordinaire. La PR n° 5 a réglé le même problème pour les imports (`<use>`) : on peut suivre la même voie.
 
 ### 3.3 Doublons
 
 - Carré et Cercle font la même chose que Rectangle et Ellipse avec Maj. Les formes à main levée font des rectangles et des ellipses ordinaires.
-- « Vue du calque seul » fait la même chose que l'œil du panneau Calques.
+- Le bouton Formes de SVG-Edit (extension `ext-shapes`) ouvre la même bibliothèque que l'onglet Formes du tiroir Bibliothèque (V7).
+- « Vue du calque seul » fait la même chose que l'œil du panneau Calques. Son raccourci Ctrl+Maj+L est aussi celui de « Verrouiller la sélection » (V7) : c'est le verrou qui s'exécute, et la vue du calque ne s'ouvre plus au clavier.
 - « Aligner sur la page » (menu « … ») fait la même chose que le menu Aligner et Alt+lettre.
 - La boîte Propriétés du document reprend la section Document du panneau, sauf le choix « images incorporées ou liées ».
 - « Export ▾ SVG » reprend « Enregistrer sous ».
@@ -71,12 +81,12 @@ Main, Loupe et Pipette ont aussi des équivalents (Espace + glisser, Ctrl+molett
 
 ### 3.4 Réglages rares
 
-Section Texte : barré, surligné, espacement des mots, longueur du texte et son ajustement. Section Effets : le flou. Section Contour : jointures et extrémités. On ne les crée presque jamais dans un synoptique, mais des fichiers existants peuvent en contenir.
+Section Texte : barré, surligné, espacement des mots, longueur du texte et son ajustement. Section Effets : le flou. Section Contour : jointures et extrémités. On ne les crée presque jamais dans un synoptique, mais des fichiers existants peuvent en contenir. L'interligne et la largeur automatique, arrivés avec les textes de plusieurs lignes, servent : ils restent.
 
 ### 3.5 Poids mort
 
 - 59 fichiers de langue (1 Mo), alors que les préférences n'en proposent que 24.
-- La bibliothèque de formes : 372 Ko d'animaux, de jeux et autres. V7 prévoit une bibliothèque GTB.
+- La bibliothèque de formes de SVG-Edit (372 Ko) : animaux, jeux, musique, objets… Le tiroir Bibliothèque la lit pour son onglet Formes (`LibraryDrawer.js`). Seules les catégories basic, arrow, flowchart et electronics (environ 40 Ko) servent à un synoptique.
 - Deux extensions jamais chargées.
 - L'ancienne vue à défilement (`view: 'scroll'`), qui devait rester « jusqu'à la fin de V3 ». V3 est livré.
 
@@ -95,10 +105,13 @@ Aucune recommandation ne touche la lecture.
 | --- | --- |
 | Sélection, Échelle, Texte, Rectangle, Ellipse, Ligne, Polygone, Plume, Image | Essentiel |
 | Main, Étoile, Crayon, Pipette, Loupe | Décision 1, conforme au plan v2 |
-| Connecteur | V7 apporte les connecteurs orthogonaux |
-| Calques, onglet Code, menu contextuel, menu « … », grille, magnétisme, alignement | Essentiel ; V4 et V7 les font évoluer |
+| Connecteur, Cadre d'export, tiroir Bibliothèque, modèles, aperçu, verrou | Faits pour les synoptiques (V5 à V7) |
+| Barre contextuelle, palette, menu contextuel, menu « … », fenêtre couleur, styles de texte | Le cœur de l'édition depuis V4 |
+| Calques, onglet Code, grille, magnétisme, alignement | Essentiel |
+| Interligne et largeur automatique des textes | Textes de plusieurs lignes |
 | Enregistrement dans le navigateur et bandeau de consentement | Décision 4 : l'éditeur sert aussi hors de SCorp-io |
 | Export (PNG, JPEG, BMP, WEBP, PDF) | Décision : tel quel |
+| Ancienne disposition | Référence du test utilisateur de V4 ; retirée après lui, comme V4 le prévoit |
 | Liste blanche d'import (`sanitize.js`) | À ne jamais réduire : elle garantit la lecture des fichiers existants |
 | Modes de dessin du carré, du cercle et des formes à main levée dans `svgcanvas` | Les retirer ne gagnerait presque rien et compliquerait la reprise des versions amont |
 
@@ -113,21 +126,22 @@ Aucune recommandation ne touche la lecture.
 
 | Fonction | Changement | Touche | Gain |
 | --- | --- | --- | --- |
-| Barré, surligné, espacement des mots, longueur du texte, flou | Affichés seulement quand l'objet en a déjà une valeur | Création | La section Texte passe de 12 à 7 réglages ; une valeur existante reste visible et modifiable |
+| Barré, surligné, espacement des mots, longueur du texte, flou | Affichés seulement quand l'objet en a déjà une valeur | Création | La section Texte passe de 14 à 9 réglages ; une valeur existante reste visible et modifiable |
 | Jointures, extrémités, espacement des lettres | Repliés sous « Plus d'options » | Outil | Sections plus courtes |
 | Aligner sur la page | Fusionné avec le menu Aligner, qui s'ouvre aussi pour un seul objet | Outil | Une seule façon d'aligner |
 | Propriétés du document (Maj+D) | Retirée une fois le choix « images incorporées ou liées » déplacé dans la section Document | Outil | Une seule place pour le document |
 | Langues | Français et anglais seulement | Outil | 57 fichiers en moins (environ 1 Mo) |
+| Bibliothèque de formes de SVG-Edit | Réduite aux catégories basic, arrow, flowchart et electronics | Création | Onglet Formes du tiroir lisible ; environ 330 Ko en moins |
 
 ### Supprimer
 
 | Fonction | Touche | Raison |
 | --- | --- | --- |
 | Carré, Cercle, rectangle et ellipse à main levée (menu Formes) | Outil, création | Doublons ; le menu Formes passe de 9 à 5 entrées |
-| Bibliothèque de formes | Outil, jusqu'à V7 ; son contenu en S3 | Contenu hors sujet |
-| Réorienter le chemin (menu « … ») | Outil | Sans usage pour un synoptique |
+| Bouton Formes de SVG-Edit | Outil | Doublon de l'onglet Formes du tiroir ; l'extension n'est plus chargée par défaut, ses fichiers restent pour le tiroir |
+| Réorienter le chemin (menu « … » d'un chemin) | Outil | Sans usage pour un synoptique |
 | Page d'accueil SVG-Edit (menu Document) | Outil | Sans usage |
-| Vue du calque seul (extension `layer_view`) | Outil | Doublon de l'œil du panneau Calques ; l'extension reste chargeable par l'option `extensions` |
+| Vue du calque seul (extension `layer_view`) | Outil | Doublon de l'œil du panneau Calques, et son raccourci ne marche plus ; l'extension reste chargeable par l'option `extensions` |
 | Raccourcis D, C, G, A, Maj+O, Maj+P | Outil | Doublons ; Ctrl+D, Ctrl+G, Ctrl+A, Tab et Maj+Tab restent. Les boutons Dupliquer et Grouper du menu « … » appellent alors les commandes `duplicate` et `group` et affichent Ctrl+D et Ctrl+G |
 | Extensions helloworld et overview_window | Code | Jamais chargées |
 | Ancienne vue à défilement | Code | Remplacée par la vue sans bordure |
@@ -137,38 +151,40 @@ Aucune recommandation ne touche la lecture.
 
 | Mesure | Avant | Après |
 | --- | --- | --- |
-| Outils de la barre | 20 | 15 |
+| Outils de la barre | 22 | 17 |
 | Entrées du menu Formes | 9 | 5 |
-| Réglages de la section Texte | 12 | 7 |
-| Commandes du registre | 93 | 85 après S1, 81 après S3 |
+| Réglages de la section Texte | 14 | 9 |
+| Commandes du registre | 118 | environ 110 après S1, 106 après S3 |
+| Raccourcis attribués à deux commandes | 5 | 4 après S1, aucun après S3 |
 | Fichiers de langue | 59 | 2 |
 
-À cela s'ajoutent 372 Ko de bibliothèque et deux extensions en moins. Surtout, l'inspecteur affiche la vraie valeur des objets stylés par classe.
+À cela s'ajoutent environ 330 Ko de formes hors sujet et deux extensions en moins. Surtout, l'inspecteur affiche la vraie valeur des objets stylés par classe.
 
 ## 5. Risques et dépendances des retraits
 
 Pour chaque retrait, il faut faire trois vérifications :
 - chercher les usages internes : registre, `layout.js`, `Inspector.js`, extensions, tests ;
 - vérifier qu'une configuration de l'hôte ne s'en sert pas ;
-- passer le corpus du lot S0.
+- passer le filet du lot S0.
 
 | Retrait | Dépendances | Effet sur les documents existants |
 | --- | --- | --- |
 | Carré, cercle, formes à main levée | Boutons de `LeftPanel.html`, menu `shapes` de `Toolbar.js` ; les modes restent dans `svgcanvas` | Aucun : ce sont des `rect`, `circle`, `ellipse` ordinaires |
-| Bibliothèque | Extension `ext-shapes` | Aucun : une forme déjà posée est un chemin ordinaire |
+| Bouton Formes de SVG-Edit | Extension `ext-shapes`, contrat des extensions de V0 ; le tiroir lit `ext-shapes/shapelib/` | Aucun : une forme déjà posée est un chemin ordinaire. Vérifier que le tiroir trouve toujours les fichiers quand l'extension n'est plus chargée |
+| Catégories de formes | `shapelib/index.json`, lu par l'extension et par le tiroir | Aucun |
 | Réglages rares du texte et flou | `TopPanel.js`, `Inspector.js` | Aucun : affichés dès que l'objet en a une valeur |
 | Propriétés du document | Boîte `imagePropertiesDialog`, commande `tool_docprops`, menu Document | Aucun, si le choix des images est déplacé avant |
-| Vue du calque seul | Extension `layer_view`, test de contrat des extensions | Aucun ; le test de contrat est mis à jour volontairement |
-| Raccourcis en double | Registre de commandes, aide des raccourcis | Aucun |
+| Vue du calque seul | Extension `layer_view`, contrat des extensions de V0 | Aucun ; le contrat est mis à jour volontairement |
+| Raccourcis en double | Registre de commandes, aide des raccourcis, palette | Aucun |
 | Langues | `locale/`, option `lang`, préférences | Aucun. Un navigateur réglé en allemand affiche l'éditeur en anglais |
 | Vue à défilement | `view.js`, option `view` | Aucun. Une configuration qui demande `view: 'scroll'` aura la vue sans bordure |
 | Extensions jamais chargées | Aucune | Aucun |
 
-**V4 vient d'abord.** V4 construit les barres contextuelles et fait tester l'éditeur par 5 personnes, et la décision 5 place nos lots après lui. Pour ne pas défaire son travail, il vaut mieux que V4 ne mette pas dans ses barres les réglages que S1 retire ou replie (sections 3.4 et 4).
+**Ancienne disposition.** Elle reste telle quelle jusqu'au test utilisateur de V4, dont elle est la référence. S1 n'y touche pas, et S3 ne retire rien de ce qu'elle emploie (jPicker, jGraduate).
 
 ## 6. Interface proposée
 
-L'interface suit la disposition « canevas » de V3, à la manière de Figma et de Claude Design :
+L'interface suit la disposition « canevas » de V3 et V4, à la manière de Figma et de Claude Design :
 - peu d'outils toujours visibles ;
 - les réglages rares sous « Plus d'options » ;
 - une valeur venant d'un style partagé montre le nom de ce style.
@@ -177,8 +193,8 @@ L'interface suit la disposition « canevas » de V3, à la manière de Figma et 
 
 ```
 Sélection V · Échelle K · Main H
-Texte T · Formes ▾ (Rectangle R, Ellipse E, Ligne L, Polygone, Étoile) · Chemins ▾ (Plume P, Crayon Q)
-Image · Connecteur
+Texte T · Cadre d'export Maj+F · Formes ▾ (Rectangle R, Ellipse E, Ligne L, Polygone, Étoile) · Chemins ▾ (Plume P, Crayon Q)
+Image · Connecteur · Bibliothèque
 Plus ▾ (Loupe Z, Pipette Ctrl+I)
 ```
 
@@ -189,75 +205,108 @@ Géométrie     X  Y  L  H  angle
 Apparence     opacité
 Remplissage   ■ #160F23   ← classe .fond
 Contour       couleur · épaisseur · style        [Plus d'options : jointures, extrémités, marqueurs]
-Texte         police · taille · gras · italique · souligné · alignement
+Texte         police · taille · gras · italique · souligné · alignement · interligne · largeur automatique
               [Plus d'options : espacement des lettres]
               (barré, surligné, espacement des mots, longueur : seulement si l'objet en a)
 Effets        (seulement si l'objet a un flou)
-Identité      id · classe · titre
+Identité      id · classe · titre · liaison
 ```
 
-Le repère « ← classe .fond » s'inspire des styles partagés de Figma. Modifier la valeur ouvre un avertissement, par exemple : « Cette couleur vient de la règle `.fond`, qui s'applique à 12 objets. Modifier la règle ? ». Si l'utilisateur confirme, la règle est modifiée en une seule étape d'annulation.
+Le repère « ← classe .fond » s'inspire des styles partagés de Figma. Modifier la valeur ouvre un avertissement, par exemple : « Cette couleur vient de la règle `.fond`, qui s'applique à 12 objets. Modifier la règle ? ». Si l'utilisateur confirme, la règle est modifiée en une seule étape d'annulation. La barre contextuelle, qui emploie les mêmes champs, suit d'elle-même.
 
 **Barre du haut, menus Document et Zoom** : inchangés, sauf « Page d'accueil SVG-Edit », « Propriétés du document » et « Vue du calque seul », qui disparaissent.
 
 ## 7. Plan de mise en œuvre
 
-Les lots viennent après V4, dans cet ordre.
+| Lot | Contenu | Sortie SVG | État |
+| --- | --- | --- | --- |
+| S0 Filet | Tests seulement ; l'éditeur ne change pas | Inchangée | Livré |
+| S1 Masquer (2 à 3 j) | Retraits d'interface, réglages conditionnels et repliés, fusion d'« Aligner sur la page », Propriétés du document | Identique à l'octet | À faire |
+| S2 Corriger (3 à 5 j) | Objets stylés par classe ; X, Y, L, H des polygones | Change volontairement | À faire ; avant le test utilisateur de V4 si sa tâche 4 reste telle quelle (section 3.1) |
+| S3 Nettoyer (3 à 5 j, après deux semaines d'usage de S1) | Langues, catégories de formes, extensions jamais chargées, vue à défilement, enregistrements en double | Identique | À faire |
 
-| Lot | Contenu | Sortie SVG |
-| --- | --- | --- |
-| S0 Filet (2 j) | Tests seulement ; l'éditeur ne change pas | Inchangée |
-| S1 Masquer (2 à 3 j) | Retraits d'interface, réglages conditionnels et repliés, fusion d'« Aligner sur la page », Propriétés du document | Identique à l'octet |
-| S2 Corriger (3 à 5 j) | Objets stylés par classe ; X, Y, L, H des polygones | Change volontairement |
-| S3 Nettoyer (3 à 5 j, après deux semaines d'usage de S1) | Langues, bibliothèque, extensions jamais chargées, vue à défilement, enregistrements en double | Identique |
+### S0 Filet (livré)
 
-### S0 Filet
+`tests/e2e/simplification-s0.spec.js`, avec `tests/fixtures/simplification/` :
+- **Inventaire** (`inventaire.json`) : les 118 commandes et leurs raccourcis, la barre d'outils, les menus Document, Zoom et « … », les réglages de la section Texte. S1 et S3 le mettent à jour volontairement : `S0_UPDATE=1` le réécrit, et la différence se relit dans la demande de fusion.
+- **Raccourcis partagés** : les cinq connus (section 3.3) ; tout autre partage fait échouer le test. Un test montre que Ctrl+Maj+L verrouille la sélection sans toucher aux calques.
+- **Familles** (`familles.svg`) : carré, cercle, rectangle, ellipse, polygone ordinaire, étoile, hexagone de l'extension, forme de la bibliothèque, tracé à main levée, flou, texte barré, surligné, espacé, à longueur fixée. Pour chacun, on ouvre le fichier, on déplace l'objet, on le redimensionne par sa poignée, on le fait pivoter, puis on le groupe et on le dégroupe. On vérifie ensuite trois choses :
+  - les attributs propres à la famille sont gardés (`shape`, `text-decoration`, `filter`…) ;
+  - annuler les cinq étapes rend le texte d'origine ;
+  - le dessin modifié, rouvert, s'enregistre à l'identique.
+- **Ce que S2 corrige**, tel que c'est aujourd'hui (`styles-classe.svg`) :
+  - le remplissage affiché « 000000 » et la couleur masquée ;
+  - la taille affichée « null » et la police masquée ;
+  - la valeur héritée d'un groupe, qui se modifie bien et doit le rester ;
+  - le polygone sans X, Y, L, H, et l'étoile qui garde son panneau.
 
-- **Corpus** :
-  - les fichiers de `tests/fixtures/import/scorpio/` ;
-  - un fichier par famille d'éléments touchée : carré, cercle, polygone ordinaire et de l'extension, étoile, texte barré, espacement des mots, `textLength`, flou, forme de la bibliothèque.
-- **Scénario par fichier** : ouvrir, sélectionner, déplacer, redimensionner, pivoter, grouper, dégrouper, annuler, enregistrer, rouvrir.
-- **Liste figée** des commandes du registre et de leurs raccourcis (test unitaire). Tout retrait devient une différence visible et voulue.
-- **Référence de sortie** construite depuis `master` (`tests/output/build-reference.mjs`).
-- **Réutilisés** :
-  - le rapport de fidélité (`npm run fidelity`) ;
-  - `import-fidelity.spec.js` (un dessin ouvert s'affiche pixel pour pixel) ;
-  - `import-reopen.test.js` (enregistré puis rouvert, le texte est le même) ;
-  - `liaisons-v0.spec.js` et `extensions-v0.spec.js`.
+  S2 retourne ces tests.
+
+Les deux fichiers entrent aussi dans le corpus des tests existants : allers-retours de `compare-output.mjs`, rapport de fidélité, tests du corpus de V6.
+
+**Mesures à la livraison** (Chromium) :
+- `simplification-s0.spec.js` : 21 tests réussis, deux passages ;
+- V6, robustesse de l'import, contrats des extensions, registre, liaisons, fidélité de l'import : 70 tests réussis ;
+- sortie comparée à `master` (référence construite par `build-reference.mjs`) : 25 allers-retours sur 25 et 73 scénarios sur 73 identiques ;
+- rapport de fidélité des deux fichiers : aucune perte ; les deux chemins de `familles.svg` sont réécrits en commandes relatives, comme pour tout fichier.
+
+Firefox tourne en CI.
+
+**Vérifier un lot S1 à S3** :
+
+```bash
+node tests/output/build-reference.mjs origin/master ../reference
+```
+
+```bash
+npx vite preview --port 8010 --strictPort --outDir ../reference/dist/editor
+```
+
+```bash
+node tests/output/compare-output.mjs --ref=http://127.0.0.1:8010 --new=http://127.0.0.1:8000
+```
+
+```bash
+npx playwright test tests/e2e/simplification-s0.spec.js
+```
 
 ### S1 Masquer
 
-- **Sortie** : sur tout le corpus, identique à l'octet à la référence (`compare-output.mjs`).
-- **Mises à jour voulues** : liste figée des commandes, contrat des extensions (`layer_view` retiré du chargement par défaut et chargeable par `extensions`).
+- **Sortie** : sur tout le corpus, identique à l'octet à la référence.
+- **Mises à jour voulues** : inventaire de S0, contrat des extensions (`layer_view` et `shapes` retirés du chargement par défaut, chargeables par `extensions`), raccourcis partagés (Ctrl+Maj+L n'est plus qu'au verrou).
 - **Tests de bout en bout** :
-  - un fichier contenant un carré, un cercle, un flou ou un texte barré l'affiche, le sélectionne, le transforme et l'enregistre comme avant ;
+  - un fichier contenant un carré, un cercle, un flou ou un texte barré l'affiche, le sélectionne, le transforme et l'enregistre comme avant (filet de S0) ;
   - les réglages rares apparaissent quand l'objet en a une valeur ;
   - les boutons Dupliquer et Grouper du menu « … » font la même chose qu'avant, et Ctrl+D et Ctrl+G aussi ;
   - le menu Aligner fonctionne pour un seul objet ;
-  - le choix des images fonctionne depuis la section Document.
+  - le choix des images fonctionne depuis la section Document ;
+  - l'onglet Formes du tiroir s'ouvre sans l'extension `ext-shapes` ;
+  - l'ancienne disposition est inchangée.
 
 ### S2 Corriger
 
 - **Objets stylés par classe** :
-  - Trouver la règle qui donne la valeur : la règle la plus spécifique, puis la dernière, parmi celles de la feuille `<style>` qui visent l'objet et fixent la propriété.
-  - L'afficher dans l'inspecteur.
+  - Trouver la règle qui donne la valeur : la plus spécifique, puis la dernière, parmi celles de la feuille `<style>` qui visent l'objet et fixent la propriété. La fenêtre couleur lit déjà les feuilles de style du document (`src/editor/color/color.js`).
+  - L'afficher dans l'inspecteur ; la barre contextuelle, qui partage ses champs, suit.
   - À la modification, demander confirmation, puis réécrire la propriété dans cette règle, en une seule étape d'annulation.
-  - Une valeur seulement héritée d'un parent continue de s'écrire sur l'objet, car un attribut l'emporte sur l'héritage.
+  - Une valeur seulement héritée d'un parent continue de s'écrire sur l'objet.
   - Les feuilles des fichiers importés sont confinées à leur import (`css-scope.js`) : la recherche doit les lire sous leur forme confinée.
+  - Les styles de texte de V4 suivent la même règle.
 - **Polygones** : un polygone sans attribut `shape` rejoint les éléments placés et dimensionnés par leur boîte, comme la polyligne. Ceux de l'extension gardent leur panneau.
 - **Tests unitaires** de la recherche de règle :
   - une classe ;
   - plusieurs classes (`titre titre-page` : la taille vient de `.titre-page`, la police de `.titre`) ;
+  - un état (`.tuyau.arret`) ;
   - un sélecteur qui n'est pas une classe (`svg.synoptique`) ;
   - une feuille d'import confinée ;
   - une valeur héritée d'un groupe ;
   - `!important` et attribut `style`.
 - **Tests de bout en bout** :
+  - les tests « ce que S2 corrige » de S0, retournés ;
   - après confirmation, l'écran change, la règle est réécrite et aucun attribut n'est ajouté ;
   - une annulation rend la feuille d'origine ;
   - l'avertissement donne le bon nombre d'objets ;
-  - un polygone de `repr-pompe.svg` se déplace et se redimensionne par X, Y, L, H ;
-  - un polygone de l'extension garde ses champs.
+  - un polygone de `repr-pompe.svg` se déplace et se redimensionne par X, Y, L, H.
 - **Rapport de fidélité** : les seuls changements sont les règles modifiées.
 
 ### S3 Nettoyer
@@ -271,7 +320,7 @@ Chaque retrait passe par les mêmes vérifications :
 | Retrait | Vérification propre |
 | --- | --- |
 | 57 fichiers de langue | Le repli vers l'anglais fonctionne et aucun test ne lit une autre langue |
-| Contenu de la bibliothèque de formes | En attendant V7, l'extension n'est plus chargée par défaut |
+| Catégories de formes hors sujet | Le tiroir et l'extension lisent la même liste réduite |
 | Extensions helloworld et overview_window | Aucune configuration de l'hôte ne les charge |
 | Vue à défilement | L'option `view: 'scroll'` retombe sur la vue sans bordure |
-| `tool_delete`, `tool_delete_multi`, `tool_move_top`, `tool_move_bottom` | Fusionnés avec `delete`, `move_front` et `move_back` ; les boutons gardent leur effet |
+| `tool_delete`, `tool_delete_multi`, `tool_move_top`, `tool_move_bottom` | Fusionnés avec `delete`, `move_front` et `move_back` ; les boutons gardent leur effet ; plus aucun raccourci partagé |
