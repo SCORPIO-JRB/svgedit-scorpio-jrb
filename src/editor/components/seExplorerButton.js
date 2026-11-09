@@ -1,6 +1,6 @@
 /* globals svgEditor */
 import './seIcon.js'
-import { setControlName } from '../commands.js'
+import { adoptTitle, controlTitle } from '../commands.js'
 
 /**
  * @class ExplorerButton
@@ -177,7 +177,9 @@ export class ExplorerButton extends HTMLElement {
     if (oldValue === newValue) return
     switch (name) {
       case 'title':
-        setControlName(this, this.$button, newValue, this.getAttribute('shortcut'))
+        // Removed by adoptTitle: the name stays.
+        if (newValue === null) break
+        adoptTitle(this, this.$button, newValue)
         break
       case 'pressed':
         if (newValue) {
@@ -220,7 +222,7 @@ export class ExplorerButton extends HTMLElement {
    * @returns {any}
    */
   get title () {
-    return this.getAttribute('title')
+    return controlTitle(this)
   }
 
   /**

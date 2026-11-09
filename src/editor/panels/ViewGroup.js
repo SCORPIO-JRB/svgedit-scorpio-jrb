@@ -19,6 +19,7 @@
  */
 import { escapeHtml } from './TopBar.js'
 import { actionLabel } from '../history-steps.js'
+import { controlTitle } from '../commands.js'
 
 /** Steps of the zoom menu, in per cent. */
 export const ZOOM_MENU_STEPS = [25, 50, 100, 200]
@@ -164,7 +165,7 @@ export class ViewGroup {
       }
       anchor.after(item)
       anchor = item
-      const title = button.getAttribute('title')
+      const title = controlTitle(button)
       item.querySelector('span').textContent = title ? editor.i18next.t(title) : button.id
       item.querySelector('kbd').textContent = editor.commands.hint(button.id) || ''
       item.setAttribute('aria-checked', String(Boolean(button.pressed)))

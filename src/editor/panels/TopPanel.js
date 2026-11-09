@@ -7,6 +7,7 @@ import { commonValueOf, roundForField } from './panelValues.js'
 import { askText } from '../components/askText.js'
 import { stepTargets } from '../history-steps.js'
 import { renameId, ungroupSelected } from '../binding.js'
+import { controlTitle } from '../commands.js'
 
 const { $qa, $id, $click, isValidUnit, getTypeMap, convertUnit } = SvgCanvas
 
@@ -986,7 +987,7 @@ class TopPanel {
     ;[trigger, ...popup.querySelectorAll('se-button')].forEach((button) => {
       button.tabIndex = 0
       button.setAttribute('role', 'button')
-      button.setAttribute('aria-label', i18next.t(button.getAttribute('title')))
+      button.setAttribute('aria-label', i18next.t(controlTitle(button)))
       button.addEventListener('keydown', press(button))
     })
     trigger.setAttribute('aria-haspopup', 'true')
