@@ -116,7 +116,7 @@ export class LibraryDrawer {
     const container = bar?.querySelector('[data-place="insert"]')
     if (!container || bar.querySelector('#tool_library')) return
     const template = document.createElement('template')
-    template.innerHTML = '<se-button id="tool_library" data-group="insert" data-rank="40" title="library.open" src="library.svg"></se-button>'
+    template.innerHTML = '<se-button id="tool_library" data-group="insert" data-rank="40" title="library.open" src="drawer.svg"></se-button>'
     this.$button = template.content.firstElementChild
     this.$button.setAttribute('aria-haspopup', 'dialog')
     this.$button.setAttribute('aria-expanded', 'false')

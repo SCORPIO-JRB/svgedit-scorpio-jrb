@@ -12,7 +12,7 @@ couleur codée en dur, de `<style>` ni de script ; les tracés sont en `currentC
 - Material Symbols : 106 fichiers. Tracé et `viewBox="0 -960 960 960"` repris tels quels, avec
   `width="24" height="24"` et `fill="currentColor"` sur la racine. `flip_vertical.svg` est le
   tracé de `flip` pivoté de 90° (attribut `transform`).
-- Dessins propres : 51 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
+- Dessins propres : 54 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
   `currentColor` de 1,5 (l'épaisseur de Material Symbols en graisse 400 : 60/960 de 24 px),
   extrémités et jointures rondes. Exceptions voulues : les icônes de jointure et d'extrémité de
   trait montrent un trait épais, puisque c'est leur sujet.
@@ -62,6 +62,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `delete.svg` | `delete` | Supprimer (élément, calque) |
 | `docprop.svg` | `description` | Propriétés du document (menu principal) |
 | `docprops.svg` | `description` | Propriétés du document (ancienne icône) — *sans référence* |
+| `drawer.svg` | dessin propre | Tiroir Bibliothèque : symboles, formes, images (lot V7) |
 | `editPref.svg` | `settings` | Préférences de l'éditeur (menu principal) |
 | `edit_foreign.svg` | `code_blocks` | Éditer un objet étranger (foreignObject) — *sans référence* |
 | `ellipse.svg` | dessin propre | Outil ellipse |
@@ -103,6 +104,8 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `linejoin_miter.svg` | dessin propre | Jointure du trait : en pointe (miter) |
 | `linejoin_round.svg` | dessin propre | Jointure du trait : ronde |
 | `link_controls.svg` | dessin propre | Lier les points de contrôle (ancienne icône) — *sans référence* |
+| `lock.svg` | dessin propre | Objet ou calque verrouillé (onglet Calques, lot V7) |
+| `lock_open.svg` | dessin propre | Verrouiller un objet ou un calque (onglet Calques, lot V7) |
 | `mcircle.svg` | `circle` (variante pleine) | Marqueur : cercle plein |
 | `mcircle_o.svg` | `circle` | Marqueur : cercle vide |
 | `minus.svg` | dessin propre | Retirer (remplissage, contour, arrêt de dégradé) |
