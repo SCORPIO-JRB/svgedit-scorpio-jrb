@@ -25,7 +25,7 @@
 import { NS } from './namespaces.js'
 import { BatchCommand, ChangeElementCommand, InsertElementCommand } from './history.js'
 import { findDefs } from './utilities.js'
-import { portsOf, portOf, DIRECTIONS } from './ports.js'
+import { portsOf, portOf, DIRECTIONS, hasDeclaredPorts } from './ports.js'
 import { drawingBoxOf } from './multi-transform.js'
 import { route, followEnds, simplify, parsePoints, formatPoints, movableSegments, moveSegment } from './orthogonal.js'
 
@@ -103,7 +103,48 @@ const gridStep = () => {
  *   being dragged
  * @returns {{points: {x: number, y: number}[], demoted: boolean}|null}
  */
-const compute = (conn, moved) => {
+/**
+ * The boxes of the symbols of the drawing, read once per pass: the other
+ * equipments a route goes round.
+ * @returns {Map<Element, {x: number, y: number, width: number, height: number}>}
+ */
+const symbolBoxes = () => {
+  const boxes = new Map()
+  for (const use of svgCanvas.getSvgContent().querySelectorAll('use')) {
+    if (use.getAttribute('display') === 'none' || !hasDeclaredPorts(use)) continue
+    try {
+      const box = drawingBoxOf([use])
+      if (box) boxes.set(use, box)
+    } catch (_e) { /* not drawn */ }
+  }
+  return boxes
+}
+
+/**
+ * The other equipments in the way of a route: those whose box meets the
+ * region of its two ends, widened.
+ * @param {Map<Element, object>} boxes
+ * @param {Element[]} ends
+ * @param {{x: number, y: number}} a
+ * @param {{x: number, y: number}} b
+ * @returns {object[]}
+ */
+const obstaclesBetween = (boxes, ends, a, b) => {
+  const pad = 80
+  const left = Math.min(a.x, b.x) - pad
+  const right = Math.max(a.x, b.x) + pad
+  const top = Math.min(a.y, b.y) - pad
+  const bottom = Math.max(a.y, b.y) + pad
+  const out = []
+  for (const [elem, box] of boxes) {
+    if (ends.some((end) => end === elem || elem.contains?.(end) || end?.contains?.(elem))) continue
+    if (box.x > right || box.x + box.width < left || box.y > bottom || box.y + box.height < top) continue
+    out.push(box)
+  }
+  return out
+}
+
+const compute = (conn, moved, boxes = null) => {
   const { start, end, startPort, endPort } = connectorEnds(conn)
   const a = endOf(start, startPort)
   const b = endOf(end, endPort)
@@ -126,7 +167,8 @@ const compute = (conn, moved) => {
     const kept = followEnds(parsePoints(conn.getAttribute('points')), s, e)
     if (kept) return { points: kept, demoted: false }
   }
-  return { points: route(s, e, { grid: gridStep() }), demoted: manual }
+  const obstacles = obstaclesBetween(boxes ?? symbolBoxes(), [start, end], s, e)
+  return { points: route(s, e, { grid: gridStep(), obstacles }), demoted: manual }
 }
 
 /**
@@ -148,8 +190,9 @@ export const routeOf = (conn, moved = null) => compute(conn, moved)?.points ?? n
  */
 export const reroute = (conns, moved = null) => {
   const changed = []
+  const boxes = conns.length ? symbolBoxes() : null
   for (const conn of conns) {
-    const result = compute(conn, moved)
+    const result = compute(conn, moved, boxes)
     if (!result) continue
     const text = formatPoints(result.points)
     if (conn.getAttribute('points') !== text) {
@@ -214,6 +257,8 @@ const arrowMarker = (color, batch) => {
   tip.setAttribute('fill', color)
   marker.append(tip)
   findDefs().append(marker)
+  // As an opening would leave it (see symbols.js)
+  svgCanvas.normalizeAsOpened?.(marker)
   batch.addSubCommand(new InsertElementCommand(marker))
   return id
 }

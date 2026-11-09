@@ -147,14 +147,19 @@ const fallback = (a, dirA, b, round) => {
  * @param {number} [options.grid=0] The step of the grid the free coordinates
  *   are rounded to, 0 for none
  * @param {Array<{x: number, y: number, width: number, height: number}>} [options.obstacles]
- *   Other boxes to go round
+ *   Other boxes not to cross (their edges may be followed)
  * @returns {{x: number, y: number}[]} From the start to the end
  */
 export const route = (start, end, { stub = STUB, margin = MARGIN, grid = 0, obstacles = [] } = {}) => {
   const round = (v) => (grid > 0 ? Math.round(v / grid) * grid : Math.round(v * 2) / 2)
   const s0 = stubOf(start, stub)
   const e0 = stubOf(end, stub)
-  const boxes = [start.box, end.box, ...obstacles].filter(Boolean).map((box) => widen(box, margin))
+  // The two equipments are gone round at a distance; the others only not
+  // crossed (a probe sits on its pipe, against the edge of its box).
+  const boxes = [
+    ...[start.box, end.box].filter(Boolean).map((box) => widen(box, margin)),
+    ...obstacles.filter(Boolean).map((box) => widen(box, 0))
+  ]
   // A stub that ends inside a box (equipments too close): no search.
   const blocked = (p) => boxes.some((r) => inside(p.x, p.y, r))
 

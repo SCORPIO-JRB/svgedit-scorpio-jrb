@@ -619,3 +619,135 @@ test.describe('Ports as magnets (V7)', () => {
     expect([Math.round(port.x), Math.round(port.y)]).toEqual([200, 180])
   })
 })
+
+test.describe('Templates (V7)', () => {
+  test.beforeEach(async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, PAGE)
+  })
+
+  test('the document menu opens the templates; the synoptic one gives the page, its frame and its layers', async ({ page }) => {
+    await page.locator('#main_button').click()
+    await expect(page.locator('#tool_template')).toBeVisible()
+    // Right after "New document"
+    expect(await page.evaluate(() => document.getElementById('tool_template').previousElementSibling?.id)).toBe('tool_clear')
+    await page.locator('#tool_template').click()
+    await expect(page.locator('#se-templates')).toBeVisible()
+    await expect(page.locator('.se-template-card')).toHaveCount(3)
+    await page.locator('.se-template-card[data-template="synoptic"]').click()
+    const doc = await page.evaluate(() => {
+      const c = window.svgEditor.svgCanvas
+      const drawing = c.getCurrentDrawing()
+      const layers = drawing.all_layers.map((layer) => [layer.getName(), c.isLockedSelf(layer.getGroup())])
+      return {
+        size: c.getResolution(),
+        frames: c.getFrames().map((f) => [f.x, f.y, f.width, f.height]),
+        layers,
+        current: drawing.getCurrentLayerName(),
+        snap: window.svgEditor.configObj.curConfig.gridSnapping,
+        steps: c.undoMgr.getUndoStackSize()
+      }
+    })
+    expect(doc.size).toEqual({ w: 1920, h: 1080, zoom: expect.any(Number) })
+    expect(doc.frames).toEqual([[0, 0, 1920, 1080]])
+    expect(doc.layers.map(([, locked]) => locked)).toEqual([true, false, false, false])
+    expect(doc.layers).toHaveLength(4)
+    expect(doc.current).toBe(doc.layers[2][0])
+    expect(doc.snap).toBe(true)
+    expect(doc.steps).toBe(0)
+  })
+
+  test('the technical diagram: A3 landscape, grid shown and snapping; a symbol and its ports fall on the grid', async ({ page }) => {
+    await page.evaluate(() => window.svgEditor.templates.apply('technical'))
+    const result = await page.evaluate(() => {
+      const ed = window.svgEditor
+      const use = ed.symbols.insert('gtb-vanne-3v', { x: 123, y: 87 })
+      return {
+        size: [ed.svgCanvas.getResolution().w, ed.svgCanvas.getResolution().h],
+        grid: ed.grid.visible,
+        snap: ed.configObj.curConfig.gridSnapping,
+        ports: ed.svgCanvas.portsOf(use).map((p) => [p.x % 10, p.y % 10])
+      }
+    })
+    expect(result.size).toEqual([1587, 1123])
+    expect(result.grid).toBe(true)
+    expect(result.snap).toBe(true)
+    for (const [x, y] of result.ports) {
+      expect(x).toBe(0)
+      expect(y).toBe(0)
+    }
+  })
+})
+
+test.describe('Reference synoptic (V7)', () => {
+  test('a heating plant made end to end: symbols, networks by fluid, values, frame; the export holds them and renders', async ({ page }) => {
+    const { buildReference, describeExport } = await import('./gtb-reference.js')
+    await visitAndApproveStorage(page)
+    const { saved, exported } = await page.evaluate(buildReference)
+    const out = await page.evaluate(describeExport, exported)
+    expect(out.parseError).toBe(false)
+    expect(out.viewBox).toBe('0 0 1920 1080')
+    expect(out.size).toEqual(['1920', '1080'])
+    // Six kinds of equipment, thirteen instances, each with its id and title
+    expect(out.symbols).toBe(6)
+    expect(out.uses).toHaveLength(13)
+    expect(out.uses.every(([id, title]) => id && !id.startsWith('svg_') && title.length > 0)).toBe(true)
+    // Fourteen networks, by fluid, with the classes of the synoptics
+    expect(out.pipes).toHaveLength(14)
+    expect(new Set(out.pipes)).toEqual(new Set(['tuyau chaud depart', 'tuyau chaud retour']))
+    // The values, each with its stable id and its point
+    expect(out.points).toEqual([
+      ['etat-chaudiere-1', 'CHAUF.CH1.ETAT'], ['etat-chaudiere-2', 'CHAUF.CH2.ETAT'],
+      ['t-depart-c1', 'CHAUF.C1.T_DEPART'], ['energie-c1', 'CHAUF.C1.ENERGIE'],
+      ['t-depart-c2', 'CHAUF.C2.T_DEPART'], ['energie-c2', 'CHAUF.C2.ENERGIE']
+    ])
+    expect(out.frames).toBe(0)
+    expect(out.scripts).toBe(0)
+    // Every network at right angles, its ends on the ports of its equipments
+    const check = await page.evaluate(() => {
+      const c = window.svgEditor.svgCanvas
+      return c.orthogonalConnectors().map((conn) => {
+        const pts = conn.getAttribute('points').split(' ').map((p) => p.split(',').map(Number))
+        const right = pts.every((p, i) => i === 0 || p[0] === pts[i - 1][0] || p[1] === pts[i - 1][1])
+        const { start, end, startPort, endPort } = c.connectorEnds(conn)
+        const a = c.portOf(start, startPort)
+        const b = c.portOf(end, endPort)
+        const first = pts[0]
+        const last = pts[pts.length - 1]
+        return right && first[0] === a.x && first[1] === a.y && last[0] === b.x && last[1] === b.y
+      })
+    })
+    expect(check).toHaveLength(14)
+    expect(check.every(Boolean)).toBe(true)
+    // The saved file opens again as it is: same text
+    const again = await page.evaluate((svg) => {
+      const c = window.svgEditor.svgCanvas
+      c.setSvgString(svg)
+      return c.getSvgString()
+    }, saved)
+    expect(again).toBe(saved)
+    // The export renders in an image (no script, no network): its symbols draw.
+    const rendered = await page.evaluate((svg) => new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = 192
+        canvas.height = 108
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, 192, 108)
+        const data = ctx.getImageData(0, 0, 192, 108).data
+        let colours = 0
+        const seen = new Set()
+        for (let i = 0; i < data.length; i += 4) {
+          const key = `${data[i] >> 4},${data[i + 1] >> 4},${data[i + 2] >> 4}`
+          if (!seen.has(key)) { seen.add(key); colours++ }
+        }
+        resolve({ ok: true, colours })
+      }
+      img.onerror = () => resolve({ ok: false })
+      img.src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+    }), exported)
+    expect(rendered.ok).toBe(true)
+    expect(rendered.colours).toBeGreaterThan(5)
+  })
+})

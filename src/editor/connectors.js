@@ -272,13 +272,18 @@ export class ConnectorTool {
   }
 
   /**
-   * The symbols of the current layer (or group), whose ports are magnets.
+   * The symbols of the visible layers, whose ports are magnets: a connector
+   * may go in a layer of its own (the networks of a synoptic) and join the
+   * equipments of another. A locked or hidden symbol takes none.
    * @returns {Element[]}
    */
   candidates () {
-    const context = this.canvas.getCurrentGroup?.() || this.canvas.getCurrentDrawing().getCurrentLayer()
-    return [...(context?.querySelectorAll('use') ?? [])].filter((use) => this.canvas.hasDeclaredPorts(use) &&
-      !this.canvas.isLocked?.(use) && use.getAttribute('display') !== 'none')
+    const drawing = this.canvas.getCurrentDrawing()
+    const layers = drawing.all_layers.map((layer) => layer.getGroup())
+      .filter((group) => group.getAttribute('display') !== 'none')
+    return layers.flatMap((group) => [...group.querySelectorAll('use')]).filter((use) =>
+      this.canvas.hasDeclaredPorts(use) && !this.canvas.isLocked?.(use) && use.getAttribute('display') !== 'none' &&
+      !use.closest('[display="none"]'))
   }
 
   /**

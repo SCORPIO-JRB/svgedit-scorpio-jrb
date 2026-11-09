@@ -590,6 +590,24 @@ export default {
     home: 'Origine',
     end: 'Fin'
   },
+  templates: {
+    new: 'Nouveau depuis un modèle…',
+    size: '{{width}} × {{height}}',
+    blank: 'Vide',
+    blank_desc: 'La page des préférences, un calque.',
+    technical: 'Schéma technique',
+    technical_desc: 'A3 paysage, grille affichée et magnétisme à 10 : les ports et les extrémités des liaisons tombent sur la grille.',
+    synoptic: 'Synoptique 1 920 × 1 080',
+    synoptic_desc: "Un cadre de sortie à la résolution de l'écran de supervision, le fond des synoptiques verrouillé, un calque par usage.",
+    layer_1: 'Calque 1',
+    layer_background: 'Fond',
+    layer_networks: 'Réseaux',
+    layer_equipment: 'Équipements',
+    layer_values: 'Valeurs',
+    layer_notes: 'Annotations',
+    frame_a3: 'A3 paysage',
+    frame_screen: 'Écran de supervision'
+  },
   connectors: {
     fluid: 'Fluide',
     arrow: 'Flèche de sens',

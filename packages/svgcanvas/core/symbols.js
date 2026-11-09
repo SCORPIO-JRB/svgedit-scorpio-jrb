@@ -107,6 +107,24 @@ const fill = (symbol, def) => {
 }
 
 /**
+ * What an opening does to a drawing (svg-exec: prepareSvg, setSvgString),
+ * done now, in the document: the saved file stays the same when it is opened
+ * again. The paths in absolute commands, closed on their start; an id for
+ * every visible element.
+ * @param {Element} root
+ * @returns {void}
+ */
+export const normalizeAsOpened = (root) => {
+  for (const path of root.querySelectorAll('path')) {
+    path.setAttribute('d', svgCanvas.pathActions.convertPath(path))
+    svgCanvas.pathActions.fixEnd(path)
+  }
+  for (const el of root.querySelectorAll(svgCanvas.getVisElems())) {
+    if (!el.id) el.id = svgCanvas.getNextId()
+  }
+}
+
+/**
  * The id a new symbol takes: its key, unless something else holds it.
  * @param {string} key
  * @returns {string}
@@ -132,6 +150,7 @@ export const ensureSymbol = (def, batch) => {
   symbol.id = freeId(def.id)
   fill(symbol, def)
   findDefs().append(symbol)
+  normalizeAsOpened(symbol)
   batch.addSubCommand(new InsertElementCommand(symbol))
   return symbol
 }
@@ -198,6 +217,7 @@ export const updateSymbol = (def) => {
     if (child.nodeType === 1) batch.addSubCommand(new RemoveElementCommand(child, next, symbol))
   }
   fill(symbol, def)
+  normalizeAsOpened(symbol)
   batch.addSubCommand(new ChangeElementCommand(symbol, old))
   for (const child of symbol.children) batch.addSubCommand(new InsertElementCommand(child))
   svgCanvas.addCommandToHistory(batch)
@@ -218,4 +238,5 @@ export const init = (canvas) => {
   canvas.instancesOf = instancesOf
   canvas.insertSymbol = insertSymbol
   canvas.updateSymbol = updateSymbol
+  canvas.normalizeAsOpened = normalizeAsOpened
 }

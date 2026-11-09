@@ -16,6 +16,7 @@ import { initStructure } from './structure.js'
 import { SymbolLibrary, SymbolPanel } from './symbols.js'
 import { LibraryDrawer } from './panels/LibraryDrawer.js'
 import { ConnectorTool, ConnectorPanel } from './connectors.js'
+import { Templates } from './templates.js'
 import { BindingPanel, ungroupSelected } from './binding.js'
 import { Preview } from './preview.js'
 import { EditorLayout } from './layout.js'
@@ -177,6 +178,8 @@ class EditorStartup {
     this.symbols = new SymbolLibrary(this)
     // Orthogonal connectors: ports, tool, route, elbows, fluids (lot V7)
     this.connectors = new ConnectorTool(this)
+    // Templates of new documents (lot V7)
+    this.templates = new Templates(this)
     // Frames to export, in the canvas layout (lot V5): their tool after
     // Text, their sections in the inspector.
     if (this.layout?.canvas) {

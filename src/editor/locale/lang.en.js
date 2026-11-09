@@ -587,6 +587,24 @@ export default {
     home: 'Home',
     end: 'End'
   },
+  templates: {
+    new: 'New from a template…',
+    size: '{{width}} × {{height}}',
+    blank: 'Blank',
+    blank_desc: 'The page of the preferences, one layer.',
+    technical: 'Technical diagram',
+    technical_desc: 'A3 landscape, grid shown and snapping at 10: the ports and the ends of the networks fall on the grid.',
+    synoptic: 'Synoptic 1,920 × 1,080',
+    synoptic_desc: 'An output frame at the resolution of the supervision screen, the background of the synoptics locked, a layer per use.',
+    layer_1: 'Layer 1',
+    layer_background: 'Background',
+    layer_networks: 'Networks',
+    layer_equipment: 'Equipment',
+    layer_values: 'Values',
+    layer_notes: 'Notes',
+    frame_a3: 'A3 landscape',
+    frame_screen: 'Supervision screen'
+  },
   connectors: {
     fluid: 'Fluid',
     arrow: 'Direction arrow',

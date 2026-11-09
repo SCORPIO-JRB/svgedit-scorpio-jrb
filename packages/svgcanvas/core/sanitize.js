@@ -226,9 +226,10 @@ for (const [element, attrs] of Object.entries(svgWhiteList_)) {
  * Attributes the filter also keeps since V6 (section 7 of the plan, option
  * `fidelity.attributes`): presentation attributes of SVG 2 on every element,
  * `pathLength` on the shapes, `dx`, `dy` and `rotate` on a text, `target` on
- * a link.
+ * a link. Lot V7 adds `color`, the colour of `currentColor`: the marks of a
+ * GTB symbol take it from their instance.
  */
-const WIDER_GENERIC = ['paint-order', 'vector-effect', 'pointer-events', 'mix-blend-mode', 'isolation']
+const WIDER_GENERIC = ['paint-order', 'vector-effect', 'pointer-events', 'mix-blend-mode', 'isolation', 'color']
 const WIDER = {
   path: ['pathLength'],
   rect: ['pathLength'],
