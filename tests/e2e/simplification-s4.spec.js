@@ -197,6 +197,26 @@ test.describe('A pipe of SCorp-io takes the look of another (S4)', () => {
       .replace('.tuyau.en-marche { stroke-width: 3; stroke-dasharray: 14 5;', '.tuyau.en-marche { stroke-width: 1.5; stroke-dasharray: none;')
       .replace('.tuyau.en-marche.chaud.depart { stroke: #F08A62; }', '.tuyau.en-marche.chaud.depart { stroke: #4F465F; }'))
   })
+
+  test('with the eyedropper, a running pipe takes the look of a stopped one, dashes included', async ({ page }) => {
+    const stopped = 'tuyau-depart-chaudiere-2'
+    // A straight pipe, which a click in its middle reaches
+    const running = 'tuyau-retour-constant'
+    await page.evaluate(() => {
+      window.svgEditor.svgCanvas.setZoom(0.5)
+      window.svgEditor.updateCanvas()
+    })
+    await select(page, [stopped])
+    await chooseTool(page, 'tool_eyedropper')
+    await clickOn(page, running)
+    await expect(dialog(page)).toContainText(/These values come from the rules \.tuyau\.en-marche\.chaud\.retour \(\d+ objects\), \.tuyau\.en-marche \(\d+ objects\)\. Change these rules\?/)
+    await answer(page, 'Change the rules')
+    for (const name of ['stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap']) {
+      expect(await drawn(page, running, name), name).toBe(await drawn(page, stopped, name))
+    }
+    expect(await attributes(page, running, ['stroke', 'stroke-width', 'stroke-dasharray'])).toEqual({ stroke: null, 'stroke-width': null, 'stroke-dasharray': null })
+    expect(await steps(page)).toBe(1)
+  })
 })
 
 test.describe('The eyedropper on a drawing without rules (S4)', () => {

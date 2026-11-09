@@ -3,7 +3,7 @@
 Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier des synoptiques techniques GTB. Il ne doit pas devenir un outil de dessin général. Une règle s'applique partout : moins de fonctions inutiles, une meilleure expérience, aucune régression sur l'existant.
 
 - **Mesures** : relevées dans l'éditeur compilé depuis `master` (b2a1dbd5), qui contient V0 à V7 et les textes de plusieurs lignes. Disposition « canevas », fichiers réels de `tests/fixtures/import/scorpio/`.
-- **État** : décidé le 9 novembre 2026. Les lots S0 à S3 sont livrés (section 7). Les sections 2 et 3 décrivent l'éditeur avant eux.
+- **État** : décidé le 9 novembre 2026. Les lots S0 à S4 sont livrés (section 7). Les sections 2 et 3 décrivent l'éditeur avant eux.
 
 ## 1. Décisions
 
@@ -55,6 +55,8 @@ Une règle CSS qui vise l'objet l'emporte sur ses attributs de présentation. L'
 Deux conséquences :
 - **Test utilisateur de V4.** Sa tâche 4 (« passer l'épaisseur d'une tuyauterie à 3 et sa couleur à `#F08A62` », sur ce synoptique) ne pouvait réussir dans aucune des deux dispositions. Depuis S2, elle réussit dans les deux : elle change la règle `.tuyau.arret`, donc toutes les tuyauteries à l'arrêt, après un avertissement qui le dit.
 - **Styles de texte (V4).** Ils écrivent les mêmes attributs (`font-family`, `font-size`, `font-weight`, `fill`). Sur un texte stylé par classe, ils étaient masqués de la même façon. Depuis S2, ils changent les règles, après un seul avertissement.
+
+« Copier / Coller les propriétés » et la Pipette avaient le même défaut, dans les deux sens : copiés depuis un objet stylé par classe, ils lisaient ses attributs ; collés sur lui, ils écrivaient des attributs masqués. S4 les corrige.
 
 ### 3.2 Un polygone n'a pas de champs X, Y, L, H
 
@@ -127,8 +129,9 @@ Aucune recommandation ne touche la lecture.
 | --- | --- | --- |
 | Remplissage, contour, police, taille d'un objet stylé par classe | Afficher la valeur réelle et la règle qui la donne. Une modification change cette règle, après un avertissement qui nomme le sélecteur et le nombre d'objets touchés | L'inspecteur dit vrai ; les états SCorp-io restent pilotés par classe |
 | X, Y, L, H d'un polygone | Un polygone sans attribut `shape` se place et se dimensionne comme une polyligne | Les polygones des fichiers réels se placent au clavier |
+| « Copier / Coller les propriétés » et Pipette sur un objet stylé par classe | Lire les valeurs des règles ; écrire là où la cible prend sa valeur, comme les champs du panneau, avec le même avertissement | La cible prend vraiment l'aspect de la source |
 
-Les deux sont faites (lot S2).
+Les deux premières sont faites par S2, la troisième par S4.
 
 ### Simplifier
 
@@ -235,6 +238,7 @@ Le repère « ← .fond » s'inspire des styles partagés de Figma : le titre de
 | S1 Masquer | Retraits d'interface, réglages conditionnels et repliés, fusion d'« Aligner sur la page », Propriétés du document | Identique à l'octet | Livré |
 | S2 Corriger | Objets stylés par classe ; X, Y, L, H des polygones ; les deux dispositions | Change volontairement : la règle modifiée, rien d'autre | Livré |
 | S3 Nettoyer | Langues, catégories de formes, extensions jamais chargées, vue à défilement, enregistrements en double | Identique | Livré |
+| S4 Propriétés et Pipette | « Copier / Coller les propriétés » et la Pipette sur les objets stylés par classe ; les deux dispositions | Change volontairement pour un objet stylé par une règle ou par son attribut `style` ; identique ailleurs | Livré |
 
 ### S0 Filet (livré)
 
@@ -263,7 +267,7 @@ Les deux fichiers entrent aussi dans le corpus des tests existants : allers-reto
 
 Firefox tourne en CI.
 
-**Vérifier un lot S1 à S3** :
+**Vérifier un lot S1 à S4** :
 
 ```bash
 node tests/output/build-reference.mjs origin/master ../reference
@@ -361,7 +365,7 @@ Les deux dispositions changent : c'est une correction (section 1).
   - la décoration et l'ancrage du texte, les marqueurs et la géométrie s'écrivent toujours en attributs ;
   - une valeur héritée d'un groupe s'affiche comme avant : l'attribut de l'objet, ou la valeur par défaut ;
   - la liste des polices n'affiche que ses propres polices, comme avant ;
-  - « Copier / Coller les propriétés » et la Pipette lisent et écrivent toujours les attributs : sur un objet stylé par classe, ils restent sans effet visible, comme avant S2. Les faire passer par les règles est un lot à part.
+  - « Copier / Coller les propriétés » et la Pipette lisent et écrivent toujours les attributs : sur un objet stylé par classe, ils restent sans effet visible, comme avant S2. S4 les fait passer par les règles.
 
 **Polygones** : un polygone sans attribut `shape` a X, Y, L, H, comme une polyligne. Il se déplace et se redimensionne par sa boîte, et ses points sont réécrits. Ceux de l'outil Étoile/Polygone gardent leur panneau.
 
@@ -451,6 +455,60 @@ Les deux dispositions sont concernées, mais ce que fait l'éditeur ne change pa
   - Une seconde rotation mesurée dans la même séquence prend 17 à 19 ms sur S3 contre 18 à 27 sur S2. Huit rotations répétées hors de la séquence prennent environ 20 ms des deux côtés.
   - Avec un ramasse-miettes forcé avant la mesure, l'écart n'est plus systématique : 22 à 47 ms sur S3, 24 à 49 sur S2. La cause la plus probable est un ramasse-miettes placé ailleurs, la mémoire de S3 étant plus petite ; elle n'est pas prouvée.
   - Sur cette machine, S2, S3 et `master` dépassent tous trois des budgets de `budgets.json`, par exemple « tout sélectionner » à 2 000 objets : 207 à 281 ms pour 150 ;
+- `standard`, contrôles des couleurs et des libellés, `remark` : réussis.
+
+Firefox tourne en CI.
+
+### S4 Propriétés et Pipette (livré)
+
+Les deux dispositions changent, comme pour S2 : c'est une correction de ce que S2 avait laissé de côté (section S2, « Ce qui ne change pas »).
+
+**Lecture.** « Copier les propriétés » et la Pipette prennent les valeurs telles qu'elles sont dessinées, comme les champs du panneau depuis S2 :
+- une valeur donnée par une règle ou par l'attribut `style` l'emporte sur l'attribut ;
+- « Copier les propriétés » continue de remonter aux groupes pour une propriété héritée, et lit aussi leurs règles : un libellé dans un groupe `.libelles` prend la couleur et la taille de cette règle ;
+- la Pipette lit, comme avant, l'objet seul.
+
+**Écriture.** « Coller les propriétés » et la Pipette écrivent chaque propriété là où la cible prend sa valeur, par le même chemin que les champs du panneau :
+- une règle est réécrite, après l'avertissement de S2 (« Cette couleur vient de la règle .equipement.en-marche, qui s'applique à 1 objet. Modifier la règle ? ») ;
+- l'attribut `style` de la cible est réécrit, sans question ;
+- ailleurs, l'attribut est écrit comme avant.
+
+Le tout forme une seule étape d'annulation. Refusé, le collage entier disparaît, attributs compris, sans rien laisser à rétablir.
+
+**Propriété que la source ne fixe pas.** Pour un objet ordinaire, le collage la retire, comme avant. Une cible stylée par une règle la garderait : une tuyauterie en marche resterait en pointillés après un collage depuis une tuyauterie à l'arrêt. La copie note donc aussi la valeur que la source affiche pour ces propriétés (`none` pour les pointillés, `1` pour l'opacité…). Une règle de la cible la reçoit, sauf si la cible affiche déjà la même valeur : `normal` et `400` sont la même graisse et ne posent pas de question. La Pipette fait de même. Une copie faite avant S4 n'a pas ces valeurs : la règle garde alors la sienne.
+
+**Correction en passant.** La Pipette retirait les pointillés de la cible sans l'enregistrer : Ctrl+Z ne les remettait pas. Ils font maintenant partie de l'étape.
+
+**Ce qui ne change pas :**
+- sur un dessin sans règle ni attribut `style`, la copie, le collage et la Pipette écrivent les mêmes attributs qu'avant ;
+- les propriétés que S2 écrit toujours en attributs (ancrage et décoration du texte, `fill-rule`, `stroke-dashoffset`, `stroke-miterlimit`) le restent ; la copie lit désormais leur valeur dans les règles, et le collage l'écrit en attribut ;
+- la pipette de la fenêtre couleur (V4) lisait déjà la couleur dessinée et écrit par le panneau : elle suivait S2 ;
+- aucun contrôle n'est ajouté ni retiré : l'inventaire de S0 et le relevé de l'ancienne disposition ne changent pas.
+
+**Tests :**
+- `tests/unit/style-rules.test.js`, 5 nouveaux tests :
+  - la copie lit les règles et non les attributs qu'elles masquent ;
+  - le collage réécrit la règle d'une cible et l'attribut des autres, en une étape, que l'annulation et le retrait défont ;
+  - il réécrit l'attribut `style` d'une cible, sans question ;
+  - la copie lit la règle d'un groupe, et l'ancrage d'un texte dans une règle, que le collage écrit en attribut ;
+  - un dessin sans règle donne les mêmes attributs qu'avant.
+- `tests/e2e/simplification-s4.spec.js`, 11 tests ; les quatre premiers tournent dans les deux dispositions :
+  - copiées depuis la pompe, les propriétés sont celles de ses règles ;
+  - collées sur elle, elles réécrivent sa règle après l'avertissement, et une annulation rend la feuille ;
+  - un refus ne laisse rien ;
+  - la Pipette lit les règles et en réécrit une après l'avertissement ;
+  - sur `synoptique-chaufferie.svg`, une tuyauterie en marche collée depuis une tuyauterie à l'arrêt se dessine comme elle : couleur, épaisseur, pointillés. Le fichier enregistré ne diffère de l'original que par ses deux règles ;
+  - la même chose par la Pipette, sans attribut ajouté ;
+  - sur un dessin sans règle, la Pipette donne les mêmes attributs qu'avant, et une annulation remet les pointillés.
+
+  Les onze échouent sur `master` comme sur S3 (`13b8a22d`).
+
+**Mesures à la livraison** (Chromium) :
+- tests unitaires : 1 028 réussis, dont 5 nouveaux ;
+- `simplification-s4.spec.js` : 11 tests réussis, trois passages ;
+- suite complète de bout en bout, sous quatre processus : 587 tests sur 587, avant l'ajout du onzième test de S4 ;
+- sortie comparée à S3 (`13b8a22d`) et à `master` : 25 allers-retours sur 25 et 73 scénarios sur 73 identiques. Aucun scénario ne passe par « Coller les propriétés » ou la Pipette : leur sortie sur un dessin sans règle est vérifiée par les tests unitaires, par ceux de M7 et par le test de la Pipette de V0, inchangés ;
+- rapport de fidélité des 25 fichiers du dépôt : le même que sur S3 ;
 - `standard`, contrôles des couleurs et des libellés, `remark` : réussis.
 
 Firefox tourne en CI.
