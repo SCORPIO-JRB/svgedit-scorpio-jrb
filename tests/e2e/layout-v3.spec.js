@@ -322,8 +322,8 @@ test.describe('Inspector (V3)', () => {
 
   test('the sections at their place; a section where nothing applies is hidden', async ({ page }) => {
     await load(page)
-    // With the frames to export of lot V5.
-    expect(await sections(page)).toEqual(['appearance', 'fill', 'stroke', 'document', 'frames'])
+    // With the frames to export of lot V5, and the current layer of lot V7.
+    expect(await sections(page)).toEqual(['appearance', 'fill', 'stroke', 'layer', 'document', 'frames'])
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('Document')
     await select(page, ['r1'])
     expect(await sections(page)).toEqual(['geometry', 'appearance', 'fill', 'stroke', 'effects', 'identity'])

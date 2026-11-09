@@ -3,7 +3,9 @@
  * section 4.5): one inspector, with sections at fixed places.
  *
  * Order: actions on the selection, Geometry, Appearance, Fill, Stroke,
- * Text, Effects, Identity, Extensions, Frame, Document, Frames. A section
+ * Text, Effects, Identity, Extensions, Frame, Layer, Document, Frames. The
+ * Layer section (lot V7) gives the current layer, without selection: its
+ * name, opacity, blend mode, visibility and lock. A section
  * where nothing applies is hidden and the others keep their order. Without
  * selection the tab describes the document and lists its frames to export;
  * Fill and Stroke then give the style of the next objects drawn, as they
@@ -27,7 +29,7 @@ import { escapeHtml } from './TopBar.js'
 
 const { isValidUnit } = SvgCanvas
 
-export const SECTIONS = ['actions', 'geometry', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity', 'extensions', 'frame', 'document', 'frames']
+export const SECTIONS = ['actions', 'geometry', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity', 'extensions', 'frame', 'layer', 'document', 'frames']
 
 /** Order of the geometry groups: position, size, then angle. */
 const GEOMETRY_ORDER = {
@@ -157,6 +159,8 @@ export class Inspector {
       <div id="tools_top" class="se-inspector">${SECTIONS.map(section).join('')}</div>`
     this.root = tab.querySelector('#tools_top')
     this.initActions()
+    this.buildLayerSection()
+    this.buildAppearanceToggles()
     this.buildDocumentSection()
     // The panels that extensions append to #tools_top go to their section,
     // and a section shows as soon as one of its groups does, whoever shows
@@ -348,6 +352,114 @@ export class Inspector {
   }
 
   /**
+   * The current layer, without selection (plan v2, 2.6; lot V7).
+   * @returns {void}
+   */
+  buildLayerSection () {
+    const { editor } = this
+    const t = (key) => escapeHtml(editor.i18next.t(key))
+    const body = this.body('layer')
+    const modes = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'difference']
+    body.innerHTML = `
+      <label class="se-field se-field-wide">${t('layers.layer')}<input type="text" id="se-layer-name"></label>
+      <label class="se-field se-field-short">${t('structure.layer_opacity')}<input type="text" id="se-layer-opacity" inputmode="decimal" size="4"></label>
+      <label class="se-field se-field-short">${t('structure.blend')}<select id="se-layer-blend">${modes.map((mode) =>
+        `<option value="${mode}">${t(`structure.blend_${mode}`)}</option>`).join('')}</select></label>
+      <label class="se-check"><input type="checkbox" id="se-layer-visible">${t('structure.visible')}</label>
+      <label class="se-check"><input type="checkbox" id="se-layer-locked">${t('structure.locked')}</label>`
+    const field = (id) => body.querySelector(`#${id}`)
+    const layer = () => editor.svgCanvas.getCurrentDrawing().getCurrentLayer()
+    const done = () => {
+      editor.layersPanel.populateLayers()
+      this.refreshLayer()
+    }
+    field('se-layer-name').addEventListener('change', (e) => {
+      const name = e.target.value.trim()
+      const drawing = editor.svgCanvas.getCurrentDrawing()
+      if (!name || name === drawing.getCurrentLayerName()) {
+        this.refreshLayer()
+        return
+      }
+      if (drawing.hasLayer(name)) {
+        editor.toast(editor.i18next.t('notification.layerHasThatName'), { type: 'error' })
+        this.refreshLayer()
+        return
+      }
+      editor.svgCanvas.renameCurrentLayer(name)
+      done()
+    })
+    field('se-layer-opacity').addEventListener('change', (e) => {
+      // "50", "50 %" or "0.5"
+      const text = e.target.value.replace(',', '.').replace('%', '').trim()
+      let value = Number.parseFloat(text)
+      if (!Number.isFinite(value)) {
+        this.refreshLayer()
+        return
+      }
+      if (value > 1 || /%/.test(e.target.value)) value /= 100
+      editor.svgCanvas.setLayerStyle(layer(), { opacity: value })
+      done()
+    })
+    field('se-layer-blend').addEventListener('change', (e) => {
+      editor.svgCanvas.setLayerStyle(layer(), { blend: e.target.value })
+      done()
+    })
+    field('se-layer-visible').addEventListener('change', (e) => {
+      const name = editor.svgCanvas.getCurrentDrawing().getCurrentLayerName()
+      editor.svgCanvas.setLayerVisibility(name, e.target.checked)
+      editor.svgCanvas.runExtensions('layerVisChanged')
+      done()
+    })
+    field('se-layer-locked').addEventListener('change', (e) => {
+      editor.svgCanvas.setLocked([layer()], e.target.checked)
+      done()
+    })
+  }
+
+  /**
+   * @returns {void}
+   */
+  refreshLayer () {
+    const { svgCanvas } = this.editor
+    if (!svgCanvas) return
+    const body = this.body('layer')
+    const drawing = svgCanvas.getCurrentDrawing()
+    const group = drawing.getCurrentLayer()
+    if (!group) return
+    const set = (id, value) => {
+      const input = body.querySelector(`#${id}`)
+      if (input && document.activeElement !== input) input.value = value
+    }
+    set('se-layer-name', drawing.getCurrentLayerName() ?? '')
+    const opacity = Number.parseFloat(group.getAttribute('opacity') ?? '1')
+    set('se-layer-opacity', `${Math.round((Number.isFinite(opacity) ? opacity : 1) * 100)} %`)
+    body.querySelector('#se-layer-blend').value = svgCanvas.getBlendMode(group)
+    body.querySelector('#se-layer-visible').checked = group.getAttribute('display') !== 'none'
+    body.querySelector('#se-layer-locked').checked = svgCanvas.isLockedSelf(group)
+  }
+
+  /**
+   * Visibility and lock of the selection, in Appearance (plan v2, 4.5): both
+   * take it out of the selection, since a hidden or locked object cannot be
+   * selected.
+   * @returns {void}
+   */
+  buildAppearanceToggles () {
+    const { editor } = this
+    const t = (key) => escapeHtml(editor.i18next.t(key))
+    const row = document.createElement('div')
+    row.className = 'se-appearance-toggles'
+    row.innerHTML = `
+      <button type="button" class="se-text-button" data-command="hide_selection">${t('structure.hide')}</button>
+      <button type="button" class="se-text-button" data-command="lock_selection">${t('structure.lock')}</button>`
+    row.addEventListener('click', (e) => {
+      const id = e.target.closest('[data-command]')?.dataset.command
+      if (id) editor.commands.execute(id, e)
+    })
+    this.body('appearance').append(row)
+  }
+
+  /**
    * @returns {void}
    */
   refreshDocument () {
@@ -387,7 +499,7 @@ export class Inspector {
       let shown
       if (frame) shown = name === 'frame'
       else if (name === 'frame') shown = false
-      else if (name === 'document' || name === 'frames') shown = none && Boolean(section.querySelector('.se-section-body').children.length)
+      else if (name === 'document' || name === 'frames' || name === 'layer') shown = none && Boolean(section.querySelector('.se-section-body').children.length)
       else if (['fill', 'stroke', 'appearance'].includes(name)) shown = true
       else shown = [...section.querySelector('.se-section-body').children].some(isShown)
       if (name === 'actions') {
@@ -406,6 +518,7 @@ export class Inspector {
     const selected = editor.svgCanvas?.getSelectedElements().filter(Boolean) ?? []
     const none = this.refreshSections()
     if (none) {
+      this.refreshLayer()
       this.refreshDocument()
       editor.frames?.refreshInspector()
     }

@@ -1,23 +1,30 @@
 /**
  * Layers tab of the canvas layout (lot V3; plan v2, section 4.5): the tree
- * of the layers, their groups and their objects, with type and id.
+ * of the layers, their groups and their objects, with type and id. Lot V7
+ * makes it the full tree of section 2.6.
  *
  * - A click selects (Shift or Ctrl adds), in sync with the canvas both ways;
  *   the layer of the object becomes the current layer and its group opens,
- *   as for a Ctrl+click.
+ *   as for a Ctrl+click. A locked object is not selected (lot V7).
+ * - Each row shows a name (the title, else the id) and its type: for a
+ *   symbol, the name of the symbol; for a connector, its fluid.
  * - The eye shows or hides a layer, or an object (`display="none"`, one undo
- *   step).
- * - A double click (or F2) renames a layer in place.
- * - A layer is dragged among the layers to change their order; an object
- *   dragged onto a layer moves to it.
- * - The search keeps the objects whose id, name or type contains the text,
- *   with the layers and groups that hold them.
+ *   step); the lock locks it (lot V7). Both show on hover, and stay while
+ *   they are on.
+ * - A double click (or F2) renames a layer, or an object (its title), in
+ *   place.
+ * - Drag and drop: a layer among the layers; an object, or the selection it
+ *   belongs to, before or after another object, into a group or onto a
+ *   layer. A line shows where it goes, indented to its depth. One undo step;
+ *   the objects keep their place on the page.
+ * - Alt+click on the arrow of a group opens or closes everything inside.
+ * - The search keeps the objects whose id, title, name or type contains the
+ *   text, with the layers and groups that hold them.
  * - Keyboard: role="tree"; up and down move, right opens, left closes or goes
  *   to the parent, Home and End, Enter selects, F2 renames.
  *
  * Only the rows in view are drawn: a tree of 5 000 objects scrolls and
- * follows the selection without delay. The full tree with symbols and
- * connectors comes in V7.
+ * follows the selection without delay.
  * @module LayerTree
  */
 import { escapeHtml } from './TopBar.js'
@@ -62,15 +69,36 @@ export const isListed = (el) => el?.nodeType === 1 && !NOT_LISTED.has(el.localNa
 export const isContainerElement = (el) => el?.localName === 'g' || el?.localName === 'a'
 
 /**
- * The name shown for an object: its id, else its title, else nothing.
  * @param {Element} el
- * @returns {string}
+ * @returns {string} The title of the element, trimmed
  */
-export const nameOf = (el) => {
-  if (el.id) return el.id
+export const titleOf = (el) => {
   const title = [...el.children].find((child) => child.localName === 'title')
   return title?.textContent.trim() ?? ''
 }
+
+/**
+ * The name shown for an object (plan v2, 2.6): its title, else its id, else
+ * nothing.
+ * @param {Element} el
+ * @returns {string}
+ */
+export const nameOf = (el) => titleOf(el) || el.id || ''
+
+/**
+ * @param {Element} el
+ * @returns {boolean} Whether the element itself carries the lock of the
+ *   editor (`se:locked`)
+ */
+export const isLockedSelf = (el) => el?.getAttribute?.('se:locked') === 'true' ||
+  el?.getAttributeNS?.('http://svg-edit.googlecode.com', 'locked') === 'true'
+
+/**
+ * @param {Element} el
+ * @returns {boolean} A connector of the editor (ext-connector)
+ */
+export const isConnector = (el) => Boolean(el?.getAttribute?.('se:connector') ||
+  el?.getAttributeNS?.('http://svg-edit.googlecode.com', 'connector'))
 
 /**
  * The rows of the tree, top of the drawing first, as the canvas draws them.
@@ -81,10 +109,12 @@ export const nameOf = (el) => {
  * @param {string} [state.query] Lower case
  * @returns {{el: Element, depth: number, kind: "layer"|"object", name: string, parent: Element|null, container: boolean, hidden: boolean}[]}
  */
-export const flattenTree = (layers, { isExpanded, query = '' }) => {
+export const flattenTree = (layers, { isExpanded, query = '', typeOf = null }) => {
   const rows = []
   const matches = (el, name) => !query ||
-    name.toLowerCase().includes(query) || el.localName.toLowerCase().includes(query)
+    name.toLowerCase().includes(query) || el.localName.toLowerCase().includes(query) ||
+    (el.id && el.id.toLowerCase().includes(query)) ||
+    Boolean(typeOf?.(el)?.toLowerCase().includes(query))
   // With a search: does the element, or something inside it, match?
   const memo = new Map()
   const holdsMatch = (el) => {
@@ -102,12 +132,13 @@ export const flattenTree = (layers, { isExpanded, query = '' }) => {
     memo.set(el, found)
     return found
   }
-  const walk = (parent, depth) => {
+  const walk = (parent, depth, lockedAbove) => {
     const children = [...parent.children]
     for (let i = children.length - 1; i >= 0; i--) {
       const el = children[i]
       if (!isListed(el) || !holdsMatch(el)) continue
       const container = isContainerElement(el)
+      const locked = isLockedSelf(el)
       rows.push({
         el,
         depth,
@@ -115,9 +146,11 @@ export const flattenTree = (layers, { isExpanded, query = '' }) => {
         name: nameOf(el),
         parent,
         container,
-        hidden: el.getAttribute('display') === 'none'
+        hidden: el.getAttribute('display') === 'none',
+        locked,
+        lockedAbove
       })
-      if (container && (query || isExpanded(el))) walk(el, depth + 1)
+      if (container && (query || isExpanded(el))) walk(el, depth + 1, lockedAbove || locked)
     }
   }
   for (let i = layers.length - 1; i >= 0; i--) {
@@ -125,8 +158,9 @@ export const flattenTree = (layers, { isExpanded, query = '' }) => {
     const layerMatches = !query || name.toLowerCase().includes(query)
     const inside = [...group.children].some((child) => isListed(child) && holdsMatch(child))
     if (!layerMatches && !inside) continue
-    rows.push({ el: group, depth: 0, kind: 'layer', name, parent: null, container: true, hidden: !visible })
-    if (query || isExpanded(group)) walk(group, 1)
+    const locked = isLockedSelf(group)
+    rows.push({ el: group, depth: 0, kind: 'layer', name, parent: null, container: true, hidden: !visible, locked, lockedAbove: false })
+    if (query || isExpanded(group)) walk(group, 1, locked)
   }
   return rows
 }
@@ -216,6 +250,27 @@ export class LayerTree {
   }
 
   /**
+   * Opens or closes a layer or group and every group inside it.
+   * @param {Element} el
+   * @param {boolean} open
+   * @returns {void}
+   */
+  setExpandedDeep (el, open) {
+    const containers = [el, ...el.querySelectorAll('g, a')].filter((node) => isListed(node) || node === el)
+    for (const node of containers) {
+      if (open) {
+        this.collapsed.delete(node)
+        this.expanded.add(node)
+      } else {
+        this.expanded.delete(node)
+        this.collapsed.add(node)
+      }
+    }
+    this.dirty = true
+    this.refresh()
+  }
+
+  /**
    * The layers, bottom first.
    * @returns {{name: string, group: Element, visible: boolean}[]}
    */
@@ -274,7 +329,8 @@ export class LayerTree {
     this.dirty = false
     this.rows = flattenTree(this.layers(), {
       isExpanded: (el) => this.isExpanded(el),
-      query: this.query
+      query: this.query,
+      typeOf: (el) => this.typeLabel(el)
     })
     this.indexOf = new Map(this.rows.map((row, i) => [row.el, i]))
     this.current = svgCanvas.getCurrentDrawing().getCurrentLayer()
@@ -303,6 +359,34 @@ export class LayerTree {
   }
 
   /**
+   * The type shown on a row: for a symbol, its name; for a connector, its
+   * fluid (lot V7); else the type of element.
+   * @param {Element} el
+   * @returns {string}
+   */
+  typeLabel (el) {
+    const { editor } = this
+    if (el.localName === 'use') {
+      const name = editor.symbols?.nameOfInstance?.(el)
+      if (name) return name
+    }
+    if (isConnector(el)) {
+      return editor.connectors?.fluidLabelOf?.(el) || editor.i18next.t('layout.type_connector')
+    }
+    return editor.i18next.t(`layout.type_${TYPE_KEYS[el.localName] ?? 'other'}`, { defaultValue: el.localName })
+  }
+
+  /**
+   * @param {object} row
+   * @returns {string} The file of the icon of a row
+   */
+  iconOf (row) {
+    if (row.kind === 'layer') return 'layer_view.svg'
+    if (isConnector(row.el)) return 'conn.svg'
+    return TYPE_ICONS[row.el.localName] ?? 'box.svg'
+  }
+
+  /**
    * @param {number} index
    * @returns {HTMLElement}
    */
@@ -326,6 +410,8 @@ export class LayerTree {
     if (row.kind === 'layer' && row.el === this.current) el.classList.add('se-tree-current')
     if (index === this.focusIndex) el.classList.add('se-tree-focus')
     if (row.hidden) el.classList.add('se-tree-hidden')
+    if (row.locked) el.classList.add('se-tree-locked')
+    if (row.lockedAbove) el.classList.add('se-tree-locked-above')
     el.draggable = true
     const open = row.container && (this.query || this.isExpanded(row.el))
     if (row.container) el.setAttribute('aria-expanded', String(Boolean(open)))
@@ -339,7 +425,7 @@ export class LayerTree {
     }
     const icon = document.createElement('se-icon')
     icon.className = 'se-tree-icon'
-    icon.setAttribute('src', `${img}/${row.kind === 'layer' ? 'layer_view.svg' : TYPE_ICONS[row.el.localName] ?? 'box.svg'}`)
+    icon.setAttribute('src', `${img}/${this.iconOf(row)}`)
     const name = document.createElement('span')
     name.className = 'se-tree-name'
     const type = document.createElement('span')
@@ -347,21 +433,29 @@ export class LayerTree {
     if (row.kind === 'layer') {
       name.textContent = row.name
     } else {
-      const typeName = editor.i18next.t(`layout.type_${TYPE_KEYS[row.el.localName] ?? 'other'}`, { defaultValue: row.el.localName })
+      const typeName = this.typeLabel(row.el)
       name.textContent = row.name || typeName
       if (row.name) type.textContent = typeName
     }
-    const eye = document.createElement('button')
-    eye.type = 'button'
-    eye.className = 'se-tree-eye'
-    eye.tabIndex = -1
-    const label = editor.i18next.t(row.hidden ? 'layout.show' : 'layout.hide')
-    eye.setAttribute('aria-label', `${label} : ${name.textContent}`)
-    eye.seTooltip = { label }
-    const eyeIcon = document.createElement('se-icon')
-    eyeIcon.setAttribute('src', `${img}/${row.hidden ? 'eye_off.svg' : 'eye.svg'}`)
-    eye.append(eyeIcon)
-    el.append(toggle, icon, name, type, eye)
+    const button = (className, label, src) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = `se-tree-button ${className}`
+      b.tabIndex = -1
+      b.setAttribute('aria-label', `${label} : ${name.textContent}`)
+      b.seTooltip = { label }
+      const glyph = document.createElement('se-icon')
+      glyph.setAttribute('src', `${img}/${src}`)
+      b.append(glyph)
+      return b
+    }
+    const lock = button('se-tree-lock',
+      editor.i18next.t(row.locked ? 'structure.unlock' : 'structure.lock_one'),
+      row.locked ? 'lock.svg' : 'lock_open.svg')
+    const eye = button('se-tree-eye',
+      editor.i18next.t(row.hidden ? 'layout.show' : 'layout.hide'),
+      row.hidden ? 'eye_off.svg' : 'eye.svg')
+    el.append(toggle, icon, name, type, lock, eye)
     return el
   }
 
@@ -382,15 +476,19 @@ export class LayerTree {
     const row = this.rowOf(e.target)
     if (!row) return
     this.focusIndex = this.indexOf.get(row.el) ?? 0
-    if (e.detail === 2 && row.kind === 'layer' && e.target.closest('.se-tree-name')) {
+    if (e.detail === 2 && e.target.closest('.se-tree-name, .se-tree-type')) {
       // The second click of a double click: the rows were drawn again after
       // the first one, so no dblclick event reaches them.
       this.rename(row)
       return
     } else if (e.target.closest('.se-tree-eye')) {
       this.toggleVisibility(row)
+    } else if (e.target.closest('.se-tree-lock')) {
+      this.toggleLock(row)
     } else if (e.target.closest('.se-tree-toggle') && row.container) {
-      this.setExpanded(row.el, !this.isExpanded(row.el))
+      // Alt+click opens or closes everything inside (plan v2, 2.6).
+      if (e.altKey) this.setExpandedDeep(row.el, !this.isExpanded(row.el))
+      else this.setExpanded(row.el, !this.isExpanded(row.el))
     } else {
       this.choose(row, { add: e.shiftKey || e.ctrlKey || e.metaKey })
     }
@@ -415,6 +513,11 @@ export class LayerTree {
       editor.layersPanel.populateLayers()
       return
     }
+    // A locked object is not selected (lot V7): the row says why.
+    if (row.locked || row.lockedAbove) {
+      editor.toast(editor.i18next.t('structure.object_locked'), { type: 'info' })
+      return
+    }
     const selected = svgCanvas.getSelectedElements().filter(Boolean)
     if (add && selected.includes(row.el)) {
       svgCanvas.removeFromSelection([row.el])
@@ -436,9 +539,21 @@ export class LayerTree {
       editor.layersPanel.populateLayers()
       return
     }
-    // One undo step; an empty value removes the attribute.
-    svgCanvas.changeSelectedAttribute('display', row.hidden ? '' : 'none', [row.el])
+    // One undo step
+    svgCanvas.setVisible([row.el], row.hidden)
     this.invalidate()
+  }
+
+  /**
+   * Locks or unlocks a layer or an object (lot V7): one undo step.
+   * @param {object} row
+   * @returns {void}
+   */
+  toggleLock (row) {
+    const { editor } = this
+    editor.svgCanvas.setLocked([row.el], !row.locked)
+    if (row.kind === 'layer') editor.layersPanel.populateLayers()
+    this.rebuild()
   }
 
   /**
@@ -461,7 +576,6 @@ export class LayerTree {
    * @returns {void}
    */
   rename (row) {
-    if (row.kind !== 'layer') return
     const { editor } = this
     const index = this.indexOf.get(row.el)
     this.scrollTo(index)
@@ -472,8 +586,11 @@ export class LayerTree {
     const input = document.createElement('input')
     input.type = 'text'
     input.className = 'se-tree-rename'
-    input.value = row.name
-    input.setAttribute('aria-label', editor.i18next.t('layers.rename'))
+    const object = row.kind === 'object'
+    // An object is named by its title; its id stays (D4).
+    input.value = object ? titleOf(row.el) : row.name
+    if (object && row.el.id) input.placeholder = row.el.id
+    input.setAttribute('aria-label', editor.i18next.t(object ? 'structure.rename' : 'layers.rename'))
     nameEl.replaceWith(input)
     rowEl.draggable = false
     input.focus()
@@ -483,7 +600,9 @@ export class LayerTree {
       if (done) return
       done = true
       const name = input.value.trim()
-      if (commit && name && name !== row.name) {
+      if (commit && object) {
+        if (name !== titleOf(row.el)) editor.svgCanvas.setTitle(row.el, name)
+      } else if (commit && name && name !== row.name) {
         if (editor.svgCanvas.getCurrentDrawing().hasLayer(name)) {
           editor.toast(editor.i18next.t('notification.layerHasThatName'), { type: 'error' })
         } else {
@@ -593,7 +712,7 @@ export class LayerTree {
         }
         break
       case 'F2':
-        if (row?.kind === 'layer') {
+        if (row) {
           e.preventDefault()
           e.stopPropagation()
           this.rename(row)
@@ -603,7 +722,53 @@ export class LayerTree {
   }
 
   /**
-   * Drag and drop: layers among layers, objects onto a layer.
+   * The objects a drag carries: the selection, when the row dragged is part
+   * of it, else the object of the row; in document order.
+   * @param {object} row
+   * @returns {Element[]}
+   */
+  draggedObjects (row) {
+    if (row.kind !== 'object') return []
+    if (!this.selected.has(row.el)) return [row.el]
+    const content = this.editor.svgCanvas.getSvgContent()
+    const all = [...this.selected].filter((el) => el.isConnected && content.contains(el))
+    // Document order; an object whose group is also carried goes with it.
+    all.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+    return all.filter((el) => !all.some((other) => other !== el && other.contains(el)))
+  }
+
+  /**
+   * Where a drop on a row puts what is dragged.
+   * @param {DragEvent} e
+   * @param {object} dragged The row dragged, with its objects
+   * @param {object} row The row under the pointer
+   * @param {HTMLElement} rowEl
+   * @returns {"before"|"after"|"into"|null} Above the row, below it, or
+   *   inside it (a layer or a group)
+   */
+  placement (e, dragged, row, rowEl) {
+    if (!dragged || !row || row.el === dragged.el) return null
+    const box = rowEl.getBoundingClientRect()
+    const y = (e.clientY - box.top) / (box.height || 1)
+    if (dragged.kind === 'layer') {
+      if (row.kind !== 'layer') return null
+      return y < 0.5 ? 'before' : 'after'
+    }
+    // Nothing goes into itself.
+    if (dragged.objects.some((el) => el === row.el || el.contains(row.el))) return null
+    if (row.kind === 'layer') return 'into'
+    if (row.container) {
+      if (y < 0.25) return 'before'
+      // Below an open group is its top.
+      if (y > 0.75) return this.isExpanded(row.el) && !this.query ? 'into' : 'after'
+      return 'into'
+    }
+    return y < 0.5 ? 'before' : 'after'
+  }
+
+  /**
+   * Drag and drop: layers among layers; objects among objects, into a group
+   * or onto a layer (lot V7).
    * @returns {void}
    */
   initDrag () {
@@ -611,34 +776,28 @@ export class LayerTree {
     const clear = () => {
       for (const el of this.$tree.querySelectorAll('.se-tree-drop-before, .se-tree-drop-after, .se-tree-drop-into')) {
         el.classList.remove('se-tree-drop-before', 'se-tree-drop-after', 'se-tree-drop-into')
+        el.style.removeProperty('--se-drop-indent')
       }
-    }
-    const placement = (e, row, rowEl) => {
-      if (!dragged || !row || row.el === dragged.el) return null
-      if (dragged.kind === 'layer') {
-        if (row.kind !== 'layer') return null
-        const box = rowEl.getBoundingClientRect()
-        return e.clientY < box.top + box.height / 2 ? 'before' : 'after'
-      }
-      // An object goes into another layer.
-      if (row.kind === 'layer' && row.el !== dragged.el.closest?.('g.layer')) return 'into'
-      return null
     }
     this.$tree.addEventListener('dragstart', (e) => {
       const row = this.rowOf(e.target)
       if (!row) return
-      dragged = row
+      dragged = { ...row, objects: this.draggedObjects(row) }
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', row.name || row.el.localName)
     })
     this.$tree.addEventListener('dragover', (e) => {
       const rowEl = e.target.closest?.('.se-tree-row')
-      const where = placement(e, this.rowOf(e.target), rowEl)
+      const row = this.rowOf(e.target)
+      const where = rowEl ? this.placement(e, dragged, row, rowEl) : null
       clear()
       if (!where) return
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
       rowEl.classList.add(`se-tree-drop-${where}`)
+      // The line of insertion starts at the depth where the objects go.
+      const depth = where === 'into' ? row.depth + 1 : row.depth
+      rowEl.style.setProperty('--se-drop-indent', `${4 + depth * 14}px`)
     })
     this.$tree.addEventListener('dragleave', clear)
     this.$tree.addEventListener('dragend', () => {
@@ -648,7 +807,7 @@ export class LayerTree {
     this.$tree.addEventListener('drop', (e) => {
       const rowEl = e.target.closest?.('.se-tree-row')
       const row = this.rowOf(e.target)
-      const where = placement(e, row, rowEl)
+      const where = rowEl ? this.placement(e, dragged, row, rowEl) : null
       clear()
       if (!where) return
       e.preventDefault()
@@ -658,7 +817,7 @@ export class LayerTree {
   }
 
   /**
-   * @param {object} dragged
+   * @param {object} dragged The row dragged, with its objects
    * @param {object} target
    * @param {"before"|"after"|"into"} where
    * @returns {void}
@@ -666,7 +825,6 @@ export class LayerTree {
   drop (dragged, target, where) {
     const { editor } = this
     const { svgCanvas } = editor
-    const drawing = svgCanvas.getCurrentDrawing()
     if (dragged.kind === 'layer') {
       // Rows go from the top layer down: "before" a row is above it.
       const layers = this.layers().map((layer) => layer.name)
@@ -679,13 +837,29 @@ export class LayerTree {
       editor.layersPanel.populateLayers()
       return
     }
-    if (where === 'into' && target.kind === 'layer' && drawing.hasLayer(target.name)) {
-      const moved = svgCanvas.selectElements([dragged.el])
-      if (!moved.length) return
-      svgCanvas.moveSelectedToLayer(target.name)
-      svgCanvas.clearSelection()
-      editor.layersPanel.populateLayers()
+    const objects = dragged.objects
+    if (!objects.length) return
+    // Rows go from the top of the drawing down, the document the other way:
+    // above a row is after it in the document.
+    let parent
+    let before = null
+    if (where === 'into') {
+      parent = target.el
+    } else {
+      parent = target.parent
+      let ref = where === 'before' ? target.el.nextElementSibling : target.el
+      while (ref && objects.includes(ref)) ref = ref.nextElementSibling
+      before = ref
     }
+    if (!parent) return
+    if (svgCanvas.getCurrentGroup?.()) svgCanvas.leaveContext()
+    const cmd = svgCanvas.moveElementsTo(objects, parent, before)
+    if (!cmd) return
+    // The layers first (their list clears the selection), then the objects
+    // stay selected, in their new place.
+    editor.layersPanel.populateLayers()
+    svgCanvas.selectElements(objects.filter((el) => !svgCanvas.isLocked(el)))
+    this.rebuild()
   }
 }
 

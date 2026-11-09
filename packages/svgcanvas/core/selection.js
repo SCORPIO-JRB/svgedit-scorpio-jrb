@@ -125,6 +125,11 @@ const addToSelectionMethod = (elemsToAdd, showGrips) => {
     if (!elem || !elem.getBBox || elem.tagName === 'defs') {
       continue
     }
+    // A locked object, or one in a locked group or layer, is never selected
+    // (lot V7).
+    if (svgCanvas.isLocked?.(elem)) {
+      continue
+    }
 
     if (elem.tagName === 'a' && elem.childNodes.length === 1) {
       // Make "a" element's child be the selected element
@@ -216,6 +221,17 @@ const getMouseTargetMethod = (evt) => {
   const content = svgCanvas.getSvgContent()
   if ([svgRoot, container, content, currentLayer].includes(mouseTarget)) {
     return svgCanvas.getSvgRoot()
+  }
+
+  // A locked object lets the pointer through to what lies below it (lot V7;
+  // the stylesheet already does so, this covers a lock it cannot read).
+  if (svgCanvas.isLocked?.(mouseTarget) && content.contains(mouseTarget)) {
+    const below = document.elementsFromPoint?.(evt.clientX, evt.clientY) ?? []
+    const next = below.find((el) => content.contains(el) && el !== content && !svgCanvas.isLocked(el))
+    if (!next || next.parentNode === content) {
+      return svgCanvas.getSvgRoot()
+    }
+    mouseTarget = next
   }
 
   // If it's a selection grip, return the grip parent

@@ -1050,7 +1050,7 @@
   font-size: var(--se-font-size-label);
 }
 
-.se-tree-eye {
+.se-tree-button {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -1067,15 +1067,23 @@
   --se-icon-size: 14px;
 }
 
-.se-tree-row:hover .se-tree-eye,
+/* The eye and the lock show on hover, and stay while they are on (lot V7). */
+.se-tree-row:hover .se-tree-button,
+.se-tree-row.se-tree-focus .se-tree-button,
 .se-tree-row.se-tree-hidden .se-tree-eye,
-.se-tree-row.se-tree-focus .se-tree-eye {
+.se-tree-row.se-tree-locked .se-tree-lock {
   opacity: 1;
 }
 
-.se-tree-eye:hover {
+.se-tree-button:hover {
   background: var(--se-control);
   color: var(--se-text);
+}
+
+/* Inside a locked layer or group: the content cannot be selected either. */
+.se-tree-row.se-tree-locked-above .se-tree-name,
+.se-tree-row.se-tree-locked-above .se-tree-icon {
+  color: var(--se-text-secondary);
 }
 
 .se-tree-rename {
@@ -1090,12 +1098,24 @@
   font: inherit;
 }
 
-.se-tree-row.se-tree-drop-before {
-  box-shadow: inset 0 2px 0 var(--se-accent);
+/* The line of insertion, indented to the depth where the objects go. */
+.se-tree-row.se-tree-drop-before::before,
+.se-tree-row.se-tree-drop-after::before {
+  position: absolute;
+  right: 0;
+  left: var(--se-drop-indent, 0);
+  height: 2px;
+  background: var(--se-accent);
+  content: "";
+  pointer-events: none;
 }
 
-.se-tree-row.se-tree-drop-after {
-  box-shadow: inset 0 -2px 0 var(--se-accent);
+.se-tree-row.se-tree-drop-before::before {
+  top: 0;
+}
+
+.se-tree-row.se-tree-drop-after::before {
+  bottom: 0;
 }
 
 .se-tree-row.se-tree-drop-into {
@@ -2405,4 +2425,12 @@
   max-height: 100%;
   background: var(--se-preview-page);
   box-shadow: 0 0 0 1px var(--se-border);
+}
+
+/* Visibility and lock of the selection, in Appearance (lot V7) */
+.se-appearance-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--se-space-2);
+  width: 100%;
 }

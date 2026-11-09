@@ -12,6 +12,7 @@ import { ThemeController } from './theme.js'
 import { ViewController } from './view.js'
 import { GridLayer } from './grid.js'
 import { FrameLayer } from './frames.js'
+import { initStructure } from './structure.js'
 import { BindingPanel, ungroupSelected } from './binding.js'
 import { Preview } from './preview.js'
 import { EditorLayout } from './layout.js'
@@ -167,6 +168,8 @@ class EditorStartup {
     // The preview of the saved file (plan v2, 4.6; lot V6), in both layouts
     this.preview = new Preview(this)
     this.commands.register({ id: 'preview', label: 'preview.open', run: () => this.preview.open() })
+    // Lock and visibility of objects (lot V7)
+    initStructure(this)
     // Frames to export, in the canvas layout (lot V5): their tool after
     // Text, their sections in the inspector.
     if (this.layout?.canvas) {

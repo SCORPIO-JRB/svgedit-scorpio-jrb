@@ -38,6 +38,7 @@ import { init as multiTransformInit } from './core/multi-transform.js'
 import { init as scaleToolInit } from './core/scale-tool.js'
 import { init as selectionNavInit } from './core/selection-nav.js'
 import { init as framesInit } from './core/frames.js'
+import { init as structureInit } from './core/structure.js'
 import {
   init as jsonInit,
   getJsonFromSvgElements,
@@ -283,6 +284,7 @@ class SvgCanvas {
     draw.init(this)
     elemGetSet.init(this)
     framesInit(this)
+    structureInit(this)
 
     // prevent links from being followed in the canvas
     const handleLinkInCanvas = e => {

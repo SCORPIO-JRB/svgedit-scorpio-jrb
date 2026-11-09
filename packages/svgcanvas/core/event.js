@@ -50,6 +50,9 @@ import { isFidelityOn } from './fidelity.js'
 // The tools whose points snap while drawing (lot V2). The grid keeps its own
 // snapping there, as before.
 const DRAW_SNAP_MODES = new Set(['rect', 'square', 'image', 'foreignObject', 'line', 'ellipse'])
+/** The tools that add an object to the current layer (lot V7: not a locked one). */
+const DRAWING_MODES = new Set(['rect', 'square', 'circle', 'ellipse', 'line', 'fhellipse', 'fhrect', 'fhpath',
+  'path', 'text', 'image', 'foreignObject', 'star', 'polygon', 'shapelib', 'connector'])
 
 const {
   InsertElementCommand,
@@ -1888,6 +1891,16 @@ const mouseDownEvent = (evt) => {
     mouseTarget = selectedElements[0]
   }
   singleTextResize = null
+
+  // Nothing is drawn into a locked layer or group (lot V7): the editor says
+  // why.
+  if (!rightClick && DRAWING_MODES.has(svgCanvas.getCurrentMode())) {
+    const locked = svgCanvas.lockedDrawingTarget?.()
+    if (locked) {
+      svgCanvas.call('locked', locked)
+      return
+    }
+  }
 
   svgCanvas.setStartTransform(mouseTarget.getAttribute('transform'))
 

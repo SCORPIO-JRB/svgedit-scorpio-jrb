@@ -392,6 +392,10 @@ export class ChangeElementCommand extends Command {
         } else if (isNullishOrEmpty) {
           this.elem.setAttribute(attr, '')
           this.elem.removeAttribute(attr)
+        } else if (attr.startsWith('se:') && !this.elem.hasAttribute(attr)) {
+          // An attribute of the editor namespace (a lock, lot V7) is created
+          // in that namespace, as the parser of a saved file would.
+          this.elem.setAttributeNS(NS.SE, attr, value)
         } else {
           this.elem.setAttribute(attr, value)
         }
@@ -428,6 +432,8 @@ export class ChangeElementCommand extends Command {
           }
         } else if (isNullishOrEmpty) {
           this.elem.removeAttribute(attr)
+        } else if (attr.startsWith('se:') && !this.elem.hasAttribute(attr)) {
+          this.elem.setAttributeNS(NS.SE, attr, value)
         } else {
           this.elem.setAttribute(attr, value)
         }

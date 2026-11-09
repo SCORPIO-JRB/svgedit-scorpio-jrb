@@ -308,6 +308,15 @@ hr {
   transition: none !important;
 }
 
+/* A locked object, or what a locked group or layer holds, lets the pointer
+   through (lot V7): it is never selected, whichever layer is current. */
+#svgcontent [*|locked="true"],
+#svgcontent [*|locked="true"] *,
+#svgcontent [se\:locked="true"],
+#svgcontent [se\:locked="true"] * {
+  pointer-events: none !important;
+}
+
 #workarea.wireframe #svgcontent * {
   fill: none;
   stroke: var(--se-wireframe-stroke);
