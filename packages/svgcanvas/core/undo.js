@@ -5,6 +5,7 @@
  * @copyright 2011 Jeff Schiller
  */
 import * as draw from './draw.js'
+import { NS } from './namespaces.js'
 import * as hstry from './history.js'
 import { BBOX_AFFECTING_ATTRS } from './history.js'
 import {
@@ -13,6 +14,7 @@ import {
 import {
   isGecko
 } from '../common/browser.js'
+import { getTextSource, setTextSource, changesLayout, pinLineHeight, layoutText } from './text-lines.js'
 import {
   transformPoint, transformListToTransform, getTransformList
 } from './math.js'
@@ -132,22 +134,26 @@ export const getUndoManager = () => {
           if (values.stdDeviation) {
             svgCanvas.setBlurOffsets(cmd.elem.parentNode, values.stdDeviation)
           }
-          if (cmd.elem.tagName === 'text') {
-            const [dx, dy] = [cmd.newValues.x - cmd.oldValues.x,
-              cmd.newValues.y - cmd.oldValues.y]
-
+          // The spans of a text follow a change of its x or y; a step that
+          // put back the content of the text (its lines) has nothing to move.
+          const delta = (name) => {
+            if (!(name in cmd.oldValues)) return 0
+            const d = Number(cmd.newValues[name]) - Number(cmd.oldValues[name])
+            return Number.isFinite(d) ? d : 0
+          }
+          const [dx, dy] = [delta('x'), delta('y')]
+          if (cmd.elem.tagName === 'text' && !cmd.oldContent && (dx || dy)) {
             const tspans = cmd.elem.children
 
-            for (let i = 0; i < tspans.length; i++) {
-              let x = Number(tspans[i].getAttribute('x'))
-              let y = Number(tspans[i].getAttribute('y'))
-
-              const unapply = (eventType === EventTypes.AFTER_UNAPPLY)
-              x = unapply ? x - dx : x + dx
-              y = unapply ? y - dy : y + dy
-
-              tspans[i].setAttribute('x', x)
-              tspans[i].setAttribute('y', y)
+            const sign = eventType === EventTypes.AFTER_UNAPPLY ? -1 : 1
+            for (const tspan of tspans) {
+              // Only the places a span has (a span without x follows the text)
+              for (const [name, d] of [['x', dx], ['y', dy]]) {
+                const value = Number(tspan.getAttribute(name))
+                if (d && tspan.hasAttribute(name) && Number.isFinite(value)) {
+                  tspan.setAttribute(name, value + sign * d)
+                }
+              }
             }
           }
         }
@@ -228,12 +234,21 @@ export const changeSelectedAttributeNoUndoMethod = (attr, newValue, elems) => {
       continue
     }
 
-    let oldval = attr === '#text' ? elem.textContent : elem.getAttribute(attr)
+    let oldval = attr === '#text' ? getTextSource(elem) : elem.getAttribute(attr)
     if (!oldval) { oldval = '' }
     if (oldval !== String(newValue)) {
+      // A text of several lines, or of a fixed width, is laid out again after
+      // a change of its font, place or width: its line height is read from
+      // its lines before (texts of several lines).
+      const relayout = changesLayout(elem, attr)
+      if (relayout) pinLineHeight(elem)
       if (attr === '#text') {
         // const oldW = utilsGetBBox(elem).width;
-        elem.textContent = newValue
+        if (elem.localName === 'text') {
+          setTextSource(elem, newValue)
+        } else {
+          elem.textContent = newValue
+        }
 
         // FF bug occurs on on rotated elements
         if ((/rotate/).test(elem.getAttribute('transform'))) {
@@ -243,6 +258,13 @@ export const changeSelectedAttributeNoUndoMethod = (attr, newValue, elems) => {
         // but this doesn't actually fix it. Hopefully on the right track, though. -Fyrd
       } else if (attr === '#href') {
         setHref(elem, newValue)
+      } else if (attr.startsWith('se:')) {
+        // An attribute of the editor (the width of a text, its line height)
+        if (newValue || typeof newValue === 'number') {
+          elem.setAttributeNS(NS.SE, attr, String(newValue))
+        } else {
+          elem.removeAttributeNS(NS.SE, attr.slice(3))
+        }
       } else if (newValue) {
         // Number(), unlike parseFloat(), rejects a value with a trailing unit suffix
         // (e.g. "10pt", "2px") instead of silently truncating it to a bare number.
@@ -253,6 +275,7 @@ export const changeSelectedAttributeNoUndoMethod = (attr, newValue, elems) => {
       } else {
         elem.removeAttribute(attr)
       }
+      if (relayout && attr !== '#text') layoutText(elem)
 
       // Go into "select" mode for text changes
       // NOTE: Important that this happens AFTER elem.setAttribute() or else attributes like
@@ -347,6 +370,58 @@ export const changeSelectedAttributeMethod = (attr, val, elems) => {
     // svgCanvas.addCommandToHistory(batchCmd);
     svgCanvas.undoMgr.addCommandToHistory(batchCmd)
   }
+}
+
+/**
+ * Changes several attributes of the given or selected elements as one undo
+ * step: a text style (lot V4) writes its font, size, weight and fill at once.
+ * @function module:svgcanvas.SvgCanvas#changeSelectedAttributes
+ * @param {Object<string, string|number>} attrs - New values by attribute
+ * @param {Element[]} [elems] - The selected elements by default
+ * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @returns {void}
+ */
+export const changeSelectedAttributesMethod = (attrs, elems) => {
+  elems = (elems || svgCanvas.getSelectedElements()).filter(Boolean)
+  const entries = Object.entries(attrs ?? {})
+  if (!elems.length || !entries.length) { return }
+  const batchCmd = new hstry.BatchCommand('Change attributes')
+  for (const [attr, val] of entries) {
+    svgCanvas.undoMgr.beginUndoableChange(attr, elems)
+    changeSelectedAttributeNoUndoMethod(attr, val, elems)
+    const cmd = svgCanvas.undoMgr.finishUndoableChange()
+    if (!cmd.isEmpty()) { batchCmd.addSubCommand(cmd) }
+  }
+  if (!batchCmd.isEmpty()) {
+    svgCanvas.undoMgr.addCommandToHistory(batchCmd)
+    svgCanvas.call('changed', elems)
+  }
+}
+
+/**
+ * Runs a function whose changes go to the history as one step: every command
+ * it adds becomes a sub-command of a single batch. A paint (colour, opacity
+ * and new gradient) is undone at once this way.
+ * @function module:svgcanvas.SvgCanvas#groupHistory
+ * @param {string} label - Text of the step
+ * @param {(batch: BatchCommand) => void} fn - Its changes; it may also add
+ *   commands to the batch itself
+ * @returns {BatchCommand} The batch, added to the history unless empty
+ */
+export const groupHistoryMethod = (label, fn) => {
+  const undoMgr = svgCanvas.undoMgr
+  const batch = new hstry.BatchCommand(label)
+  const own = Object.prototype.hasOwnProperty.call(undoMgr, 'addCommandToHistory')
+  const add = undoMgr.addCommandToHistory
+  undoMgr.addCommandToHistory = (cmd) => { batch.addSubCommand(cmd) }
+  try {
+    fn(batch)
+  } finally {
+    if (own) undoMgr.addCommandToHistory = add
+    else delete undoMgr.addCommandToHistory
+  }
+  if (!batch.isEmpty()) undoMgr.addCommandToHistory(batch)
+  return batch
 }
 
 /**

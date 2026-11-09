@@ -146,7 +146,9 @@
   color: var(--se-accent);
 }
 
+/* As specific as the empty mark of a menu entry above, and after it. */
 .se-layout-canvas se-popover [aria-checked="true"]::before,
+.se-layout-canvas se-popover[menu] [aria-checked="true"]::before,
 .se-layout-canvas se-popover [data-zoom][aria-current="true"]::before {
   content: '✓';
 }
@@ -1048,7 +1050,7 @@
   font-size: var(--se-font-size-label);
 }
 
-.se-tree-eye {
+.se-tree-button {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -1065,15 +1067,23 @@
   --se-icon-size: 14px;
 }
 
-.se-tree-row:hover .se-tree-eye,
+/* The eye and the lock show on hover, and stay while they are on (lot V7). */
+.se-tree-row:hover .se-tree-button,
+.se-tree-row.se-tree-focus .se-tree-button,
 .se-tree-row.se-tree-hidden .se-tree-eye,
-.se-tree-row.se-tree-focus .se-tree-eye {
+.se-tree-row.se-tree-locked .se-tree-lock {
   opacity: 1;
 }
 
-.se-tree-eye:hover {
+.se-tree-button:hover {
   background: var(--se-control);
   color: var(--se-text);
+}
+
+/* Inside a locked layer or group: the content cannot be selected either. */
+.se-tree-row.se-tree-locked-above .se-tree-name,
+.se-tree-row.se-tree-locked-above .se-tree-icon {
+  color: var(--se-text-secondary);
 }
 
 .se-tree-rename {
@@ -1088,12 +1098,24 @@
   font: inherit;
 }
 
-.se-tree-row.se-tree-drop-before {
-  box-shadow: inset 0 2px 0 var(--se-accent);
+/* The line of insertion, indented to the depth where the objects go. */
+.se-tree-row.se-tree-drop-before::before,
+.se-tree-row.se-tree-drop-after::before {
+  position: absolute;
+  right: 0;
+  left: var(--se-drop-indent, 0);
+  height: 2px;
+  background: var(--se-accent);
+  content: "";
+  pointer-events: none;
 }
 
-.se-tree-row.se-tree-drop-after {
-  box-shadow: inset 0 -2px 0 var(--se-accent);
+.se-tree-row.se-tree-drop-before::before {
+  top: 0;
+}
+
+.se-tree-row.se-tree-drop-after::before {
+  bottom: 0;
 }
 
 .se-tree-row.se-tree-drop-into {
@@ -1281,4 +1303,1437 @@
   background: var(--se-action);
   color: var(--se-action-text);
   font-weight: 600;
+}
+
+/* Contextual bar (lot V4)
+—————————————————————————————*/
+
+/* Above the selection; its empty parts let the click through to the canvas. */
+#se-context-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 0 4px;
+  background: var(--se-surface-raised);
+  box-shadow: var(--se-shadow-menu);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity var(--se-duration-state) var(--se-ease-out);
+}
+
+#se-context-bar[hidden],
+#se-context-bar.se-ctx-hiding,
+#se-context-bar.se-ctx-offscreen {
+  display: none;
+}
+
+#se-context-bar > :not(.se-sep) {
+  pointer-events: auto;
+}
+
+/* Over an object it covers: faded, the click goes through its empty parts. */
+#se-context-bar.se-ctx-faded {
+  opacity: 0.3;
+}
+
+#se-context-bar [hidden] {
+  display: none;
+}
+
+#se-context-bar .se-text-button[aria-pressed="true"] {
+  background: var(--se-accent-bg);
+  color: var(--se-accent);
+}
+
+#se-context-bar .se-text-button:disabled,
+#se-context-bar .se-icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Fill and stroke: the swatch of the inspector's colour picker, and a name. */
+#se-context-bar .se-ctx-paint {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--se-control-size);
+  padding-right: 6px;
+  border-radius: var(--se-radius-control);
+  cursor: pointer;
+}
+
+#se-context-bar .se-ctx-paint:hover {
+  background: var(--se-control-hover);
+}
+
+#se-context-bar se-colorpicker::part(picker) {
+  width: 24px;
+  height: var(--se-control-size);
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+#se-context-bar se-colorpicker::part(logo),
+#se-context-bar se-colorpicker::part(value),
+#se-context-bar se-colorpicker::part(alpha) {
+  display: none;
+}
+
+#se-context-bar se-colorpicker:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--se-radius-control);
+}
+
+#se-context-bar .se-ctx-paint-name {
+  color: var(--se-text);
+}
+
+/* Fields: as in the inspector, narrower. */
+#se-context-bar se-spin-input {
+  display: block;
+  width: 64px;
+}
+
+#se-context-bar se-spin-input::part(field) {
+  box-sizing: border-box;
+  gap: 4px;
+  width: 100%;
+  height: var(--se-control-size);
+  margin: 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+#se-context-bar se-spin-input::part(field):focus-within {
+  border-color: var(--se-focus-ring);
+}
+
+#se-context-bar se-spin-input::part(icon) {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--se-text-label);
+}
+
+#se-context-bar se-spin-input::part(label) {
+  display: none;
+}
+
+#se-context-bar se-spin-input::part(box),
+#se-context-bar se-spin-input::part(input) {
+  flex: 1;
+  width: 100% !important;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  text-align: left;
+}
+
+#se-context-bar se-spin-input::part(spin-button) {
+  display: none;
+}
+
+#se-context-bar .se-ctx-list-value {
+  display: inline-flex;
+  align-items: center;
+}
+
+#se-ctx-list [role="menuitemradio"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Text styles: Style ▾ of the contextual bar (lot V4) */
+#se-textstyles {
+  width: 280px;
+  padding: 8px;
+}
+
+#se-textstyles .se-textstyles-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+#se-textstyles [role="tab"] {
+  height: var(--se-control-size);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: transparent;
+  color: var(--se-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+#se-textstyles [role="tab"][aria-selected="true"] {
+  background: var(--se-surface-tab-active);
+  color: var(--se-text);
+}
+
+#se-textstyles [role="tab"]:focus-visible,
+#se-textstyles .se-textstyle-item:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+}
+
+#se-textstyles .se-textstyle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: transparent;
+  color: var(--se-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+#se-textstyles .se-textstyle-item:hover {
+  background: var(--se-control-hover);
+}
+
+#se-textstyles .se-textstyle-item[aria-checked="true"] {
+  background: var(--se-accent-bg);
+}
+
+#se-textstyles .se-textstyle-sample {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#se-textstyles .se-textstyle-values {
+  flex: none;
+  color: var(--se-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+#se-textstyles .se-textstyles-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+#se-textstyles .se-textstyles-row span {
+  color: var(--se-text-label);
+}
+
+#se-textstyles select {
+  flex: 0 1 170px;
+  height: var(--se-control-size);
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text);
+  font: inherit;
+}
+
+#se-textstyles .se-textstyles-fields {
+  display: flex;
+  gap: 8px;
+}
+
+#se-textstyles .se-textstyles-fields se-spin-input::part(field) {
+  box-sizing: border-box;
+  gap: 4px;
+  height: var(--se-control-size);
+  margin: 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+#se-textstyles .se-textstyles-fields se-spin-input::part(spin-button),
+#se-textstyles .se-textstyles-fields se-spin-input::part(label) {
+  display: none;
+}
+
+/* Command palette, Ctrl+K and ? (lot V4) */
+#se-palette {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  z-index: 100001;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100% - 32px));
+  max-height: min(480px, calc(100% - 96px));
+  padding: 8px;
+  border: 1px solid var(--se-border);
+  border-radius: var(--se-radius-float);
+  background: var(--se-surface-raised);
+  box-shadow: var(--se-shadow-menu);
+  color: var(--se-text);
+  transform: translateX(-50%);
+}
+
+#se-palette[hidden] {
+  display: none;
+}
+
+#se-palette .se-palette-title {
+  margin: 0 4px 6px;
+  color: var(--se-text-label);
+  font-size: var(--se-font-size-label);
+  font-weight: 600;
+}
+
+#se-palette input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  margin-bottom: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--se-border-control);
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text);
+  font: inherit;
+  outline: none;
+}
+
+#se-palette input:focus-visible {
+  border-color: var(--se-focus-ring);
+}
+
+#se-palette ul {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+#se-palette [role="option"] {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--se-radius-control);
+  cursor: pointer;
+}
+
+#se-palette [role="option"][aria-selected="true"] {
+  background: var(--se-accent-bg);
+}
+
+#se-palette [role="option"][aria-disabled="true"] {
+  color: var(--se-text-secondary);
+  cursor: default;
+}
+
+#se-palette kbd {
+  margin-left: auto;
+  color: var(--se-text-secondary);
+  font: inherit;
+  white-space: nowrap;
+}
+
+#se-palette .se-palette-empty {
+  margin: 8px 10px;
+  color: var(--se-text-secondary);
+}
+
+/*
+ * Colour window (se-color-field, canvas layout): beside the panel, or over
+ * the contextual bar.
+ */
+#se-paint {
+  --se-checker: repeating-conic-gradient(var(--se-checker-dark) 0% 25%, var(--se-checker-light) 0% 50%) 0 0 / 8px 8px;
+
+  width: 256px;
+  padding: 0 0 12px;
+  overflow-x: hidden;
+}
+
+#se-paint [hidden] {
+  display: none !important;
+}
+
+#se-paint .se-paint-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 4px 14px;
+}
+
+#se-paint .se-paint-title {
+  font-size: var(--se-font-size-title);
+  font-weight: 600;
+  line-height: var(--se-line-height-title);
+}
+
+#se-paint .se-paint-icon,
+.se-paint-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-icon);
+  cursor: pointer;
+}
+
+#se-paint .se-paint-icon:hover,
+.se-paint-toggle:hover {
+  background: var(--se-control-hover);
+  color: var(--se-text);
+}
+
+#se-paint .se-paint-icon[aria-pressed="true"] {
+  background: var(--se-accent-bg);
+  color: var(--se-accent);
+}
+
+#se-paint .se-paint-icon:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+#se-paint button:focus-visible,
+#se-paint [role="slider"]:focus-visible,
+.se-paint-toggle:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: 1px;
+}
+
+#se-paint .se-paint-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 12px 8px;
+}
+
+#se-paint [role="tab"] {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: transparent;
+  color: var(--se-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+#se-paint [role="tab"][aria-selected="true"] {
+  background: var(--se-surface-tab-active);
+  color: var(--se-text);
+}
+
+#se-paint [role="tabpanel"] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px;
+}
+
+#se-paint .se-paint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#se-paint .se-paint-label {
+  flex: 0 0 40px;
+  color: var(--se-text-label);
+  font-size: var(--se-font-size-label);
+  line-height: var(--se-line-height-label);
+}
+
+/* Solid or gradient: a segmented control. */
+#se-paint .se-paint-segments {
+  display: flex;
+  flex: 1 1 auto;
+  padding: 2px;
+  border-radius: var(--se-radius-control);
+  background: var(--se-control);
+}
+
+#se-paint .se-paint-segments button {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-icon);
+  cursor: pointer;
+}
+
+#se-paint .se-paint-segments button[aria-checked="true"] {
+  background: var(--se-surface-tab-active);
+  color: var(--se-text);
+}
+
+/* The segment chosen shows by its background, not by the check of menus. */
+.se-layout-canvas #se-paint .se-paint-segments [aria-checked="true"]::before {
+  content: none;
+}
+
+#se-paint .se-paint-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--se-control-size);
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text);
+  font: inherit;
+}
+
+#se-paint .se-paint-select-plain {
+  flex: 0 1 auto;
+  padding-left: 0;
+  background: transparent;
+  color: var(--se-text-secondary);
+}
+
+/* A field: a grey box, as in the inspector. */
+#se-paint .se-paint-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  height: var(--se-control-size);
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+  color: var(--se-text-secondary);
+}
+
+#se-paint .se-paint-field:focus-within {
+  border-color: var(--se-accent);
+}
+
+#se-paint .se-paint-field input {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+#se-paint .se-paint-angle {
+  flex: 0 0 72px;
+}
+
+#se-paint .se-paint-percent {
+  flex: 0 0 56px;
+}
+
+#se-paint .se-paint-percent input {
+  text-align: right;
+}
+
+/* Saturation and brightness, hue, opacity. */
+#se-paint .se-paint-area {
+  position: relative;
+  height: 160px;
+  border-radius: var(--se-radius-control);
+  background:
+    linear-gradient(to top, var(--se-marker-dark), transparent),
+    linear-gradient(to right, var(--se-marker-light), var(--se-paint-hue));
+  cursor: crosshair;
+  touch-action: none;
+}
+
+#se-paint .se-paint-thumb {
+  position: absolute;
+  top: 50%;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid var(--se-marker-light);
+  border-radius: 50%;
+  background: var(--se-paint-color);
+  box-shadow: 0 0 0 1px var(--se-thumb-shadow), inset 0 0 0 1px var(--se-thumb-shadow);
+  pointer-events: none;
+}
+
+#se-paint .se-paint-area .se-paint-thumb {
+  margin-top: -7px;
+}
+
+#se-paint .se-paint-sliders {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#se-paint .se-paint-tracks {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 7px;
+}
+
+#se-paint .se-paint-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+#se-paint .se-paint-hue {
+  background: var(--se-paint-hue-track);
+}
+
+#se-paint .se-paint-alpha {
+  background: linear-gradient(to right, transparent, var(--se-paint-opaque)), var(--se-checker);
+}
+
+#se-paint .se-paint-alpha .se-paint-thumb {
+  background: linear-gradient(var(--se-paint-color), var(--se-paint-color)), var(--se-checker);
+}
+
+#se-paint .se-paint-hint {
+  margin: -4px 0 0;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+  line-height: var(--se-line-height-label);
+}
+
+#se-paint .se-paint-values {
+  display: flex;
+  gap: 4px;
+}
+
+#se-paint .se-paint-values > .se-paint-select {
+  flex: 0 0 58px;
+}
+
+#se-paint .se-paint-channels {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+#se-paint .se-paint-channels .se-paint-field {
+  flex: 1 1 0;
+  padding: 0 4px;
+}
+
+#se-paint .se-paint-channels-3 input {
+  text-align: center;
+}
+
+/* Swatches: of the document, recent, of a library. */
+#se-paint .se-paint-swatches-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: -4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--se-border);
+}
+
+#se-paint .se-paint-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 22px);
+  gap: 6px;
+}
+
+.se-swatch {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: var(--se-paint-color);
+  box-shadow: inset 0 0 0 1px var(--se-border-control);
+  cursor: pointer;
+}
+
+#se-paint .se-swatch:hover {
+  box-shadow: inset 0 0 0 1px var(--se-border-control), 0 0 0 2px var(--se-border-control);
+}
+
+#se-paint .se-paint-empty {
+  margin: 0;
+  color: var(--se-text-secondary);
+}
+
+#se-paint .se-paint-search input {
+  height: 100%;
+}
+
+#se-paint .se-paint-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+#se-paint .se-paint-group-name {
+  margin: 0 0 6px;
+  color: var(--se-text-label);
+  font-size: var(--se-font-size-label);
+  font-weight: 500;
+  line-height: var(--se-line-height-label);
+}
+
+#se-paint .se-paint-list {
+  display: flex;
+  flex-direction: column;
+}
+
+#se-paint .se-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+#se-paint .se-swatch-row:hover {
+  background: var(--se-control-hover);
+}
+
+#se-paint .se-swatch-row .se-swatch {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+#se-paint .se-swatch-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#se-paint .se-swatch-hex {
+  color: var(--se-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Gradient: the bar of its stops, the list. */
+#se-paint .se-paint-bar {
+  position: relative;
+  height: 20px;
+  margin: 4px 9px;
+  border-radius: var(--se-radius-field);
+  background: var(--se-checker);
+  cursor: copy;
+  touch-action: none;
+}
+
+#se-paint .se-paint-bar-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--se-border-control);
+}
+
+#se-paint .se-paint-handle {
+  position: absolute;
+  top: 50%;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  padding: 0;
+  border: 2px solid var(--se-marker-light);
+  border-radius: 50%;
+  background: linear-gradient(var(--se-paint-color), var(--se-paint-color)), var(--se-checker);
+  box-shadow: 0 0 0 1px var(--se-thumb-shadow);
+  cursor: grab;
+}
+
+#se-paint .se-paint-handle[aria-current="true"] {
+  box-shadow: 0 0 0 1px var(--se-thumb-shadow), 0 0 0 3px var(--se-accent);
+}
+
+#se-paint .se-paint-stops-head {
+  justify-content: space-between;
+}
+
+#se-paint .se-paint-stops {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: -6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+#se-paint .se-paint-stop {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border-radius: var(--se-radius-control);
+}
+
+#se-paint .se-paint-stop[aria-current="true"] {
+  background: var(--se-accent-row);
+}
+
+#se-paint .se-paint-stop .se-paint-percent {
+  flex: 0 0 50px;
+}
+
+#se-paint .se-paint-stop-color {
+  flex: 1 1 auto;
+}
+
+#se-paint .se-paint-chip {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: linear-gradient(var(--se-paint-color), var(--se-paint-color)), var(--se-checker);
+  box-shadow: inset 0 0 0 1px var(--se-border-control);
+  cursor: pointer;
+}
+
+/* Picking a colour on the drawing. */
+.se-paint-picking,
+.se-paint-picking * {
+  cursor: crosshair !important;
+}
+
+/* The − and + of the Fill and Stroke sections, on the line of their title. */
+.se-layout-canvas .se-inspector .se-section[data-section="fill"],
+.se-layout-canvas .se-inspector .se-section[data-section="stroke"] {
+  position: relative;
+}
+
+.se-layout-canvas .se-inspector .se-paint-toggle {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+}
+
+/* The field of the inspector: swatch, hexadecimal and opacity typed in. */
+.se-layout-canvas .se-inspector se-colorpicker[editable]::part(swatch) {
+  cursor: pointer;
+}
+
+/* The window takes the focus when it opens; its controls show theirs. */
+#se-paint:focus {
+  outline: none;
+}
+
+/* Frames to export (lot V5): in the interaction layer, a grey outline and
+   its name above it; the name moves the frame, the handles of a selected
+   frame resize it. */
+.se-layout-canvas #se-frames .se-frame-box {
+  fill: none;
+  stroke: var(--se-frame);
+  stroke-width: 1px;
+  shape-rendering: crispEdges;
+}
+
+.se-layout-canvas #se-frames .se-frame-label {
+  fill: var(--se-frame-label);
+  font-family: var(--se-font-ui);
+  font-size: var(--se-font-size-label);
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+
+.se-layout-canvas #se-frames .se-frame-hit {
+  fill: none;
+  pointer-events: all;
+  cursor: move;
+}
+
+.se-layout-canvas #se-frames .se-frame-selected .se-frame-box {
+  stroke: var(--se-selection);
+  stroke-width: 1.5px;
+}
+
+.se-layout-canvas #se-frames .se-frame-selected .se-frame-label {
+  fill: var(--se-accent);
+}
+
+.se-layout-canvas #se-frames .se-frame-handle {
+  fill: var(--se-text-on-accent);
+  stroke: var(--se-selection);
+  stroke-width: 1px;
+  pointer-events: all;
+}
+
+.se-layout-canvas [data-section="frame"] > .se-section-body,
+.se-layout-canvas [data-section="frames"] > .se-section-body {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.se-layout-canvas .se-field select {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-weight: normal;
+  outline: none;
+}
+
+.se-layout-canvas .se-field select option {
+  background: var(--se-surface-raised);
+  color: var(--se-text);
+}
+
+.se-layout-canvas .se-frame-list {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.se-layout-canvas .se-frame-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  min-height: var(--se-control-size);
+  padding: 0 var(--se-space-2);
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.se-layout-canvas .se-frame-row:hover {
+  background: var(--se-control-hover);
+}
+
+.se-layout-canvas .se-frame-row:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+}
+
+.se-layout-canvas .se-frame-size {
+  color: var(--se-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.se-layout-canvas .se-frame-empty {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--se-text-secondary);
+}
+
+/* Identity and binding: the binding and the data of the object (lot V6) */
+.se-layout-canvas .se-inspector .se-binding {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  flex-basis: 100%;
+  align-items: stretch;
+  gap: var(--se-space-1);
+}
+
+.se-layout-canvas .se-inspector .se-binding[hidden],
+.se-layout-canvas .se-binding [hidden] {
+  display: none;
+}
+
+.se-layout-canvas .se-binding-link {
+  display: flex;
+  align-items: baseline;
+  gap: var(--se-space-2);
+  padding: var(--se-space-1) var(--se-space-2);
+}
+
+.se-layout-canvas .se-binding-label,
+.se-layout-canvas .se-binding-none {
+  color: var(--se-text-secondary);
+}
+
+.se-layout-canvas .se-binding-label {
+  flex: none;
+}
+
+.se-layout-canvas .se-binding-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.se-layout-canvas .se-binding-data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--se-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.se-layout-canvas .se-binding-row {
+  display: flex;
+  align-items: center;
+  gap: var(--se-space-1);
+}
+
+.se-layout-canvas .se-binding-row .se-field {
+  flex: 1 1 auto;
+}
+
+.se-layout-canvas .se-binding-name {
+  max-width: 50%;
+  overflow: hidden;
+  font-family: var(--se-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.se-layout-canvas .se-binding-new {
+  display: flex;
+  flex-direction: column;
+  gap: var(--se-space-1);
+}
+
+/* Preview of the saved file, in both layouts (plan v2, 4.6; lot V6): no
+   editing interface, the file over the whole editor. */
+#se-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 100002;
+  display: flex;
+  flex-direction: column;
+  background: var(--se-canvas);
+  color: var(--se-text);
+  font-family: var(--se-font-ui, inherit);
+}
+
+#se-preview .se-preview-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--se-space-3);
+  height: 40px;
+  padding: 0 var(--se-space-3);
+  border-bottom: 1px solid var(--se-border-top);
+  background: var(--se-surface-top);
+}
+
+#se-preview .se-preview-title {
+  font-weight: 600;
+}
+
+#se-preview .se-preview-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--se-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#se-preview-close {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--se-space-2);
+  height: var(--se-control-size);
+  padding: 0 var(--se-space-3);
+  border: 0;
+  border-radius: var(--se-radius-control);
+  background: var(--se-control);
+  color: var(--se-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+#se-preview-close:hover {
+  background: var(--se-control-hover);
+}
+
+#se-preview-close:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: 2px;
+}
+
+#se-preview-close kbd {
+  color: var(--se-text-secondary);
+  font: inherit;
+  font-size: var(--se-font-size-label);
+}
+
+#se-preview .se-preview-stage {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: var(--se-space-6);
+}
+
+#se-preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  background: var(--se-preview-page);
+  box-shadow: 0 0 0 1px var(--se-border);
+}
+
+/* Visibility and lock of the selection, in Appearance (lot V7) */
+.se-appearance-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--se-space-2);
+  width: 100%;
+}
+
+/* Symbol section of the inspector (lot V7) */
+.se-symbol-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--se-space-2);
+  width: 100%;
+}
+
+.se-symbol-panel[hidden] {
+  display: none;
+}
+
+.se-symbol-info {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--se-space-2);
+}
+
+.se-symbol-name {
+  font-weight: 600;
+}
+
+.se-symbol-version,
+.se-symbol-ports {
+  margin: 0;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+}
+
+.se-symbol-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--se-space-2);
+}
+
+/* Library drawer (lot V7): shapes, symbols and images, under the toolbar.
+—————————————————————————————*/
+
+.se-library {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 320px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 80px);
+  padding: var(--se-space-2) 0;
+  border: 1px solid var(--se-border);
+  border-radius: var(--se-radius-float);
+  background: var(--se-surface-raised);
+  box-shadow: var(--se-shadow-menu);
+  color: var(--se-text);
+}
+
+.se-library[hidden] {
+  display: none;
+}
+
+.se-library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--se-space-2) 0 var(--se-space-4);
+}
+
+.se-library-head h2 {
+  margin: 0;
+  font-size: var(--se-font-size-control);
+  font-weight: 600;
+}
+
+.se-library-tabs {
+  display: flex;
+  gap: 2px;
+  margin: var(--se-space-1) var(--se-space-3);
+  padding: 2px;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+.se-library-tabs[hidden] {
+  display: none;
+}
+
+.se-library-tabs [role="tab"] {
+  flex: 1;
+  min-height: 24px;
+  padding: 0 var(--se-space-2);
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.se-library-tabs [role="tab"][aria-selected="true"] {
+  background: var(--se-surface-raised);
+  color: var(--se-text);
+  font-weight: 600;
+}
+
+.se-library-tabs [role="tab"]:focus-visible,
+.se-library-item:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+}
+
+.se-library-body {
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--se-space-3);
+}
+
+.se-library-section h3 {
+  margin: var(--se-space-3) 0 var(--se-space-1);
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+  font-weight: 600;
+}
+
+.se-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: var(--se-space-1);
+}
+
+.se-library-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-size: var(--se-font-size-label);
+  cursor: grab;
+}
+
+.se-library-item:hover {
+  border-color: var(--se-border);
+  background: var(--se-control-hover);
+}
+
+.se-library-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  color: var(--se-icon);
+}
+
+.se-library-preview svg,
+.se-library-preview img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.se-library-preview path {
+  fill: currentColor;
+}
+
+/* A symbol keeps the colours of its instance. */
+.se-library-symbol path {
+  fill: revert-layer;
+}
+
+.se-library-symbol {
+  border-radius: var(--se-radius-field);
+  background: var(--se-canvas);
+}
+
+.se-library-label {
+  overflow: hidden;
+  max-width: 100%;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.se-library-empty,
+.se-library-help {
+  margin: var(--se-space-3);
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+}
+
+.se-library-help {
+  margin-bottom: 0;
+}
+
+.se-library-pick-row {
+  margin-top: var(--se-space-2);
+}
+
+/* Connector section (lot V7) */
+.se-connector-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--se-space-2);
+  width: 100%;
+}
+
+.se-connector-panel[hidden],
+.se-connector-panel [hidden] {
+  display: none;
+}
+
+.se-connector-ends {
+  width: 100%;
+  margin: 0;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+}
+
+/* Templates of new documents (lot V7) */
+.se-templates {
+  box-sizing: border-box;
+  width: min(720px, calc(100vw - 32px));
+  padding: var(--se-space-4);
+  border: 1px solid var(--se-border);
+  border-radius: var(--se-radius-float);
+  background: var(--se-surface-overlay);
+  box-shadow: var(--se-shadow-menu);
+  color: var(--se-text);
+  font-family: var(--se-font-ui);
+  font-size: var(--se-font-size-control);
+}
+
+.se-templates::backdrop {
+  background: var(--se-backdrop);
+}
+
+.se-templates h2 {
+  margin: 0 0 var(--se-space-3);
+  font-size: var(--se-font-size-control);
+  font-weight: 600;
+}
+
+.se-templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--se-space-3);
+}
+
+.se-template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: var(--se-space-3);
+  border: 1px solid var(--se-border);
+  border-radius: var(--se-radius-field);
+  background: var(--se-surface);
+  color: var(--se-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.se-template-card:hover {
+  border-color: var(--se-accent);
+}
+
+.se-template-card:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: 1px;
+}
+
+.se-template-page {
+  align-self: center;
+  width: 70%;
+  margin-bottom: var(--se-space-2);
+  border: 1px solid var(--se-border-control);
+  border-radius: 2px;
+  background: var(--se-canvas);
+}
+
+.se-template-name {
+  font-weight: 600;
+}
+
+.se-template-size,
+.se-template-desc {
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+}
+
+.se-templates-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--se-space-3);
 }

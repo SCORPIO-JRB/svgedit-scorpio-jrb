@@ -70,6 +70,17 @@ export default class SePlainAlertDialog extends PlainAlertDialog {
             font-weight: 600;
           }
 
+          /* The native button inside the elix button kept its grey: white
+             on light grey in the action button (lot V6) */
+          [part~="choice-button"]::part(inner) {
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            cursor: inherit;
+          }
+
           [part~="choice-button"]:focus-visible {
             outline: 2px solid var(--se-focus-ring);
             outline-offset: 1px;

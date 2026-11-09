@@ -33,6 +33,7 @@ import { getParentsUntil } from '@svgedit/svgcanvas/common/util.js'
 // Zoom bounds and ladder shared by every zoom gesture (1 = 100 %), from 1 %
 // to 6 400 % (lot V2).
 import { clampZoom, nextZoomStep } from './view.js'
+import { ungroupSelected } from './binding.js'
 
 const { $id, $click, decode64 } = SvgCanvas
 
@@ -86,6 +87,7 @@ class Editor extends EditorStartup {
       if (this.svgCanvas) this.svgCanvas.setConfig(this.configObj.curConfig)
       if (opts && ['showGrid', 'snappingStep', 'gridSubdivisions', 'gridColor'].some((key) => key in opts)) {
         this.grid?.update()
+        this.frames?.update()
       }
       return result
     }
@@ -300,7 +302,8 @@ class Editor extends EditorStartup {
         fn: () => {
           const elem = this.selectedElement
           if (elem && !this.multiselected && ['g', 'a', 'use'].includes(elem.tagName)) {
-            this.svgCanvas.ungroupSelectedElement()
+            // A bound group: asked first (V6)
+            ungroupSelected(this)
           }
         }
       },
@@ -893,6 +896,8 @@ class Editor extends EditorStartup {
     const newCanX = w / 2
     const offset = this.svgCanvas.updateCanvas(w, h)
     this.grid?.update()
+    this.frames?.update()
+    this.connectors?.updateOverlay()
 
     const ratio = newCanX / oldCanX
 
@@ -1009,6 +1014,8 @@ class Editor extends EditorStartup {
   elementTransition (win, elems) {
     const mode = this.svgCanvas.getMode()
     const elem = elems[0]
+    // The orthogonal connectors follow the moving equipments (lot V7).
+    this.connectors?.transition(elems)
 
     if (!elem) {
       return
@@ -1048,6 +1055,8 @@ class Editor extends EditorStartup {
    */
   elementChanged (win, elems) {
     const mode = this.svgCanvas.getMode()
+    // Their route follows every change, the undo and redo included (lot V7).
+    this.connectors?.elementsChanged(elems)
     if (mode === 'select') {
       this.leftPanel.clickSelect()
     }
@@ -1064,7 +1073,8 @@ class Editor extends EditorStartup {
         // This occurs for the text elements in Firefox. Not for a
         // multi-selection: the panel would show the last changed element alone
         // (and, in the angle field, its own angle).
-      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode) {
+      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode && !elem.closest?.('metadata')) {
+        // Not the frames to export, nor other data of the editor (lot V5).
         this.selectedElement = elem
       }
     })
@@ -1501,7 +1511,8 @@ class Editor extends EditorStartup {
         ? this.configObj.curConfig.snappingStep
         : 1
       const multi = this.svgCanvas.getZoom() * step
-      this.svgCanvas.moveSelectedElements(dx * multi, dy * multi)
+      // Nudges in a row are one undo step (lot V5).
+      this.svgCanvas.undoMgr.merging('nudge', () => this.svgCanvas.moveSelectedElements(dx * multi, dy * multi))
     }
   }
 

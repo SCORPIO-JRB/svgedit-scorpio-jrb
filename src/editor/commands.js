@@ -372,6 +372,29 @@ export const setControlName = (host, control, label, spec, t) => {
 }
 
 /**
+ * The title attribute of a button (se-button, se-flyingbutton,
+ * se-explorerbutton) gives its name, then leaves the element: the browser
+ * would show it in a tooltip of its own, next to se-tooltip. The `title`
+ * property of the button and controlTitle keep it.
+ * @param {HTMLElement} host
+ * @param {HTMLElement} control The element that carries the accessible name
+ * @param {string} value The title attribute
+ * @param {(key: string) => string} [t]
+ * @returns {void}
+ */
+export const adoptTitle = (host, control, value, t) => {
+  host.seTitle = value
+  setControlName(host, control, t ? t(value) : value, host.getAttribute('shortcut'), t)
+  host.removeAttribute('title')
+}
+
+/**
+ * @param {Element} element
+ * @returns {string|null} Its title, also when adoptTitle took it
+ */
+export const controlTitle = (element) => element.seTitle ?? element.getAttribute('title')
+
+/**
  * @param {string} label
  * @param {string} spec A shortcut attribute
  * @param {(key: string) => string} [t]
@@ -398,7 +421,7 @@ export const bindElementCommand = (element, t) => {
   const id = element.id || element.dataset.commandId
   registry.register({
     id,
-    label: element.getAttribute('title') ?? element.getAttribute('label') ?? id,
+    label: controlTitle(element) ?? element.getAttribute('label') ?? id,
     shortcuts: spec,
     when: () => element.isConnected && !element.hasAttribute('disabled'),
     run: () => element.click(),

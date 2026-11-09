@@ -82,7 +82,9 @@ describe('sanitizeSvg (lot 5)', () => {
     const removed = sanitizeSvg(doc.documentElement)
 
     assert.equal(doc.querySelector('metadata').innerHTML.replace(/ xmlns:\w+="[^"]*"/g, ''), rdf)
-    assert.deepEqual(removed, ['paint-order', 'onclick', '<script>', '<sodipodi:namedview>'])
+    // paint-order is kept since V6 (section 7, option fidelity.attributes)
+    assert.deepEqual(removed, ['onclick', '<script>', '<sodipodi:namedview>'])
+    assert.equal(doc.querySelector('rect').getAttribute('paint-order'), 'stroke')
   })
 
   it('lists what it removes from a stylesheet', () => {

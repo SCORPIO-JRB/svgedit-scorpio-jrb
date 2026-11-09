@@ -24,6 +24,7 @@ import {
 import * as hstry from './history.js'
 import { pauseAnimations } from './sanitize.js'
 import { getClosest } from '../common/util.js'
+import { geometryMeetsRect } from './outline.js'
 
 const { BatchCommand, ChangeElementCommand } = hstry
 let svgCanvas = null
@@ -124,6 +125,11 @@ const addToSelectionMethod = (elemsToAdd, showGrips) => {
     if (!elem || !elem.getBBox || elem.tagName === 'defs') {
       continue
     }
+    // A locked object, or one in a locked group or layer, is never selected
+    // (lot V7).
+    if (svgCanvas.isLocked?.(elem)) {
+      continue
+    }
 
     if (elem.tagName === 'a' && elem.childNodes.length === 1) {
       // Make "a" element's child be the selected element
@@ -179,6 +185,31 @@ const addToSelectionMethod = (elemsToAdd, showGrips) => {
   }
 }
 /**
+ * A text of the current layer or group whose box holds the pointer: the
+ * space between its lines, an empty line, are the text too (a block of text
+ * is taken anywhere, as its frame shows it).
+ * @param {MouseEvent} evt
+ * @returns {Element|null}
+ */
+const textAt = (evt) => {
+  if (!Number.isFinite(evt.clientX) || !Number.isFinite(evt.clientY)) return null
+  const context = svgCanvas.getCurrentGroup() || svgCanvas.getCurrentDrawing().getCurrentLayer()
+  // Blocks only (lines, or a fixed width): a text of one line is hit on its
+  // glyphs, and the pointer moving over the page reads no other box.
+  const texts = [...(context?.children ?? [])].filter((el) => el.localName === 'text' &&
+    (el.firstElementChild?.localName === 'tspan' || el.hasAttributeNS(NS.SE, 'width')))
+  for (const text of texts.reverse()) {
+    if (svgCanvas.isLocked?.(text) || text.getAttribute('display') === 'none') continue
+    const box = text.getBoundingClientRect()
+    if (box.width && evt.clientX >= box.left && evt.clientX <= box.right &&
+      evt.clientY >= box.top && evt.clientY <= box.bottom) {
+      return text
+    }
+  }
+  return null
+}
+
+/**
  * @name module:svgcanvas.SvgCanvas#getMouseTarget
  * @type {module:path.EditorContext#getMouseTarget}
  */
@@ -214,7 +245,18 @@ const getMouseTargetMethod = (evt) => {
   const container = svgCanvas.getDOMContainer()
   const content = svgCanvas.getSvgContent()
   if ([svgRoot, container, content, currentLayer].includes(mouseTarget)) {
-    return svgCanvas.getSvgRoot()
+    return textAt(evt) ?? svgCanvas.getSvgRoot()
+  }
+
+  // A locked object lets the pointer through to what lies below it (lot V7;
+  // the stylesheet already does so, this covers a lock it cannot read).
+  if (svgCanvas.isLocked?.(mouseTarget) && content.contains(mouseTarget)) {
+    const below = document.elementsFromPoint?.(evt.clientX, evt.clientY) ?? []
+    const next = below.find((el) => content.contains(el) && el !== content && !svgCanvas.isLocked(el))
+    if (!next || next.parentNode === content) {
+      return svgCanvas.getSvgRoot()
+    }
+    mouseTarget = next
   }
 
   // If it's a selection grip, return the grip parent
@@ -321,6 +363,33 @@ const getVisibleElementsAndBBoxes = (parent) => {
 }
 
 /**
+ * Whether a box lies entirely inside a rectangle.
+ * @param {SVGRect} rect
+ * @param {module:utilities.BBoxObject} box
+ * @returns {boolean}
+ */
+const rectContains = (rect, box) => box.x >= rect.x && box.y >= rect.y &&
+  box.x + box.width <= rect.x + rect.width && box.y + box.height <= rect.y + rect.height
+
+/**
+ * Whether the drawing of an element meets the band. Without the geometry of
+ * a browser, the box decides.
+ * @param {Element} elem
+ * @param {SVGRect} rect
+ * @param {Element} space
+ * @param {Map<Element, Object>} cache
+ * @returns {boolean}
+ */
+const meetsDrawing = (elem, rect, space, cache) => {
+  if (typeof space?.getScreenCTM !== 'function' || typeof elem.getScreenCTM !== 'function') { return true }
+  try {
+    return geometryMeetsRect(elem, rect, space, cache)
+  } catch (e) {
+    return true
+  }
+}
+
+/**
  * This method sends back an array or a NodeList full of elements that
  * intersect the multi-select rubber-band-box on the currentLayer only.
  *
@@ -366,14 +435,21 @@ const getIntersectionListMethod = (rect) => {
     // Cache all bboxes
     svgCanvas.setCurBBoxes(getVisibleElementsAndBBoxes(parent))
   }
-  let i = svgCanvas.getCurBBoxes().length
+  const curBBoxes = svgCanvas.getCurBBoxes()
+  // The boxes sort the objects; an object the band only partly covers is
+  // taken when its drawing meets the band, not just its box (lot V4). The
+  // outlines read stay for the rest of the gesture.
+  if (!curBBoxes.outlines) { curBBoxes.outlines = new Map() }
+  const space = svgCanvas.getCurrentDrawing().getCurrentLayer()
+  let i = curBBoxes.length
   while (i--) {
-    const curBBoxes = svgCanvas.getCurBBoxes()
     if (!rubberBBox.width) {
       continue
     }
-    if (curBBoxes[i].bbox && rectsIntersect(rubberBBox, curBBoxes[i].bbox)) {
-      resultList.push(curBBoxes[i].elem)
+    const { elem, bbox } = curBBoxes[i]
+    if (bbox && rectsIntersect(rubberBBox, bbox) &&
+      (rectContains(rubberBBox, bbox) || meetsDrawing(elem, rubberBBox, space, curBBoxes.outlines))) {
+      resultList.push(elem)
     }
   }
 
@@ -401,6 +477,9 @@ const groupSvgElem = (elem) => {
   elem.replaceWith(g)
   g.appendChild(elem)
   dataStorage.put(g, 'gsvg', elem)
+  // A group of the editor, not of the file: the save leaves it out while it
+  // carries nothing of its own (V6, section 7, option fidelity.nestedSvg)
+  dataStorage.put(g, 'gsvgWrapper', true)
   g.id = svgCanvas.getNextId()
 }
 

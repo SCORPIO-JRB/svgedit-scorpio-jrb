@@ -16,6 +16,8 @@ import {
 import { getParents } from '../common/util.js'
 import { isSafeHref } from './sanitize.js'
 import { warn } from '../common/logger.js'
+import { InsertElementCommand } from './history.js'
+import { getTextSource, getLineHeight, getTextWidth } from './text-lines.js'
 
 let svgCanvas = null
 
@@ -34,6 +36,10 @@ export const init = (canvas) => {
   svgCanvas.addTextDecoration = addTextDecorationMethod // Adds the given value to the text decoration
   svgCanvas.removeTextDecoration = removeTextDecorationMethod // Removes the given value from the text decoration
   svgCanvas.setTextAnchor = setTextAnchorMethod // Set the new text anchor.
+  svgCanvas.getLineHeight = getLineHeightMethod // The line height of the selected text
+  svgCanvas.setLineHeight = setLineHeightMethod // Sets the line height of the selected texts
+  svgCanvas.getTextWidth = getTextWidthMethod // The fixed width of the selected text, or 0
+  svgCanvas.setTextWidth = setTextWidthMethod // Sets or removes the fixed width of the selected texts
   svgCanvas.setLetterSpacing = setLetterSpacingMethod // Set the new letter spacing.
   svgCanvas.setWordSpacing = setWordSpacingMethod // Set the new word spacing.
   svgCanvas.setTextLength = setTextLengthMethod // Set the new text length.
@@ -54,6 +60,8 @@ export const init = (canvas) => {
   svgCanvas.setSegType = setSegTypeMethod // Sets the new segment type to the selected segment(s).
   svgCanvas.setStrokeWidth = setStrokeWidthMethod // Sets the stroke width for the current selected elements.
   svgCanvas.getResolution = getResolutionMethod // The current dimensions and zoom level in an object
+  // Where the page starts: the origin of the viewBox of the opened file (lot V5)
+  svgCanvas.getPageOrigin = () => svgCanvas.getDataStorage().get(svgCanvas.getSvgContent(), 'viewBoxOrigin') ?? { x: 0, y: 0 }
   svgCanvas.getTitle = getTitleMethod // the current group/SVG's title contents or `undefined` if no element
   svgCanvas.setGroupTitle = setGroupTitleMethod // Sets the group/SVG's title content.
   svgCanvas.setStrokeAttr = setStrokeAttrMethod // Set the given stroke-related attribute the given value for selected elements.
@@ -66,6 +74,8 @@ export const init = (canvas) => {
   svgCanvas.setColor = setColorMethod // Change the current stroke/fill color/gradien
   svgCanvas.setGradient = setGradientMethod // Apply the current gradient to selected element's fill or stroke.
   svgCanvas.setPaint = setPaintMethod // Set a color/gradient to a fill/stroke.
+  svgCanvas.previewPaint = previewPaintMethod // Show a paint on the selection, outside the history.
+  svgCanvas.cancelPaintPreview = cancelPaintPreviewMethod // Give back the paint a preview replaced.
 }
 
 /**
@@ -253,6 +263,8 @@ const setResolutionMethod = (x, y) => {
 
       x = Math.round(bbox.width)
       y = Math.round(bbox.height)
+      // The content now starts at 0, 0: so does the page.
+      svgCanvas.getDataStorage().remove(svgCanvas.getSvgContent(), 'viewBoxOrigin')
     } else {
       return false
     }
@@ -354,8 +366,9 @@ const setBBoxZoomMethod = (val, editorW, editorH) => {
       break
     } case 'canvas': {
       const res = svgCanvas.getResolution()
+      const origin = svgCanvas.getPageOrigin()
       spacer = 0.95
-      bb = { width: res.w, height: res.h, x: 0, y: 0 }
+      bb = { width: res.w, height: res.h, x: origin.x, y: origin.y }
       break
     } case 'content':
       bb = getStrokedBBoxDefaultVisible()
@@ -454,25 +467,35 @@ const setColorMethod = (type, val, preventUndo) => {
 * @returns {void}
 */
 const setGradientMethod = (type) => {
+  const found = gradientOfPaint(type)
+  if (found) svgCanvas.setColor(type, `url(#${found.grad.id})`)
+}
+
+/**
+* The gradient of the current paint in the defs: an equal one already there,
+* or a copy appended with a new id.
+* @param {"fill"|"stroke"} type
+* @returns {{grad: Element, inserted: boolean}|null} null when the current
+*   paint is not a gradient
+*/
+const gradientOfPaint = (type) => {
   if (!svgCanvas.getCurProperties(`${type}_paint`) ||
-    svgCanvas.getCurProperties(`${type}_paint`).type === 'solidColor') { return }
+    svgCanvas.getCurProperties(`${type}_paint`).type === 'solidColor') { return null }
   const canvas = svgCanvas
   let grad = canvas[type + 'Grad']
-  if (!grad) { return }
+  if (!grad) { return null }
   // find out if there is a duplicate gradient already in the defs
   const duplicateGrad = findDuplicateGradient(grad)
   const defs = findDefs()
   // no duplicate found, so import gradient into defs
   if (!duplicateGrad) {
-    // const origGrad = grad;
     grad = svgCanvas.getDOMDocument().importNode(grad, true)
     defs.append(grad)
     // get next id and set it on the grad
     grad.id = svgCanvas.getNextId()
-  } else { // use existing gradient
-    grad = duplicateGrad
+    return { grad, inserted: true }
   }
-  svgCanvas.setColor(type, `url(#${grad.id})`)
+  return { grad: duplicateGrad, inserted: false }
 }
 
 /**
@@ -558,29 +581,124 @@ const findDuplicateGradient = (grad) => {
 }
 
 /**
-* Set a color/gradient to a fill/stroke.
+* Set a color/gradient to a fill/stroke, as one undo step: its opacity, its
+* colour and the gradient it adds to the defs are undone together.
 * @function module:elem-get-set.SvgCanvas#setPaint
 * @param {"fill"|"stroke"} type - String with "fill" or "stroke"
 * @param {} paint - The paint object to apply
 * @returns {void}
 */
 const setPaintMethod = (type, paint) => {
+  // A preview gives the elements back first: the step records their paint.
+  cancelPaintPreviewMethod()
   // make a copy
   const p = new Paint(paint)
-  svgCanvas.setPaintOpacity(type, p.alpha / 100, true)
+  svgCanvas.groupHistory(`Change ${type}`, (batch) => {
+    svgCanvas.setPaintOpacity(type, p.alpha / 100)
 
-  // now set the current paint object
-  svgCanvas.setCurProperties(`${type}_paint`, p)
-  switch (p.type) {
-    case 'solidColor':
-      svgCanvas.setColor(type, p.solidColor !== 'none' ? `#${p.solidColor}` : 'none')
-      break
-    case 'linearGradient':
-    case 'radialGradient':
-      svgCanvas.setCanvas(type + 'Grad', p[p.type])
-      svgCanvas.setGradient(type)
-      break
+    // now set the current paint object
+    svgCanvas.setCurProperties(`${type}_paint`, p)
+    switch (p.type) {
+      case 'solidColor':
+        svgCanvas.setColor(type, p.solidColor !== 'none' ? `#${p.solidColor}` : 'none')
+        break
+      case 'linearGradient':
+      case 'radialGradient': {
+        svgCanvas.setCanvas(type + 'Grad', p[p.type])
+        const found = gradientOfPaint(type)
+        if (!found) break
+        if (found.inserted) batch.addSubCommand(new InsertElementCommand(found.grad))
+        svgCanvas.setColor(type, `url(#${found.grad.id})`)
+        break
+      }
+    }
+  })
+}
+
+/**
+* The elements a paint changes: its opacity goes on the selected elements,
+* its colour on the shapes, those of a group included (as setColor does).
+* @param {"fill"|"stroke"} type
+* @returns {{selected: Element[], colored: Element[]}}
+*/
+const paintTargets = (type) => {
+  const selected = svgCanvas.getSelectedElements().filter(Boolean)
+  const colored = []
+  for (let i = selected.length - 1; i >= 0; i--) {
+    const elem = selected[i]
+    if (elem.tagName === 'g') {
+      walkTree(elem, (e) => { if (e.nodeName !== 'g') colored.push(e) })
+    } else if (type !== 'fill' || (elem.tagName !== 'polyline' && elem.tagName !== 'line')) {
+      colored.push(elem)
+    }
   }
+  return { selected, colored }
+}
+
+/** The paint a preview replaced, to give it back. */
+let preview = null
+
+/**
+* Shows a paint on the selected elements while it is being chosen (a drag in
+* the colour window), outside the history. setPaint, or cancelPaintPreview,
+* gives the elements back their paint first.
+* @function module:elem-get-set.SvgCanvas#previewPaint
+* @param {"fill"|"stroke"} type
+* @param {} paint
+* @returns {void}
+*/
+const previewPaintMethod = (type, paint) => {
+  const p = new Paint(paint)
+  if (preview && preview.type !== type) cancelPaintPreviewMethod()
+  if (!preview) {
+    const { selected, colored } = paintTargets(type)
+    const opacity = `${type}-opacity`
+    preview = {
+      type,
+      selected,
+      colored,
+      saved: [
+        ...selected.map((elem) => ({ elem, name: opacity, value: elem.getAttribute(opacity) })),
+        ...colored.map((elem) => ({ elem, name: type, value: elem.getAttribute(type) }))
+      ],
+      grad: null,
+      defs: svgCanvas.getSvgContent().getElementsByTagNameNS(NS.SVG, 'defs')[0] ?? null
+    }
+  }
+  for (const elem of preview.selected) elem.setAttribute(`${type}-opacity`, String(p.alpha / 100))
+  let value = 'none'
+  if (p.type === 'solidColor' && p.solidColor && p.solidColor !== 'none') {
+    value = `#${p.solidColor}`
+  } else if ((p.type === 'linearGradient' || p.type === 'radialGradient') && p[p.type]) {
+    const grad = svgCanvas.getDOMDocument().importNode(p[p.type], true)
+    grad.id = `se_paint_preview_${type}`
+    preview.grad?.remove()
+    findDefs().append(grad)
+    preview.grad = grad
+    value = `url(#${grad.id})`
+  }
+  for (const elem of preview.colored) elem.setAttribute(type, value)
+}
+
+/**
+* Gives back the paint a preview replaced.
+* @function module:elem-get-set.SvgCanvas#cancelPaintPreview
+* @returns {boolean} Whether a preview was shown
+*/
+const cancelPaintPreviewMethod = () => {
+  if (!preview) return false
+  for (const { elem, name, value } of preview.saved) {
+    if (value === null) elem.removeAttribute(name)
+    else elem.setAttribute(name, value)
+  }
+  if (preview.grad) {
+    const defs = preview.grad.parentNode
+    preview.grad.remove()
+    // The defs a gradient preview made go with it.
+    if (!preview.defs && defs && !defs.firstElementChild) defs.remove()
+  }
+  preview = null
+  return true
 }
 
 /**
@@ -664,7 +782,7 @@ const getSelectedTextElements = () => {
 const getChangedTextElements = (textElements, attr, newValue) => {
   const normalizedValue = String(newValue)
   return textElements.filter((elem) => {
-    const oldValue = attr === '#text' ? elem.textContent : elem.getAttribute(attr)
+    const oldValue = attr === '#text' ? getTextSource(elem) : elem.getAttribute(attr)
     return (oldValue || '') !== normalizedValue
   })
 }
@@ -802,7 +920,83 @@ const setTextAnchorMethod = (value) => {
   const textElements = getSelectedTextElements()
   const changedTextElements = getChangedTextElements(textElements, 'text-anchor', value)
   if (changedTextElements.length > 0) {
-    svgCanvas.changeSelectedAttribute('text-anchor', value, changedTextElements)
+    // The block stays where it is and its lines align in it: its anchor,
+    // `x`, moves to its left side, its middle or its right side.
+    const { undoMgr } = svgCanvas
+    const moves = changedTextElements.map((elem) => {
+      const x = elem.getAttribute('x')
+      if (x === null || !/^\s*-?[\d.]+(e-?\d+)?\s*$/i.test(x)) return null
+      const width = getTextWidth(elem) || elem.getBBox?.().width || 0
+      const from = ANCHOR_FACTORS[window.getComputedStyle(elem).textAnchor] ?? 0
+      const to = ANCHOR_FACTORS[value] ?? 0
+      return width ? [elem, Math.round((Number(x) + (to - from) * width) * 1000) / 1000] : null
+    }).filter(Boolean)
+    // One step, named by its alignment: the moves of the anchors join it.
+    undoMgr.beginUndoableChange('text-anchor', changedTextElements)
+    svgCanvas.changeSelectedAttributeNoUndo('text-anchor', value, changedTextElements)
+    const batch = undoMgr.finishUndoableChange()
+    moves.forEach(([elem, x]) => {
+      undoMgr.beginUndoableChange('x', [elem])
+      svgCanvas.changeSelectedAttributeNoUndo('x', x, [elem])
+      batch.addSubCommand(undoMgr.finishUndoableChange())
+    })
+    if (!batch.isEmpty()) svgCanvas.addCommandToHistory(batch)
+  }
+  notifyTextChange(changedTextElements)
+}
+
+const ANCHOR_FACTORS = { start: 0, middle: 0.5, end: 1 }
+
+/**
+ * @function module:svgcanvas.SvgCanvas#getLineHeight
+ * @returns {number} The line height of the selected text, in font sizes
+ */
+const getLineHeightMethod = () => {
+  const [text] = getSelectedTextElements()
+  return text ? getLineHeight(text) : 1.2
+}
+
+/**
+ * Sets the line height of the selected texts, in font sizes.
+ * @function module:svgcanvas.SvgCanvas#setLineHeight
+ * @param {number|string} value
+ * @returns {void}
+ */
+const setLineHeightMethod = (value) => {
+  const n = Number.parseFloat(value)
+  if (!Number.isFinite(n) || n <= 0) return
+  const textElements = getSelectedTextElements()
+  const changedTextElements = textElements.filter((elem) => getLineHeight(elem) !== n || !elem.hasAttributeNS(NS.SE, 'line-height'))
+  if (changedTextElements.length > 0) {
+    svgCanvas.changeSelectedAttribute('se:line-height', String(n), changedTextElements)
+  }
+  notifyTextChange(changedTextElements)
+}
+
+/**
+ * @function module:svgcanvas.SvgCanvas#getTextWidth
+ * @returns {number} The fixed width of the selected text, or 0 for a text
+ *   as wide as its lines
+ */
+const getTextWidthMethod = () => {
+  const [text] = getSelectedTextElements()
+  return text ? getTextWidth(text) : 0
+}
+
+/**
+ * Gives the selected texts a fixed width, their lines breaking to fit in
+ * it, or (0, null) takes it away.
+ * @function module:svgcanvas.SvgCanvas#setTextWidth
+ * @param {number|null} value
+ * @returns {void}
+ */
+const setTextWidthMethod = (value) => {
+  const n = Number.parseFloat(value)
+  const width = Number.isFinite(n) && n > 0 ? String(Math.round(n * 100) / 100) : ''
+  const textElements = getSelectedTextElements()
+  const changedTextElements = textElements.filter((elem) => (elem.getAttribute('se:width') || '') !== width)
+  if (changedTextElements.length > 0) {
+    svgCanvas.changeSelectedAttribute('se:width', width, changedTextElements)
   }
   notifyTextChange(changedTextElements)
 }
@@ -960,7 +1154,7 @@ const setFontSizeMethod = (val) => {
 const getTextMethod = () => {
   const selectedElements = svgCanvas.getSelectedElements()
   const selected = selectedElements[0]
-  return (selected) ? selected.textContent : ''
+  return (selected) ? getTextSource(selected) : ''
 }
 
 /**

@@ -516,7 +516,7 @@ describe('Select Module', () => {
       expect(manager.rotateZones.ne.getAttribute('style')).toMatch(/rotate\.svg\) 12 12, auto$/)
     })
 
-    it('outlines a hovered element with the frame of its selector, and hides the outline', () => {
+    it('without the geometry of a browser, outlines a hovered element with the frame of its selector, and hides the outline', () => {
       manager.showHover(rectElement)
       const outline = document.getElementById('selectorHover')
       expect(outline.hasAttribute('display')).toBe(false)

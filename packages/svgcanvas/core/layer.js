@@ -7,7 +7,7 @@
  */
 
 import { NS } from './namespaces.js'
-import { toXml, walkTree } from './utilities.js'
+import { toXml, walkTree, setStyleProperty } from './utilities.js'
 
 /**
  * This class encapsulates the concept of a layer in the drawing. It can be constructed with
@@ -46,10 +46,10 @@ class Layer {
 
     addLayerClass(this.group_)
     walkTree(this.group_, function (e) {
-      e.style.pointerEvents = 'inherit'
+      setStyleProperty(e, 'pointer-events', 'inherit')
     })
 
-    this.group_.style.pointerEvents = svgElem ? 'all' : 'none'
+    setStyleProperty(this.group_, 'pointer-events', svgElem ? 'all' : 'none')
   }
 
   /**
@@ -73,7 +73,7 @@ class Layer {
    * @returns {void}
    */
   activate () {
-    this.group_.style.pointerEvents = 'all'
+    setStyleProperty(this.group_, 'pointer-events', 'all')
   }
 
   /**
@@ -81,7 +81,7 @@ class Layer {
    * @returns {void}
    */
   deactivate () {
-    this.group_.style.pointerEvents = 'none'
+    setStyleProperty(this.group_, 'pointer-events', 'none')
   }
 
   /**

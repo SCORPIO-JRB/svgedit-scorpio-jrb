@@ -406,7 +406,7 @@ export const scaleText = (text, m, info, startTransform) => {
     ;['dx', 'dy'].forEach((name) => {
       if (elem.hasAttribute(name)) { changes[name] = mapList(elem.getAttribute(name), (n) => n * s) }
     })
-    ;['font-size', 'textLength', 'letter-spacing', 'word-spacing'].forEach((name) => {
+    ;['font-size', 'textLength', 'letter-spacing', 'word-spacing', 'se:width'].forEach((name) => {
       if (!elem.hasAttribute(name)) { return }
       const scaled = scaleLength(elem.getAttribute(name), s)
       if (scaled !== null) { changes[name] = scaled }

@@ -21,6 +21,7 @@ import {
   getStrokedBBoxDefaultVisible,
   getBBox as utilsGetBBox,
   remapTimingIds,
+  withoutStyleProperty,
   isInsideDefinition
 } from './utilities.js'
 import {
@@ -40,6 +41,7 @@ import { getClosest } from '../common/util.js'
 import { parseSvgText, getDeclaredSize, removeOutsideAnimations } from './svg-paste.js'
 import { scopeStyleSheet, keyframesNames } from './css-scope.js'
 import { ANIMATION_ELEMENTS, isPauseOfAnimation } from './sanitize.js'
+import { isFidelityOn, isRawAttribute } from './fidelity.js'
 
 const {
   InsertElementCommand,
@@ -59,7 +61,12 @@ export const init = canvas => {
   svgCanvas = canvas
   svgCanvas.setSvgString = setSvgString
   svgCanvas.importSvgString = importSvgString
+  svgCanvas.replaceUseSymbol = replaceUseSymbol
   svgCanvas.uniquifyElems = uniquifyElemsMethod
+  svgCanvas.getReferencesTo = getReferencesTo
+  svgCanvas.getBinding = getBinding
+  svgCanvas.renameElementId = renameElementId
+  svgCanvas.setElementData = setElementData
   svgCanvas.setUseData = setUseDataMethod
   svgCanvas.convertGradients = convertGradientsMethod
   svgCanvas.removeUnusedDefElems = removeUnusedDefElemsMethod // remove DOM elements inside the `<defs>` if they are notreferred to,
@@ -95,33 +102,7 @@ const svgCanvasToString = () => {
     svgCanvas.selectOnly([svgCanvas.getCurrentGroup()])
   }
 
-  const nakedSvgs = []
-
-  // Unwrap gsvg if it has no special attributes (only id and style)
-  const gsvgElems = svgCanvas.getSvgContent().querySelectorAll('g[data-gsvg]')
-  Array.prototype.forEach.call(gsvgElems, element => {
-    const attrs = element.attributes
-    let len = attrs.length
-    for (let i = 0; i < len; i++) {
-      if (attrs[i].nodeName === 'id' || attrs[i].nodeName === 'style') {
-        len--
-      }
-    }
-    // No significant attributes, so ungroup
-    if (len <= 0) {
-      const svg = element.firstChild
-      nakedSvgs.push(svg)
-      element.replaceWith(svg)
-    }
-  })
   const output = svgCanvas.svgToString(svgCanvas.getSvgContent(), 0)
-
-  // Rewrap gsvg
-  if (nakedSvgs.length) {
-    Array.prototype.forEach.call(nakedSvgs, el => {
-      svgCanvas.groupSvgElem(el)
-    })
-  }
 
   return output
 }
@@ -164,6 +145,23 @@ const qualifiedName = (node, nsMap) => {
     return node.nodeType === 1 ? node.localName : node.nodeName
   }
   return `${namespacePrefix(nsMap, uri, node.prefix)}:${node.localName}`
+}
+
+/**
+ * Whether an element is a group the editor put around a nested `<svg>` (see
+ * groupSvgElem) that holds only it and carries no attribute of its own.
+ * @param {Element} elem
+ * @param {object} curConfig
+ * @returns {boolean}
+ */
+const isEditorSvgWrapper = (elem, curConfig) => {
+  if (elem.localName !== 'g' || !isFidelityOn(curConfig, 'nestedSvg')) return false
+  const dataStorage = svgCanvas.getDataStorage()
+  if (!dataStorage.get(elem, 'gsvgWrapper')) return false
+  const svg = elem.firstElementChild
+  if (!svg || svg !== dataStorage.get(elem, 'gsvg') || elem.children.length !== 1) return false
+  return [...elem.attributes].every((attr) => attr.name === 'id' ||
+    (attr.name === 'style' && withoutStyleProperty(attr.value, 'pointer-events').trim() === ''))
 }
 
 /**
@@ -233,10 +231,11 @@ const elementToString = (elem, indent) => {
       //   res.w += unit;
       //   res.h += unit;
       // }
+      const origin = svgCanvas.getPageOrigin?.() ?? { x: 0, y: 0 }
       if (curConfig.dynamicOutput) {
         vb = elem.getAttribute('viewBox')
-        if (!vb) {
-          vb = [0, 0, res.w, res.h].join(' ')
+        if (!vb || origin.x || origin.y) {
+          vb = [origin.x, origin.y, res.w, res.h].join(' ')
         }
         out.push(` viewBox="${vb}" xmlns="${NS.SVG}"`)
       } else {
@@ -250,7 +249,7 @@ const elementToString = (elem, indent) => {
             : ` width="${convertUnit(res.w, unit) + unit}" height="${convertUnit(res.h, unit) + unit}"`
         }
         if (declared?.viewBox) {
-          size += ` viewBox="0 0 ${res.w} ${res.h}"`
+          size += ` viewBox="${origin.x} ${origin.y} ${res.w} ${res.h}"`
         }
         out.push(`${size} xmlns="${NS.SVG}"`)
       }
@@ -289,7 +288,6 @@ const elementToString = (elem, indent) => {
         }
       })
 
-      let i = attrs.length
       const attrNames = [
         'width',
         'height',
@@ -300,8 +298,10 @@ const elementToString = (elem, indent) => {
         'id',
         'overflow'
       ]
-      while (i--) {
-        const attr = attrs[i]
+      // In the order of the file: written backwards, they were reversed at
+      // each save of a saved file (V6, option fidelity.stableSave)
+      const rootAttrs = isFidelityOn(curConfig, 'stableSave') ? attrs : [...attrs].reverse()
+      for (const attr of rootAttrs) {
         const attrVal = toXml(attr.value)
 
         // Namespaces have already been dealt with, so skip
@@ -327,15 +327,31 @@ const elementToString = (elem, indent) => {
       if (elem.nodeName === 'defs' && !elem.firstChild) {
         return ''
       }
+      // The group the editor put around a nested <svg> of a file is left out
+      // while it carries nothing of its own (only its id and the editor's
+      // style): the file gets its <svg> back as it was
+      if (isEditorSvgWrapper(elem, curConfig)) {
+        return elementToString(elem.firstElementChild, indent)
+      }
 
       const mozAttrs = ['-moz-math-font-style', '_moz-math-font-style']
       // The values of an animation, or of the data of another application,
       // are kept as written
       const round = elem.namespaceURI === NS.SVG && !ANIMATION_ELEMENTS.has(elem.localName)
+      // V6 (section 7): identifiers, classes and bound data are not numbers
+      const rawValues = isFidelityOn(curConfig, 'rawValues')
+      const styleProperties = isFidelityOn(curConfig, 'styleProperties')
+      const emptyValues = isFidelityOn(curConfig, 'emptyValues')
       // Do not iterate attributes in reverse order!
       for (let i = 0; i < attrs.length; i++) {
         const attr = attrs[i]
         let attrVal = toXml(attr.value)
+        // The pointer-events of the editor (layers, open groups) are not
+        // saved; the rest of the style is
+        if (styleProperties && attr.localName === 'style' && !attr.namespaceURI) {
+          attrVal = toXml(withoutStyleProperty(attr.value, 'pointer-events'))
+          if (attrVal.trim() === '') continue
+        }
         // remove bogus attributes added by Gecko, and the pause of the
         // animations in the editor
         if (mozAttrs.includes(attr.localName) || isPauseOfAnimation(elem, attr)) {
@@ -365,7 +381,9 @@ const elementToString = (elem, indent) => {
             attrVal = svgCanvas.pathActions.convertPath(elem, true)
           }
           // Properly parse attribute value if it is a number!
-          if (round && !isNaN(attrVal) && !isNaN(parseFloat(attrVal))) {
+          if (round && rawValues && isRawAttribute(attr)) {
+            // Written as it is
+          } else if (round && !isNaN(attrVal) && !isNaN(parseFloat(attrVal))) {
             attrVal = shortFloat(attrVal)
           } else if (round && unitRe.test(attrVal)) {
             attrVal = shortFloat(attrVal) + unit
@@ -398,8 +416,11 @@ const elementToString = (elem, indent) => {
             out.push('"')
           }
         } else {
-          // Do not skip data attribute even they are empty!
-          if ((/^data[-]/i).test(attr.localName)) {
+          // Do not skip data attribute even they are empty! Nor, in V6, an
+          // empty attribute of another application (rdf:about="")
+          if ((/^data[-]/i).test(attr.localName) ||
+            (emptyValues && attr.namespaceURI && nsMap[attr.namespaceURI] &&
+              ![NS.SVG, NS.XMLNS, NS.XLINK, NS.SE].includes(attr.namespaceURI))) {
             // map various namespaces to our fixed namespace prefixes
             // (the default xmlns attribute itself does not get a prefix)
             if (
@@ -421,18 +442,25 @@ const elementToString = (elem, indent) => {
     if (elem.hasChildNodes()) {
       out.push('>')
       indent++
-      let bOneLine = false
+      // Inside a text, white space is drawn: nothing is added between its
+      // spans (an indented line of a centered text moved by half a space).
+      const inText = Boolean(elem.closest?.('text'))
+      let bOneLine = inText
 
       for (let i = 0; i < childs.length; i++) {
         const child = childs.item(i)
         switch (child.nodeType) {
           case 1: { // element node
-            // An element left out (an empty <defs>) leaves no empty line
-            const text = svgCanvas.svgToString(child, indent)
-            if (text) {
-              out.push('\n')
-              out.push(text)
+            // An element written as nothing (an empty <defs>) leaves no
+            // blank line (V6, option fidelity.stableSave)
+            if (inText) {
+              out.push(svgCanvas.svgToString(child, 0))
+              break
             }
+            const text = svgCanvas.svgToString(child, indent)
+            if (text === '' && isFidelityOn(curConfig, 'stableSave')) break
+            out.push('\n')
+            out.push(text)
             break
           }
           case 3: {
@@ -497,27 +525,167 @@ const SELECTOR_ID = /#([\w\u00A0-\uFFFF-]+)(?=[^{};]*\{)/g
  */
 const remapReferences = (root, ids) => {
   if (!ids.size) return
-  const remapUrl = (match, _quote, id) => ids.has(id) ? `url(#${ids.get(id)})` : match
   ;[root, ...root.querySelectorAll('*')].forEach((elem) => {
-    for (const attr of [...elem.attributes]) {
-      const value = attr.value
-      let next = value
-      if (attr.localName === 'href') {
-        if (value.startsWith('#') && ids.has(value.slice(1))) next = `#${ids.get(value.slice(1))}`
-      } else if (attr.localName === 'connector' && attr.namespaceURI === NS.SE) {
-        next = value.split(/\s+/).map((id) => ids.get(id) || id).join(' ')
-      } else if ((attr.localName === 'begin' || attr.localName === 'end') && !attr.namespaceURI) {
-        next = remapTimingIds(value, (id) => ids.get(id))
-      } else if (value.includes('url(')) {
-        next = value.replace(URL_REFERENCE, remapUrl)
-      }
-      if (next !== value) attr.value = next
-    }
-    if (elem.localName === 'style') {
-      const text = elem.textContent.replace(SELECTOR_ID, (match, id) => ids.has(id) ? `#${ids.get(id)}` : match)
-      if (text !== elem.textContent) elem.textContent = text
-    }
+    const { attributes, text } = referenceChanges(elem, ids)
+    attributes.forEach(({ attr, value }) => { attr.value = value })
+    if (text !== null) elem.textContent = text
   })
+}
+
+/**
+ * The references of one element that point to elements changing identifier,
+ * and what they become (see remapReferences); nothing is changed.
+ * @param {Element} elem
+ * @param {Map<string, string>} ids - New identifier of each old one
+ * @returns {{attributes: Array<{attr: Attr, value: string}>, text: string|null}}
+ *   The attributes to change, and the new text of a style sheet
+ */
+const referenceChanges = (elem, ids) => {
+  const remapUrl = (match, _quote, id) => ids.has(id) ? `url(#${ids.get(id)})` : match
+  const attributes = []
+  for (const attr of [...elem.attributes]) {
+    const value = attr.value
+    let next = value
+    if (attr.localName === 'href') {
+      if (value.startsWith('#') && ids.has(value.slice(1))) next = `#${ids.get(value.slice(1))}`
+    } else if (attr.localName === 'connector' && attr.namespaceURI === NS.SE) {
+      next = value.split(/\s+/).map((id) => ids.get(id) || id).join(' ')
+    } else if ((attr.localName === 'begin' || attr.localName === 'end') && !attr.namespaceURI) {
+      next = remapTimingIds(value, (id) => ids.get(id))
+    } else if (value.includes('url(')) {
+      next = value.replace(URL_REFERENCE, remapUrl)
+    }
+    if (next !== value) attributes.push({ attr, value: next })
+  }
+  let text = null
+  if (elem.localName === 'style') {
+    const next = elem.textContent.replace(SELECTOR_ID, (match, id) => ids.has(id) ? `#${ids.get(id)}` : match)
+    if (next !== elem.textContent) text = next
+  }
+  return { attributes, text }
+}
+
+/**
+ * The elements of the drawing that refer to an identifier: `href="#id"`,
+ * `url(#id)`, `begin="id.end"`, a connector, a `#id` selector of a style sheet.
+ * @function module:svgcanvas.SvgCanvas#getReferencesTo
+ * @param {string} id
+ * @returns {Element[]}
+ */
+const getReferencesTo = (id) => {
+  const content = svgCanvas.getSvgContent()
+  if (!id || !content) return []
+  const probe = new Map([[id, `${id}\u0001`]])
+  return [...content.querySelectorAll('*')].filter((elem) => {
+    const { attributes, text } = referenceChanges(elem, probe)
+    return attributes.length > 0 || text !== null
+  })
+}
+
+/**
+ * What binds an element to the data of SCorp-io, as far as the file tells:
+ * its attributes of the SCorp-io binding (`scorp_*`, `instanceId`,
+ * `representationId`) and `data-*`, and the elements of the drawing that refer
+ * to its identifier. The format of the binding is not fixed yet (decision D4
+ * of the plan): until then, an element that has any of them is bound.
+ * @function module:svgcanvas.SvgCanvas#getBinding
+ * @param {Element} elem
+ * @returns {{attributes: Array<{name: string, value: string}>, references: Element[], bound: boolean}}
+ */
+const getBinding = (elem) => {
+  const attributes = [...(elem?.attributes ?? [])]
+    .filter((attr) => !attr.namespaceURI && (attr.name.startsWith('data-') || attr.name.startsWith('scorp_') ||
+      attr.name === 'instanceId' || attr.name === 'representationId'))
+    .map(({ name, value }) => ({ name, value }))
+  const references = elem?.id ? getReferencesTo(elem.id).filter((other) => other !== elem) : []
+  return { attributes, references, bound: attributes.length > 0 || references.length > 0 }
+}
+
+/** A name of data the editor writes: `data-` and an XML name without a colon. */
+const VALID_DATA = /^data-[\p{L}\p{N}_.\-\u00B7]+$/u
+
+/**
+ * Sets, changes or removes an attribute of data (`data-*`) of an element, in
+ * one undo step.
+ * @function module:svgcanvas.SvgCanvas#setElementData
+ * @param {Element} elem
+ * @param {string} name - `data-tag`...
+ * @param {string|null} value - Null removes it; an empty value is kept
+ * @returns {boolean} False for a name that is not one of data
+ */
+const setElementData = (elem, name, value) => {
+  if (!VALID_DATA.test(name ?? '')) return false
+  const old = elem.getAttribute(name)
+  if (old === value) return true
+  if (value === null || value === undefined) {
+    elem.removeAttribute(name)
+  } else {
+    elem.setAttribute(name, String(value))
+  }
+  const batchCmd = new BatchCommand('Change data')
+  batchCmd.addSubCommand(new ChangeElementCommand(elem, { [name]: old }))
+  svgCanvas.addCommandToHistory(batchCmd)
+  svgCanvas.call('changed', [elem])
+  return true
+}
+
+/** An identifier the editor accepts: an XML name without a colon. */
+const VALID_ID = /^[\p{L}_][\p{L}\p{N}_.\-\u00B7]*$/u
+
+/**
+ * Gives an element a new identifier, and the references of the drawing to it
+ * follow, in one undo step. An identifier already taken, by an element of the
+ * drawing or of the editor, is refused: it used to be given anyway, and two
+ * elements then shared it.
+ * @function module:svgcanvas.SvgCanvas#renameElementId
+ * @param {Element} elem
+ * @param {string} newId
+ * @returns {{ok: boolean, reason?: 'invalid'|'taken', references?: number}}
+ */
+const renameElementId = (elem, newId) => {
+  const id = String(newId ?? '').trim()
+  const oldId = elem.id
+  if (id === oldId) return { ok: true, references: 0 }
+  if (!id) {
+    // No identifier: only for an element nothing refers to
+    if (getReferencesTo(oldId).some((other) => other !== elem)) return { ok: false, reason: 'invalid' }
+  } else if (!VALID_ID.test(id)) {
+    return { ok: false, reason: 'invalid' }
+  } else {
+    const other = svgCanvas.getDOMDocument().getElementById(id)
+    const rootId = svgCanvas.getDataStorage().get(svgCanvas.getSvgContent(), 'rootId')
+    if ((other && other !== elem) || id === rootId) return { ok: false, reason: 'taken' }
+  }
+  const batchCmd = new BatchCommand('Change id')
+  let references = 0
+  if (oldId && id) {
+    const ids = new Map([[oldId, id]])
+    ;[...svgCanvas.getSvgContent().querySelectorAll('*')].forEach((other) => {
+      if (other === elem) return
+      const { attributes, text } = referenceChanges(other, ids)
+      if (!attributes.length && text === null) return
+      const old = {}
+      attributes.forEach(({ attr, value }) => {
+        old[attr.localName === 'href' ? '#href' : attr.name] = attr.value
+        attr.value = value
+      })
+      if (text !== null) {
+        old['#text'] = other.textContent
+        other.textContent = text
+      }
+      batchCmd.addSubCommand(new ChangeElementCommand(other, old))
+      references++
+    })
+  }
+  if (id) {
+    elem.id = id
+  } else {
+    elem.removeAttribute('id')
+  }
+  batchCmd.addSubCommand(new ChangeElementCommand(elem, { id: oldId || null }))
+  svgCanvas.addCommandToHistory(batchCmd)
+  svgCanvas.call('changed', [elem])
+  return { ok: true, references }
 }
 
 /**
@@ -673,17 +841,20 @@ const setSvgString = (xmlString, preventUndo) => {
       }
     })
 
-    // For Firefox: Put all paint elems in defs. Those already there stay in
-    // their place: moved to the end, they changed the order of a saved
-    // drawing at each opening.
+    // For Firefox: Put all paint elems in defs. A file without any gets no
+    // <defs>: an empty one is written as a blank line, which moved from one
+    // save to the next (V5). Those already there stay in their place: moved
+    // to the end, they changed the order of a saved drawing at each opening.
     if (isGecko()) {
-      const svgDefs = findDefs()
       const findElems = content.querySelectorAll(
         'linearGradient, radialGradient, pattern'
       )
-      Array.prototype.forEach.call(findElems, ele => {
-        if (ele.parentNode !== svgDefs) svgDefs.appendChild(ele)
-      })
+      if (findElems.length) {
+        const svgDefs = findDefs()
+        Array.prototype.forEach.call(findElems, ele => {
+          if (ele.parentNode !== svgDefs) svgDefs.appendChild(ele)
+        })
+      }
     }
 
     // Set ref element for <use> elements
@@ -695,7 +866,11 @@ const setSvgString = (xmlString, preventUndo) => {
     // bounding box units changed how they look (a gradient shared by several
     // shapes, one taking its units from another by href, a slanted one on a
     // shape that is not square). They follow their shape when it changes
-    // (recalculate.js).
+    // (recalculate.js). The option fidelity.gradientUnits set to false
+    // converts them as before.
+    if (!isFidelityOn(curConfig, 'gradientUnits')) {
+      svgCanvas.convertGradients(content)
+    }
 
     const attrs = {
       id: 'svgcontent',
@@ -718,6 +893,13 @@ const setSvgString = (xmlString, preventUndo) => {
       const vb = viBox.split(/[ ,]+/)
       const vbWidth = Number(vb[2])
       const vbHeight = Number(vb[3])
+      // The origin of the viewBox (lot V5): the page starts there, and the
+      // save writes it back. It was ignored, so the drawing moved.
+      const vbX = Number(vb[0])
+      const vbY = Number(vb[1])
+      if ((vbX || vbY) && Number.isFinite(vbX) && Number.isFinite(vbY)) {
+        dataStorage.put(content, 'viewBoxOrigin', { x: vbX, y: vbY })
+      }
       if (Number.isFinite(vbWidth)) {
         attrs.width = vbWidth
       }
@@ -741,15 +923,17 @@ const setSvgString = (xmlString, preventUndo) => {
     // identify layers
     draw.identifyLayers()
 
-    // Give ID for any visible layer children missing one. The content of
-    // <defs> and <symbol> (an imported file), of clip paths, masks, patterns
-    // and markers is not an object of the drawing: it stays as saved, else
-    // each opening added hundreds of identifiers to an import.
+    // Give ID for any visible layer children missing one. Not to the lines
+    // of a text: they are not selected alone, and a text saved, opened and
+    // saved again stays the same. The content of <defs> and <symbol> (an
+    // imported file), of clip paths, masks, patterns and markers is not an
+    // object of the drawing: it stays as saved, else each opening added
+    // hundreds of identifiers to an import.
     const chiElems = content.children
     Array.prototype.forEach.call(chiElems, chiElem => {
       const visElems = chiElem.querySelectorAll(svgCanvas.getVisElems())
       Array.prototype.forEach.call(visElems, elem => {
-        if (!elem.id && !isInsideDefinition(elem, content)) {
+        if (!elem.id && elem.localName !== 'tspan' && !isInsideDefinition(elem, content)) {
           elem.id = svgCanvas.getNextId()
         }
       })
@@ -856,6 +1040,122 @@ const cancelGroupTransform = (parent, layer) => {
 const ROOT_ONLY = new Set(['version', 'baseProfile', 'enable-background'])
 
 /**
+ * Builds the <symbol> of an imported SVG in the <defs> of the drawing (see
+ * importSvgString), its changes added to a batch command.
+ * @param {string} xmlString
+ * @param {BatchCommand} batchCmd
+ * @returns {{symbol: Element, width: number|null, height: number|null, removed: string[]}}
+ * @throws {Error} When the text is not an SVG document
+ */
+const buildImportedSymbol = (xmlString, batchCmd) => {
+  // Checked before anything changes in the drawing
+  const newDoc = parseSvgText(xmlString)
+  if (!newDoc) {
+    throw new Error('Not an SVG document')
+  }
+  const removed = svgCanvas.prepareSvg(newDoc)
+
+  // import new svg document into our document
+  // If DOM3 adoptNode() available, use it. Otherwise fall back to DOM2 importNode()
+  const svg = svgCanvas.getDOMDocument().adoptNode
+    ? svgCanvas.getDOMDocument().adoptNode(newDoc.documentElement)
+    : svgCanvas.getDOMDocument().importNode(newDoc.documentElement, true)
+
+  svgCanvas.uniquifyElems(svg)
+  removed.push(...removeOutsideAnimations(svg))
+  const { width, height } = getDeclaredSize(svg)
+
+  const symbol = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'symbol')
+  const hadDefs = svgCanvas.getSvgContent().getElementsByTagNameNS(NS.SVG, 'defs').length > 0
+  const defs = findDefs()
+  if (!hadDefs) {
+    // A <defs> made for the import goes with it
+    batchCmd.addSubCommand(new InsertElementCommand(defs))
+  }
+
+  if (isGecko()) {
+    // Move all gradients into root for Firefox, workaround for this bug:
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=353575
+    const elements = svg.querySelectorAll(
+      'linearGradient, radialGradient, pattern'
+    )
+    Array.prototype.forEach.call(elements, el => {
+      defs.appendChild(el)
+      batchCmd.addSubCommand(new InsertElementCommand(el))
+    })
+  }
+
+  while (svg.firstChild) {
+    const first = svg.firstChild
+    symbol.append(first)
+  }
+  // The size of the root goes to the <use>: the <symbol> keeps its view
+  // box, which scales the file to that size. The namespaces are declared
+  // on the root of the drawing when it is saved.
+  for (const attr of svg.attributes) {
+    if (attr.namespaceURI === NS.XMLNS) continue
+    if (!attr.namespaceURI && ['x', 'y', 'width', 'height'].includes(attr.localName)) continue
+    // Attributes of a root only, without effect on a <symbol>
+    if (!attr.namespaceURI && ROOT_ONLY.has(attr.localName)) continue
+    symbol.setAttributeNS(attr.namespaceURI, attr.nodeName, attr.value)
+  }
+  // In the drawing before any new identifier is chosen: the identifiers of
+  // the file are kept, so a new one must not take one of them.
+  defs.append(symbol)
+  batchCmd.addSubCommand(new InsertElementCommand(symbol))
+  if (!symbol.id) symbol.id = svgCanvas.getNextId()
+  removed.push(...scopeImportedStyles(symbol))
+  return { symbol, width, height, removed }
+}
+
+/**
+ * Remplacer (lot V4): the symbol of a <use> becomes that of another SVG
+ * file. The <use> keeps its identifier, its place and its scale, and takes
+ * the size the new file declares. One undo step; the old symbol stays in the
+ * <defs>, where other <use> may show it.
+ * @function module:svgcanvas.SvgCanvas#replaceUseSymbol
+ * @param {SVGUseElement} useEl
+ * @param {string} xmlString
+ * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @fires module:svgcanvas.SvgCanvas#event:contentRemoved
+ * @returns {boolean} Whether the symbol was replaced
+ */
+const replaceUseSymbol = (useEl, xmlString) => {
+  const dataStorage = svgCanvas.getDataStorage()
+  const batchCmd = new BatchCommand('Replace symbol')
+  let removed
+  try {
+    const built = buildImportedSymbol(xmlString, batchCmd)
+    removed = built.removed
+    const { symbol, width, height } = built
+    const old = {
+      '#href': svgCanvas.getHref(useEl),
+      width: useEl.getAttribute('width'),
+      height: useEl.getAttribute('height')
+    }
+    svgCanvas.setHref(useEl, '#' + symbol.id)
+    if (width !== null) useEl.setAttribute('width', shortFloat(width))
+    else useEl.removeAttribute('width')
+    if (height !== null) useEl.setAttribute('height', shortFloat(height))
+    else useEl.removeAttribute('height')
+    batchCmd.addSubCommand(new ChangeElementCommand(useEl, old))
+    dataStorage.put(useEl, 'symbol', symbol)
+    dataStorage.put(useEl, 'ref', symbol)
+  } catch (e) {
+    batchCmd.unapply()
+    error('Error replacing a symbol', e, 'svg-exec')
+    return false
+  }
+  svgCanvas.addCommandToHistory(batchCmd)
+  svgCanvas.selectorManager.requestSelector(useEl)?.resize()
+  svgCanvas.call('changed', [useEl])
+  if (removed.length) {
+    svgCanvas.call('contentRemoved', { action: 'import', items: removed })
+  }
+  return true
+}
+
+/**
  * This function imports the input SVG XML as a `<symbol>` in the `<defs>`, then adds a
  * `<use>` to the current layer, at the size the file declares. The stylesheets
  * and the animations of the file apply only to it. The import is one undo
@@ -878,63 +1178,9 @@ const importSvgString = (xmlString, _preserveDimension, _doNotUseExisting) => {
   let useEl
   let removed
   try {
-    // Checked before anything changes in the drawing
-    const newDoc = parseSvgText(xmlString)
-    if (!newDoc) {
-      throw new Error('Not an SVG document')
-    }
-    removed = svgCanvas.prepareSvg(newDoc)
-
-    // import new svg document into our document
-    // If DOM3 adoptNode() available, use it. Otherwise fall back to DOM2 importNode()
-    const svg = svgCanvas.getDOMDocument().adoptNode
-      ? svgCanvas.getDOMDocument().adoptNode(newDoc.documentElement)
-      : svgCanvas.getDOMDocument().importNode(newDoc.documentElement, true)
-
-    svgCanvas.uniquifyElems(svg)
-    removed.push(...removeOutsideAnimations(svg))
-    const { width, height } = getDeclaredSize(svg)
-
-    const symbol = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'symbol')
-    const hadDefs = svgCanvas.getSvgContent().getElementsByTagNameNS(NS.SVG, 'defs').length > 0
-    const defs = findDefs()
-    if (!hadDefs) {
-      // A <defs> made for the import goes with it
-      batchCmd.addSubCommand(new InsertElementCommand(defs))
-    }
-
-    if (isGecko()) {
-      // Move all gradients into root for Firefox, workaround for this bug:
-      // https://bugzilla.mozilla.org/show_bug.cgi?id=353575
-      const elements = svg.querySelectorAll(
-        'linearGradient, radialGradient, pattern'
-      )
-      Array.prototype.forEach.call(elements, el => {
-        defs.appendChild(el)
-        batchCmd.addSubCommand(new InsertElementCommand(el))
-      })
-    }
-
-    while (svg.firstChild) {
-      const first = svg.firstChild
-      symbol.append(first)
-    }
-    // The size of the root goes to the <use>: the <symbol> keeps its view
-    // box, which scales the file to that size. The namespaces are declared
-    // on the root of the drawing when it is saved.
-    for (const attr of svg.attributes) {
-      if (attr.namespaceURI === NS.XMLNS) continue
-      if (!attr.namespaceURI && ['x', 'y', 'width', 'height'].includes(attr.localName)) continue
-      // Attributes of a root only, without effect on a <symbol>
-      if (!attr.namespaceURI && ROOT_ONLY.has(attr.localName)) continue
-      symbol.setAttributeNS(attr.namespaceURI, attr.nodeName, attr.value)
-    }
-    // In the drawing before any new identifier is chosen: the identifiers of
-    // the file are kept, so a new one must not take one of them.
-    defs.append(symbol)
-    batchCmd.addSubCommand(new InsertElementCommand(symbol))
-    if (!symbol.id) symbol.id = svgCanvas.getNextId()
-    removed.push(...scopeImportedStyles(symbol))
+    const built = buildImportedSymbol(xmlString, batchCmd)
+    removed = built.removed
+    const { symbol, width, height } = built
 
     useEl = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'use')
     useEl.id = svgCanvas.getNextId()
@@ -1382,10 +1628,11 @@ const removeUnusedDefElemsMethod = () => {
 }
 /**
  * Converts gradients from userSpaceOnUse to objectBoundingBox. The editor no
- * longer calls it when it opens a file or ungroups an import: the conversion
- * is wrong for a gradient shared by several shapes, for one that takes its
- * units from another by href, and for a slanted one on a shape that is not
- * square. A gradient in user units follows its shape instead.
+ * longer calls it when it opens a file or ungroups an import, unless the
+ * option fidelity.gradientUnits is false: the conversion is wrong for a
+ * gradient shared by several shapes, for one that takes its units from
+ * another by href, and for a slanted one on a shape that is not square. A
+ * gradient in user units follows its shape instead.
  * @function module:svgcanvas.SvgCanvas#convertGradients
  * @param {Element} elem
  * @returns {void}
@@ -1429,6 +1676,13 @@ const convertGradientsMethod = elem => {
             return
           }
         }
+      }
+      // A gradient several objects use keeps its units: converted after the
+      // box of the first one, it would change the others (V6, section 7,
+      // option fidelity.gradientUnits). One object alone is converted, so
+      // that the gradient follows it when it moves.
+      if (fillStrokeElems.length > 1 && isFidelityOn(svgCanvas.getCurConfig(), 'gradientUnits')) {
+        return
       }
       // get object's bounding box
       const bb = utilsGetBBox(fillStrokeElems[0])

@@ -12,7 +12,7 @@ couleur codée en dur, de `<style>` ni de script ; les tracés sont en `currentC
 - Material Symbols : 106 fichiers. Tracé et `viewBox="0 -960 960 960"` repris tels quels, avec
   `width="24" height="24"` et `fill="currentColor"` sur la racine. `flip_vertical.svg` est le
   tracé de `flip` pivoté de 90° (attribut `transform`).
-- Dessins propres : 44 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
+- Dessins propres : 56 fichiers. `viewBox="0 0 24 24"`, glyphe entre 3 et 21 environ, trait
   `currentColor` de 1,5 (l'épaisseur de Material Symbols en graisse 400 : 60/960 de 24 px),
   extrémités et jointures rondes. Exceptions voulues : les icônes de jointure et d'extrémité de
   trait montrent un trait épais, puisque c'est leur sujet.
@@ -62,6 +62,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `delete.svg` | `delete` | Supprimer (élément, calque) |
 | `docprop.svg` | `description` | Propriétés du document (menu principal) |
 | `docprops.svg` | `description` | Propriétés du document (ancienne icône) — *sans référence* |
+| `drawer.svg` | dessin propre | Tiroir Bibliothèque : symboles, formes, images (lot V7) |
 | `editPref.svg` | `settings` | Préférences de l'éditeur (menu principal) |
 | `edit_foreign.svg` | `code_blocks` | Éditer un objet étranger (foreignObject) — *sans référence* |
 | `ellipse.svg` | dessin propre | Outil ellipse |
@@ -76,6 +77,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `flip_vertical.svg` | `flip` pivoté de 90° | Retourner verticalement |
 | `fontsize.svg` | `format_size` | Taille de police (champ) |
 | `forwardslash.svg` | dessin propre | Marqueur : barre oblique « / » — *sans référence* |
+| `frame.svg` | dessin propre | Outil Cadre d'export (V5) |
 | `globe_link.svg` | `add_link` | Créer un lien hypertexte |
 | `go_down.svg` | `arrow_downward` | Descendre le calque |
 | `go_up.svg` | `arrow_upward` | Monter le calque |
@@ -95,6 +97,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `leftarrow_o.svg` | dessin propre | Marqueur : flèche vide vers la gauche |
 | `letter_spacing.svg` | `format_letter_spacing_2` | Espacement des lettres (champ) |
 | `library.svg` | `shapes` | Bibliothèque (même dessin que shapelib) — *sans référence* |
+| `line_height.svg` | dessin propre | Interligne d'un texte de plusieurs lignes (champ) |
 | `linecap_butt.svg` | dessin propre | Extrémité du trait : plate (butt) |
 | `linecap_round.svg` | dessin propre | Extrémité du trait : ronde |
 | `linecap_square.svg` | dessin propre | Extrémité du trait : carrée |
@@ -102,8 +105,11 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `linejoin_miter.svg` | dessin propre | Jointure du trait : en pointe (miter) |
 | `linejoin_round.svg` | dessin propre | Jointure du trait : ronde |
 | `link_controls.svg` | dessin propre | Lier les points de contrôle (ancienne icône) — *sans référence* |
+| `lock.svg` | dessin propre | Objet ou calque verrouillé (onglet Calques, lot V7) |
+| `lock_open.svg` | dessin propre | Verrouiller un objet ou un calque (onglet Calques, lot V7) |
 | `mcircle.svg` | `circle` (variante pleine) | Marqueur : cercle plein |
 | `mcircle_o.svg` | `circle` | Marqueur : cercle vide |
+| `minus.svg` | dessin propre | Retirer (remplissage, contour, arrêt de dégradé) |
 | `mkr_markers_dimension.svg` | `arrow_range` | Marqueurs de cote — *sans référence* |
 | `mkr_markers_label.svg` | `label` | Marqueur étiquette — *sans référence* |
 | `mkr_markers_off.svg` | `horizontal_rule` | Sans marqueurs — *sans référence* |
@@ -120,11 +126,15 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `opacity.svg` | `opacity` | Opacité (champ) |
 | `open.svg` | `folder_open` | Ouvrir |
 | `open_path.svg` | dessin propre | Ouvrir le sous-chemin — *sans référence* |
+| `paint_gradient.svg` | dessin propre | Peinture en dégradé |
+| `paint_solid.svg` | dessin propre | Peinture unie |
 | `panel_right.svg` | dessin propre | Afficher ou masquer le panneau de droite (Ctrl+\\) |
 | `panning.svg` | `pan_tool` | Outil main : déplacer la vue (ext-panning) |
 | `path.svg` | `stylus_fountain_pen` | Outil chemin (plume) |
 | `pen.svg` | `pen_size_2` | Outil ligne |
 | `pencil.svg` | `draw` | Outil crayon (main levée) |
+| `play_arrow.svg` | `play_arrow` | Prévisualiser le fichier exporté (V6) |
+| `plus.svg` | dessin propre | Ajouter (remplissage, contour, arrêt de dégradé) |
 | `polygon.svg` | `pentagon` | Outil polygone (ext-polystar) |
 | `ratio_lock.svg` | `link` | Conserver les proportions |
 | `rect.svg` | `rectangle` | Outil rectangle |
@@ -148,6 +158,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `stroke.svg` | `border_color` | Couleur du contour |
 | `svg-edit-home.svg` | `public` | Site web de SVG-Edit — *sans référence* |
 | `text.svg` | `title` | Outil texte ; renommer le calque |
+| `text_auto_width.svg` | dessin propre | Largeur automatique d'un texte : il ne passe plus à la ligne de lui-même |
 | `text_decoration_linethrough.svg` | `format_strikethrough` | Barré |
 | `text_decoration_overline.svg` | `format_overline` | Trait au-dessus (overline) |
 | `text_decoration_underline.svg` | `format_underlined` | Souligné |
@@ -170,6 +181,8 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `ungroup.svg` | `ungroup` | Dégrouper |
 | `unlink_use.svg` | `link_off` | Rompre le lien vers l'élément de référence (&lt;use&gt;) |
 | `verticalslash.svg` | dessin propre | Marqueur : barre verticale — *sans référence* |
+| `view_grid.svg` | dessin propre | Nuancier en grille |
+| `view_list.svg` | dessin propre | Nuancier en liste |
 | `warning.svg` | `warning` | Avertissement — *sans référence* |
 | `webappfind.svg` | `save` | Enregistrer via WebAppFind (extension archivée) — *sans référence* |
 | `width.svg` | `arrow_range` | Largeur — *sans référence* |

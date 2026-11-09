@@ -206,10 +206,11 @@ test.describe('Zoom menu (V3)', () => {
     expect(await rulers()).toBe('none')
   })
 
-  test('the view group holds the panel and the zoom; the view buttons are entries of the menu, those of the extensions too', async ({ page }) => {
+  test('the view group holds the preview, the panel and the zoom; the view buttons are entries of the menu, those of the extensions too', async ({ page }) => {
     const shown = await page.evaluate(() => [...document.querySelectorAll('#se-viewgroup button, #se-viewgroup se-button')]
       .filter((el) => el.getBoundingClientRect().width > 0).map((el) => el.id))
-    expect(shown).toEqual(['se-panel-toggle', 'se-zoom-button'])
+    // Preview ▷ joins them in V6 (plan v2, 4.1 and 4.6)
+    expect(shown).toEqual(['se-preview-button', 'se-panel-toggle', 'se-zoom-button'])
     await page.locator('#se-zoom-button').click()
     // The layer view of ext-layer_view: its button, pressed by its entry.
     const entry = page.locator('#se-zoom-menu [data-mirror="tool_layerView"]')
@@ -254,10 +255,11 @@ test.describe('Toolbar (V3)', () => {
       .map((place) => `${place.dataset.place}: ${[...place.children].map((el) => el.id).filter(Boolean).join(' ')}`))
     expect(order).toEqual([
       'select: tool_select tool_scale ext-panning',
-      'create: tool_text tools_shapes tools_paths',
+      // The frame tool of lot V5 comes after Text.
+      'create: tool_text tool_frame tools_shapes tools_paths',
       'shapes: tool_rect tool_square tool_fhrect tool_ellipse tool_circle tool_fhellipse tool_line tool_star tool_polygon',
       'paths: tool_path tool_fhpath',
-      'insert: tool_image tool_connect tool_shapelib',
+      'insert: tool_image tool_connect tool_shapelib tool_library',
       'more: tool_zoom tool_eyedropper'
     ])
     await expect(page.locator('#tools_left')).toHaveAttribute('role', 'toolbar')
@@ -320,7 +322,8 @@ test.describe('Inspector (V3)', () => {
 
   test('the sections at their place; a section where nothing applies is hidden', async ({ page }) => {
     await load(page)
-    expect(await sections(page)).toEqual(['appearance', 'fill', 'stroke', 'document'])
+    // With the frames to export of lot V5, and the current layer of lot V7.
+    expect(await sections(page)).toEqual(['appearance', 'fill', 'stroke', 'layer', 'document', 'frames'])
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('Document')
     await select(page, ['r1'])
     expect(await sections(page)).toEqual(['geometry', 'appearance', 'fill', 'stroke', 'effects', 'identity'])
