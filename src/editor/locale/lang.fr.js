@@ -87,6 +87,7 @@ export default {
     section_effects: 'Effets',
     section_identity: 'Identité et liaison',
     section_extensions: 'Extensions',
+    section_connector: 'Connecteur',
     section_symbol: 'Symbole',
     section_layer: 'Calque',
     section_document: 'Document',
@@ -588,6 +589,29 @@ export default {
     pagedown: 'Pg suiv',
     home: 'Origine',
     end: 'Fin'
+  },
+  connectors: {
+    fluid: 'Fluide',
+    arrow: 'Flèche de sens',
+    route_auto: 'Tracé automatique',
+    ends: 'De {{start}} ({{startPort}}) à {{end}} ({{endPort}})',
+    count_one: '1 connecteur',
+    count_other: '{{count}} connecteurs',
+    missing: 'objet absent'
+  },
+  fluids: {
+    neutral: 'Sans fluide',
+    hot_supply: 'Eau chaude, départ',
+    hot_return: 'Eau chaude, retour',
+    cold_supply: 'Eau glacée, départ',
+    cold_return: 'Eau glacée, retour',
+    supply_air: 'Air soufflé',
+    return_air: 'Air repris',
+    fresh_air: 'Air neuf',
+    exhaust_air: 'Air extrait',
+    gas: 'Gaz',
+    power: 'Alimentation électrique',
+    signal: 'Signal, bus'
   },
   library: {
     title: 'Bibliothèque',

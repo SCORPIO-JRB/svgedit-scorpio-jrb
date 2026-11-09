@@ -392,6 +392,8 @@ export class EditorLayout {
     this.editor.frames?.selectionChanged()
     this.editor.binding?.refresh()
     this.editor.symbolPanel?.refresh()
+    this.editor.connectorPanel?.refresh()
+    this.editor.connectors?.scheduleOverlay()
   }
 
   /**
@@ -407,6 +409,8 @@ export class EditorLayout {
     this.editor.frames?.refreshInspector()
     this.editor.binding?.refresh()
     this.editor.symbolPanel?.refresh()
+    this.editor.connectorPanel?.refresh()
+    this.editor.connectors?.scheduleOverlay()
   }
 
   /**

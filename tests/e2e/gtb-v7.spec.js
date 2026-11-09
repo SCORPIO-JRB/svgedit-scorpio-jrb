@@ -400,3 +400,222 @@ test.describe('Library drawer (V7)', () => {
     await expect.poll(() => page.evaluate(() => document.querySelectorAll('#svgcontent image').length)).toBe(2)
   })
 })
+
+test.describe('Orthogonal connectors (V7)', () => {
+  test.beforeEach(async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, PAGE)
+    await page.evaluate(() => {
+      const ed = window.svgEditor
+      ed.symbols.insert('gtb-pompe', { x: 120, y: 120 }).id = 'pompe'
+      ed.symbols.insert('gtb-vanne-2v', { x: 400, y: 300 }).id = 'vanne'
+      ed.svgCanvas.clearSelection()
+      ed.svgCanvas.undoMgr.resetUndoStack()
+    })
+  })
+
+  const screen = (page, x, y) => page.evaluate(([x, y]) => window.svgEditor.view.docToScreen(x, y), [x, y])
+  const connector = (page) => page.evaluate(() => {
+    const conn = window.svgEditor.svgCanvas.orthogonalConnectors()[0]
+    if (!conn) return null
+    const se = (name) => conn.getAttributeNS('http://svg-edit.googlecode.com', name)
+    return {
+      id: conn.id,
+      points: conn.getAttribute('points'),
+      ends: se('connector'),
+      ports: [se('start-port'), se('end-port')],
+      route: se('route'),
+      fluid: se('fluid'),
+      stroke: conn.getAttribute('stroke'),
+      width: conn.getAttribute('stroke-width'),
+      marker: conn.getAttribute('marker-end'),
+      className: conn.getAttribute('class')
+    }
+  })
+  const draw = async (page, from, to) => {
+    await page.locator('#tool_connect').click()
+    const a = await screen(page, ...from)
+    const b = await screen(page, ...to)
+    await page.mouse.move(a.x, a.y)
+    await page.mouse.down()
+    await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 4 })
+    await page.mouse.move(b.x + 3, b.y - 2, { steps: 4 })
+    await page.mouse.up()
+  }
+  const isOrthogonal = (points) => {
+    const p = points.split(' ').map((pair) => pair.split(',').map(Number))
+    return p.every((q, i) => i === 0 || q[0] === p[i - 1][0] || q[1] === p[i - 1][1])
+  }
+
+  test('the tool joins two ports at right angles, the ports catching the pointer; one undo step', async ({ page }) => {
+    // The port of the valve is a magnet: the pointer stops a few pixels away.
+    await draw(page, [140, 120], [380, 300])
+    const conn = await connector(page)
+    expect(conn.ends).toBe('pompe vanne')
+    expect(conn.ports).toEqual(['out', 'in'])
+    expect(conn.route).toBe('auto')
+    expect(isOrthogonal(conn.points)).toBe(true)
+    expect(conn.points.startsWith('140,120 ')).toBe(true)
+    expect(conn.points.endsWith(' 380,300')).toBe(true)
+    expect(await steps(page)).toBe(1)
+    expect(await selected(page)).toEqual([conn.id])
+    // Under the equipments, as the pipes of a synoptic
+    expect(await page.evaluate((id) => {
+      const layer = document.getElementById(id).parentNode
+      return [...layer.children].filter((el) => el.localName !== 'title').map((el) => el.id)
+    }, conn.id)).toEqual([conn.id, 'fond', 'pompe', 'vanne'])
+    // The save keeps what joins it, in the editor namespace.
+    const saved = await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())
+    expect(saved).toContain('se:connector="pompe vanne"')
+    expect(saved).toContain('se:start-port="out"')
+  })
+
+  test('two clicks draw it too; the ports show on hover', async ({ page }) => {
+    const v = await screen(page, 400, 300)
+    await page.mouse.move(v.x, v.y)
+    await expect.poll(() => page.locator('#se-connector-overlay .se-port').count()).toBe(3)
+    await page.locator('#tool_connect').click()
+    const a = await screen(page, 140, 120)
+    const b = await screen(page, 400, 280)
+    await page.mouse.click(a.x, a.y)
+    await page.mouse.move(b.x, b.y, { steps: 5 })
+    await page.mouse.click(b.x, b.y)
+    const conn = await connector(page)
+    expect(conn.ports).toEqual(['out', 'signal'])
+    expect(isOrthogonal(conn.points)).toBe(true)
+  })
+
+  test('the route follows a moved equipment, during the drag and after; undo and redo bring it back', async ({ page }) => {
+    await draw(page, [140, 120], [380, 300])
+    const before = (await connector(page)).points
+    await page.evaluate(() => window.svgEditor.svgCanvas.clearSelection())
+    await page.locator('#tool_select').click()
+    const v = await screen(page, 400, 300)
+    await page.mouse.click(v.x, v.y)
+    await page.mouse.move(v.x, v.y)
+    await page.mouse.down()
+    await page.mouse.move(v.x + 40, v.y + 60, { steps: 6 })
+    await expect.poll(async () => (await connector(page)).points).not.toBe(before)
+    await page.mouse.up()
+    const after = (await connector(page)).points
+    expect(after.endsWith(' 420,360')).toBe(true)
+    expect(isOrthogonal(after)).toBe(true)
+    await page.keyboard.press('Control+z')
+    expect((await connector(page)).points).toBe(before)
+    await page.keyboard.press('Control+Shift+z')
+    expect((await connector(page)).points).toBe(after)
+  })
+
+  test('an elbow dragged shapes the route in one step; the shape stays when an equipment moves', async ({ page }) => {
+    await draw(page, [140, 120], [380, 300])
+    const handle = page.locator('#se-connector-overlay .se-elbow').first()
+    await expect(handle).toBeVisible()
+    const box = await handle.boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 - 60, box.y + box.height / 2 + 30, { steps: 5 })
+    await page.mouse.up()
+    const shaped = await connector(page)
+    expect(shaped.route).toBe('manual')
+    expect(shaped.points).toBe('140,120 200,120 200,300 380,300')
+    expect(await steps(page)).toBe(2)
+    // The valve goes down: the vertical segment keeps its place.
+    await page.evaluate(() => {
+      const c = window.svgEditor.svgCanvas
+      c.selectOnly([document.getElementById('vanne')], true)
+      c.moveSelectedElements(0, 40)
+    })
+    expect((await connector(page)).points).toBe('140,120 200,120 200,340 380,340')
+    await page.keyboard.press('Control+z')
+    await page.keyboard.press('Control+z')
+    expect((await connector(page)).route).toBe('auto')
+    // The palette gives the automatic route back.
+    await page.keyboard.press('Control+Shift+z')
+    await page.evaluate(() => {
+      const c = window.svgEditor.svgCanvas
+      c.selectOnly([c.orthogonalConnectors()[0]], true)
+      window.svgEditor.commands.execute('connector_route_auto')
+    })
+    expect((await connector(page)).route).toBe('auto')
+  })
+
+  test('a fluid gives colour, width, arrow and class in one step; the next connector takes it', async ({ page }) => {
+    await draw(page, [140, 120], [380, 300])
+    await page.locator('#se-tab-properties').click()
+    await expect(page.locator('#se-connector-fluid')).toBeVisible()
+    await page.locator('#se-connector-fluid').selectOption('chaud-depart')
+    const hot = await connector(page)
+    expect([hot.fluid, hot.stroke, hot.width, hot.className]).toEqual(['chaud-depart', '#F08A62', '3', 'tuyau chaud depart'])
+    expect(hot.marker).toMatch(/^url\(#se-arrow-F08A62\)$/)
+    expect(await page.evaluate(() => document.querySelector('#svgcontent marker#se-arrow-F08A62 path').getAttribute('fill'))).toBe('#F08A62')
+    expect(await steps(page)).toBe(2)
+    await page.locator('#se-connector-arrow').uncheck()
+    expect((await connector(page)).marker).toBe(null)
+    await page.locator('#se-tab-properties').focus()
+    await page.keyboard.press('Control+z')
+    expect((await connector(page)).marker).not.toBe(null)
+    expect(await page.evaluate(() => window.svgEditor.connectors.fluidId)).toBe('chaud-depart')
+  })
+
+  test('between two plain objects, the connector stays the straight one of the extension', async ({ page }) => {
+    await load(page, `<svg xmlns="${NS}" width="640" height="480"><g class="layer"><title>L</title>
+      <rect id="a" x="50" y="50" width="80" height="60"/><rect id="b" x="300" y="200" width="80" height="60"/></g></svg>`)
+    const a = await screen(page, 90, 80)
+    const b = await screen(page, 340, 230)
+    await page.locator('#tool_connect').click()
+    await page.mouse.move(a.x, a.y)
+    await page.mouse.down()
+    await page.mouse.move(b.x, b.y, { steps: 6 })
+    await page.mouse.up()
+    const line = await page.evaluate(() => {
+      const el = document.querySelector('#svgcontent polyline')
+      return { ends: el?.getAttributeNS('http://svg-edit.googlecode.com', 'connector'), route: el?.getAttributeNS('http://svg-edit.googlecode.com', 'route'), n: el?.points.numberOfItems }
+    })
+    expect(line).toEqual({ ends: 'a b', route: null, n: 3 })
+  })
+
+  test('copied with its equipments, a connector joins the copies', async ({ page }) => {
+    await page.evaluate(() => {
+      const ed = window.svgEditor
+      const c = ed.svgCanvas
+      c.addConnector({ start: document.getElementById('pompe'), startPort: 'out', end: document.getElementById('vanne'), endPort: 'in', fluid: ed.connectors.fluid('froid-depart') })
+      c.selectOnly([document.getElementById('pompe'), document.getElementById('vanne'), c.orthogonalConnectors()[0]], true)
+      c.copySelectedElements()
+      c.pasteElements('in_place')
+    })
+    const ends = await page.evaluate(() => window.svgEditor.svgCanvas.orthogonalConnectors()
+      .map((conn) => conn.getAttributeNS('http://svg-edit.googlecode.com', 'connector')))
+    expect(ends).toHaveLength(2)
+    expect(ends[0]).toBe('pompe vanne')
+    expect(ends[1]).not.toBe('pompe vanne')
+    expect(ends[1].split(' ').every((id) => id && id !== 'pompe' && id !== 'vanne')).toBe(true)
+  })
+})
+
+test.describe('Ports as magnets (V7)', () => {
+  test.beforeEach(async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, PAGE)
+    await page.evaluate(() => {
+      const ed = window.svgEditor
+      ed.setConfig({ objectSnapping: true })
+      ed.symbols.insert('gtb-pompe', { x: 200, y: 200 }).id = 'pompe'
+      ed.symbols.insert('gtb-sonde-temperature', { x: 100, y: 100 }).id = 'sonde'
+      ed.svgCanvas.clearSelection()
+      ed.svgCanvas.undoMgr.resetUndoStack()
+    })
+  })
+
+  test('a probe dragged near the power port of a pump lands on it', async ({ page }) => {
+    // The probe port (bottom middle) at (100, 120); the power port of the pump at (200, 180).
+    const from = await page.evaluate(() => window.svgEditor.view.docToScreen(100, 100))
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    // 97 + 4: within the reach of the port, not on it
+    await page.mouse.move(from.x + 50, from.y + 30, { steps: 4 })
+    await page.mouse.move(from.x + 97, from.y + 64, { steps: 4 })
+    await page.mouse.up()
+    const port = await page.evaluate(() => window.svgEditor.svgCanvas.portsOf(document.getElementById('sonde'))[0])
+    expect([Math.round(port.x), Math.round(port.y)]).toEqual([200, 180])
+  })
+})

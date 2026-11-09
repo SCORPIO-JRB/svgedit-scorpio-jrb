@@ -21,7 +21,7 @@ import * as hstry from './history.js'
 import { findPos } from '../../svgcanvas/common/util.js'
 import { isMac } from '../common/browser.js'
 import { isDeepClick } from './selection-nav.js'
-import { SnapIndex, SNAP_THRESHOLD, measureGuides, snapMove, snapPoint, snapResize } from './snap.js'
+import { SnapIndex, SNAP_THRESHOLD, measureGuides, snapMove, snapPoint, snapResize, snapPorts } from './snap.js'
 import { FRAME_PRESETS, DEFAULT_PRESET, frameSnapBoxes } from './frames.js'
 import {
   beginGroupResize,
@@ -399,6 +399,28 @@ const snapTargets = (moving) => {
 }
 
 /**
+ * The ports of the symbols that move, and those of the symbols that do not
+ * (lot V7): the magnets of the move. Only the ports the symbols declare.
+ * @param {Element[]} moving
+ * @returns {{moving: Array<{x: number, y: number}>, targets: Array<{x: number, y: number}>}|null}
+ */
+const portMagnets = (moving) => {
+  if (!svgCanvas.portsOf || !svgCanvas.hasDeclaredPorts) { return null }
+  const content = svgCanvas.getSvgContent()
+  const list = moving.filter(Boolean)
+  const movingUses = list.flatMap((elem) => (elem.localName === 'use' ? [elem] : [...elem.querySelectorAll?.('use') ?? []]))
+    .filter((use) => svgCanvas.hasDeclaredPorts(use))
+  if (!movingUses.length) { return null }
+  const declared = (use) => svgCanvas.portsOf(use).filter((port) => !port.implicit)
+  const targets = [...content.querySelectorAll('use')]
+    .filter((use) => !list.some((elem) => elem === use || elem.contains?.(use)) && svgCanvas.hasDeclaredPorts(use) &&
+      use.getAttribute('display') !== 'none')
+    .flatMap(declared)
+  if (!targets.length) { return null }
+  return { moving: movingUses.flatMap(declared), targets }
+}
+
+/**
  * Starts the snapping of a gesture.
  * @param {Element[]} moving
  * @param {module:snap.Box|null} frame
@@ -412,7 +434,7 @@ const startSnap = (moving, frame) => {
   }
   const start = performance.now()
   const boxes = config.objectSnapping === false ? [] : snapTargets(moving)
-  snapSession = { index: new SnapIndex(boxes), frame }
+  snapSession = { index: new SnapIndex(boxes), frame, ports: portMagnets(moving) }
   // For the bench: the start of a gesture reads every visible box once.
   svgCanvas.snapTiming = { index: performance.now() - start, boxes: boxes.length, search: 0 }
 }
@@ -714,7 +736,15 @@ const mouseMoveEvent = (evt) => {
           }
           if (!snapSession) { startSnap(dragged, svgCanvas.dragStartFrame) }
           const snapping = snapSession.index ? snapOptions(evt) : null
-          if (snapping) {
+          // A port within reach of another wins (lot V7).
+          const onPort = snapping && snapSession.ports
+            ? snapPorts(snapSession.ports.moving, snapSession.ports.targets, dx, dy, snapping.tolerance * 1.5)
+            : null
+          if (onPort) {
+            dx = onPort.dx
+            dy = onPort.dy
+            svgCanvas.selectorManager.showGuides?.(onPort.guides)
+          } else if (snapping) {
             const searchStart = performance.now()
             const snapped = snapMove(snapSession.index, snapSession.frame, dx, dy, snapping)
             if (svgCanvas.snapTiming) { svgCanvas.snapTiming.search = performance.now() - searchStart }

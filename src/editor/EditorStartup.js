@@ -15,6 +15,7 @@ import { FrameLayer } from './frames.js'
 import { initStructure } from './structure.js'
 import { SymbolLibrary, SymbolPanel } from './symbols.js'
 import { LibraryDrawer } from './panels/LibraryDrawer.js'
+import { ConnectorTool, ConnectorPanel } from './connectors.js'
 import { BindingPanel, ungroupSelected } from './binding.js'
 import { Preview } from './preview.js'
 import { EditorLayout } from './layout.js'
@@ -174,6 +175,8 @@ class EditorStartup {
     initStructure(this)
     // Symbol libraries (lot V7), in both layouts
     this.symbols = new SymbolLibrary(this)
+    // Orthogonal connectors: ports, tool, route, elbows, fluids (lot V7)
+    this.connectors = new ConnectorTool(this)
     // Frames to export, in the canvas layout (lot V5): their tool after
     // Text, their sections in the inspector.
     if (this.layout?.canvas) {
@@ -188,6 +191,7 @@ class EditorStartup {
       this.binding = new BindingPanel(this, this.layout.inspector.body('identity'))
       // The symbol of an instance of a library (lot V7)
       this.symbolPanel = new SymbolPanel(this, this.layout.inspector.body('symbol'))
+      this.connectorPanel = new ConnectorPanel(this, this.connectors, this.layout.inspector.body('connector'))
     }
 
     const { undoMgr } = this.svgCanvas

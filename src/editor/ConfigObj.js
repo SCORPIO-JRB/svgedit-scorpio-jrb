@@ -19,7 +19,7 @@ export const regexEscape = function (str) {
  * in the top bar.
  * @type {string[]}
  */
-export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins', 'homeUrl', 'breadcrumb', 'colorLibraries', 'symbolLibraries']
+export const URL_FORBIDDEN_CONFIG = ['userExtensions', 'imgPath', 'extPath', 'forceStorage', 'allowedOrigins', 'homeUrl', 'breadcrumb', 'colorLibraries', 'symbolLibraries', 'fluids']
 
 /**
  * Tells whether a configuration key must be ignored when it comes from the URL.
@@ -130,6 +130,8 @@ export default class ConfigObj {
       * @property {Array<{id: string, label: string, fontFamily: string, fontSize: number, fontWeight: number, fill: string}>|null} [textStyles=null] Named text styles of the Style ▾ window (lot V4): each writes font-family, font-size, font-weight and fill, and is recognised by these values. Null for the styles of the SCorp-io synoptics; never from the URL.
       * @property {Array<{id: string, name: string, groups: Array<{name: string, colors: Array<{value: string, name?: string, step?: string}>}>}>|null} [colorLibraries=null] Colour libraries of the Libraries tab of the colour window (canvas layout). A name is a translation key or a text; a colour of a scale may give a step, shown after the name of its group. Null for the colours of the Scorp-io synoptics and of the Scorp-io design system; never from the URL.
       * @property {Array<{id: string, name: string, categories: Array<{id: string, name: string}>, symbols: Array<object>}>|null} [symbolLibraries=null] Symbol libraries of the Library drawer (lot V7): each symbol has an id, a version, a name (translation key or text), a category, keywords, a viewBox and size, the markup of its drawing, its ports and the attributes of a new instance (see gtb-symbols.js). Null for the GTB symbols of the editor; never from the URL.
+      * @property {Array<{id: string, name: string, stroke: string, width: number, dash?: string, arrow?: boolean, className?: string}>|null} [fluids=null] Styles of the orthogonal connectors (lot V7), one per fluid; the first is that of the first connector. Null for the fluids of the editor (fluids.js); never from the URL.
+      * @property {"auto"|"orthogonal"|"straight"} [connectorRouting="auto"] Route of a new connector (lot V7): orthogonal from a port of a symbol and straight between two plain objects ("auto"), always orthogonal, or always straight.
       * @property {"borderless"|"scroll"} [view="borderless"] The view of the drawing (lot V2): "borderless" has no edge and no scroll bar, the wheel scrolls it and Ctrl+wheel zooms from 1 % to 6 400 %; "scroll" is the canvas of SVG-Edit with scroll bars, kept until the end of V3. Read at start.
       * @property {PlainObject} [initFill] Init fill properties
       * @property {string} [initFill.color="FF0000"] The initial fill color. Must be a hex code string. Defaults to solid red.
@@ -179,6 +181,8 @@ export default class ConfigObj {
       textStyles: null,
       colorLibraries: null,
       symbolLibraries: null,
+      fluids: null,
+      connectorRouting: 'auto',
       initFill: {
         color: 'FF0000', // solid red
         opacity: 1

@@ -43,14 +43,17 @@ export default {
     let connections = []
 
     /**
-     * The connectors of the drawing: the lines this tool joined to two
-     * objects. An object whose id merely starts with "conn_", or the line
-     * being drawn, is not one.
+     * The straight connectors of the drawing: the lines this tool joined to
+     * two objects. An object whose id merely starts with "conn_", the line
+     * being drawn, or an orthogonal connector (lot V7, which the editor
+     * routes itself: see connectors.js), is not one.
      * @returns {Element[]}
      */
     const getConnectors = () => Array.from(
       svgCanvas.getSvgContent().querySelectorAll('[id^="conn_"]')
-    ).filter(elem => elem.hasAttributeNS(seNs, 'connector'))
+    ).filter(elem => elem.hasAttributeNS(seNs, 'connector') && !elem.hasAttributeNS(seNs, 'route'))
+    /** The orthogonal connectors of the editor (lot V7), if it has them. */
+    const orthogonal = () => svgEditor.connectors ?? null
 
     // Save the original groupSelectedElements method
     const originalGroupSelectedElements = svgCanvas.groupSelectedElements
@@ -385,7 +388,7 @@ export default {
       const elements = svgContent.querySelectorAll('*')
       elements.forEach(element => {
         const conn = element.getAttributeNS(seNs, 'connector')
-        if (conn) {
+        if (conn && !element.hasAttributeNS(seNs, 'route')) {
           const connData = conn.split(' ')
           const startEl = connData[0] && getElement(connData[0])
           const endEl = connData[1] && getElement(connData[1])
@@ -434,6 +437,10 @@ export default {
         } = svgEditor.configObj
 
         if (mode === 'connector') {
+          // From a port of a symbol, the connector is orthogonal (lot V7):
+          // the editor draws it.
+          const ortho = !started && orthogonal()?.toolDown(opts)
+          if (ortho) return ortho
           // Return if the line is already started
           if (started) return undefined
 
@@ -506,6 +513,10 @@ export default {
         const diffY = y - startY
 
         const mode = svgCanvas.getMode()
+        if (mode === 'connector' && orthogonal()?.drawing) {
+          orthogonal().toolMove(opts)
+          return
+        }
         if (mode === 'connector' && started) {
           // const sw = curLine.getAttribute('stroke-width') * 3;
           // Set start point (adjusts based on bb)
@@ -524,7 +535,9 @@ export default {
           setPoint(curLine, 'end', x, y, true)
         } else if (mode === 'select') {
           for (const elem of svgCanvas.getSelectedElements()) {
-            if (elem && dataStorage.has(elem, 'c_start')) {
+            // A connector does not move by itself: its ends hold it (an
+            // orthogonal one too, lot V7).
+            if (elem && (dataStorage.has(elem, 'c_start') || svgCanvas.isOrthogonalConnector?.(elem))) {
               svgCanvas.removeFromSelection([elem])
               elem.transform.baseVal.clear()
             }
@@ -543,6 +556,7 @@ export default {
 
         // Early exit if not in connector mode
         if (svgCanvas.getMode() !== 'connector') return undefined
+        if (orthogonal()?.drawing) return orthogonal().toolUp(opts)
 
         // Check for a foreignObject parent and update mouseTarget if found
         const fo = svgCanvas.getClosest(mouseTarget.parentNode, 'foreignObject')
@@ -740,10 +754,13 @@ export default {
       },
       toolButtonStateUpdate (opts) {
         const button = document.getElementById('tool_connect')
-        if (opts.nostroke && button.pressed === true) {
+        // The orthogonal connectors take their stroke from their fluid
+        // (lot V7): the tool stays available without a stroke.
+        const nostroke = opts.nostroke && !orthogonal()
+        if (nostroke && button.pressed === true) {
           svgEditor.clickSelect()
         }
-        button.disabled = opts.nostroke
+        button.disabled = nostroke
       }
     }
   }

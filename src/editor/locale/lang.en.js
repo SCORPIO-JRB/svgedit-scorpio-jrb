@@ -87,6 +87,7 @@ export default {
     section_effects: 'Effects',
     section_identity: 'Identity and binding',
     section_extensions: 'Extensions',
+    section_connector: 'Connector',
     section_symbol: 'Symbol',
     section_layer: 'Layer',
     section_document: 'Document',
@@ -585,6 +586,29 @@ export default {
     pagedown: 'Page Down',
     home: 'Home',
     end: 'End'
+  },
+  connectors: {
+    fluid: 'Fluid',
+    arrow: 'Direction arrow',
+    route_auto: 'Automatic route',
+    ends: 'From {{start}} ({{startPort}}) to {{end}} ({{endPort}})',
+    count_one: '1 connector',
+    count_other: '{{count}} connectors',
+    missing: 'missing object'
+  },
+  fluids: {
+    neutral: 'No fluid',
+    hot_supply: 'Hot water, supply',
+    hot_return: 'Hot water, return',
+    cold_supply: 'Chilled water, supply',
+    cold_return: 'Chilled water, return',
+    supply_air: 'Supply air',
+    return_air: 'Return air',
+    fresh_air: 'Fresh air',
+    exhaust_air: 'Exhaust air',
+    gas: 'Gas',
+    power: 'Power supply',
+    signal: 'Signal, bus'
   },
   library: {
     title: 'Library',

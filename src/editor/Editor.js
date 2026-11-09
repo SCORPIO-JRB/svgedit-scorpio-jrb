@@ -897,6 +897,7 @@ class Editor extends EditorStartup {
     const offset = this.svgCanvas.updateCanvas(w, h)
     this.grid?.update()
     this.frames?.update()
+    this.connectors?.updateOverlay()
 
     const ratio = newCanX / oldCanX
 
@@ -1013,6 +1014,8 @@ class Editor extends EditorStartup {
   elementTransition (win, elems) {
     const mode = this.svgCanvas.getMode()
     const elem = elems[0]
+    // The orthogonal connectors follow the moving equipments (lot V7).
+    this.connectors?.transition(elems)
 
     if (!elem) {
       return
@@ -1052,6 +1055,8 @@ class Editor extends EditorStartup {
    */
   elementChanged (win, elems) {
     const mode = this.svgCanvas.getMode()
+    // Their route follows every change, the undo and redo included (lot V7).
+    this.connectors?.elementsChanged(elems)
     if (mode === 'select') {
       this.leftPanel.clickSelect()
     }

@@ -41,6 +41,7 @@ import { init as framesInit } from './core/frames.js'
 import { init as structureInit } from './core/structure.js'
 import { init as portsInit } from './core/ports.js'
 import { init as symbolsInit } from './core/symbols.js'
+import { init as connectorsInit } from './core/connectors.js'
 import {
   init as jsonInit,
   getJsonFromSvgElements,
@@ -289,6 +290,7 @@ class SvgCanvas {
     structureInit(this)
     portsInit(this)
     symbolsInit(this)
+    connectorsInit(this)
 
     // prevent links from being followed in the canvas
     const handleLinkInCanvas = e => {

@@ -492,3 +492,47 @@ input[type=text] {
   outline-offset: -2px;
   border-radius: 3px;
 }
+
+/* Ports, connector being drawn and elbows (lot V7): drawn in the root of the
+   canvas, over the drawing, never part of it. Only the elbows take the
+   pointer. */
+#se-connector-overlay {
+  pointer-events: none;
+}
+
+#se-connector-overlay .se-port {
+  fill: var(--se-surface);
+  stroke: var(--se-accent);
+  stroke-width: 1.5;
+}
+
+#se-connector-overlay .se-port-implicit {
+  fill: none;
+  stroke-dasharray: 2 2;
+}
+
+#se-connector-overlay .se-port-target {
+  fill: var(--se-accent);
+}
+
+#se-connector-overlay .se-connector-preview {
+  fill: none;
+  stroke: var(--se-accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+#se-connector-overlay .se-elbow {
+  fill: var(--se-surface);
+  stroke: var(--se-accent);
+  stroke-width: 1.5;
+  pointer-events: all;
+}
+
+#se-connector-overlay .se-elbow-v {
+  cursor: ew-resize;
+}
+
+#se-connector-overlay .se-elbow-h {
+  cursor: ns-resize;
+}

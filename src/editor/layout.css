@@ -2638,3 +2638,23 @@
 .se-library-pick-row {
   margin-top: var(--se-space-2);
 }
+
+/* Connector section (lot V7) */
+.se-connector-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--se-space-2);
+  width: 100%;
+}
+
+.se-connector-panel[hidden],
+.se-connector-panel [hidden] {
+  display: none;
+}
+
+.se-connector-ends {
+  width: 100%;
+  margin: 0;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+}

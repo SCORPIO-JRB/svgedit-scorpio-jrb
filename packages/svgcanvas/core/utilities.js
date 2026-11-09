@@ -1523,14 +1523,20 @@ export const getElement = id => {
  */
 export const assignAttributes = (elem, attrs, suspendLength, unitCheck) => {
   for (const [key, value] of Object.entries(attrs)) {
+    // The attributes of the editor namespace (a connector pasted with its
+    // equipments, lot V7) keep it, as the parser of a saved file gives it.
     const ns =
       key.startsWith('xml:')
         ? NS.XML
         : key.startsWith('xlink:')
           ? NS.XLINK
-          : null
+          : key.startsWith('se:')
+            ? NS.SE
+            : null
     if (value === undefined || value === null) {
-      if (ns) {
+      if (ns === NS.SE) {
+        elem.removeAttributeNS(ns, key.slice(3))
+      } else if (ns) {
         elem.removeAttributeNS(ns, key)
       } else {
         elem.removeAttribute(key)
