@@ -158,7 +158,19 @@ Le test vérifie aussi que le fichier enregistré se rouvre et se réenregistre 
 
 ## 7. Vérifications
 
-(rempli à la fin du lot)
+- **Tests unitaires** : 980 sur 980 (74 fichiers), dont 18 nouveaux (`tests/unit/gtb-v7.test.js` : routeur, ports, bibliothèque).
+- **E2E, disposition canevas** : 507 sur 507, dont 28 nouveaux (`tests/e2e/gtb-v7.spec.js`). Le contrat des extensions de V0, le connecteur droit et les tests des lots précédents passent sans changement. Seules deux attentes ont été mises à jour : le nom d'une ligne de l'arbre (titre d'abord) et la nouvelle section Calque sans sélection.
+- **E2E, disposition classique** : 365 sur 365, hors tests propres à la disposition canevas (V3 à V7).
+- **E2E Firefox** : à vérifier. La CI GitHub ne démarre toujours pas : paiement refusé ou limite de dépenses atteinte (« Billing & plans » des réglages GitHub).
+- **Sortie comparée à V6** (`tests/output/compare-output.mjs`) : 73 scénarios sur 73 identiques. Les 21 allers-retours du corpus sont identiques ; les deux fichiers de référence ne diffèrent que par l'attribut `color` des 13 instances, que V6 retirait.
+- **Fichiers que SVG-Edit a déjà produits** : 19 sur 19 identiques de V6 à V7.
+- **Rapport de fidélité** : sur le corpus, résultat identique à V6. Les deux fichiers de référence sont relus sans aucune perte (V6 en perdait 13 chacun).
+- **Synoptique de référence** : construit de bout en bout par le test E2E. L'export est valide, s'affiche en image, ne contient ni script ni cadre de l'éditeur, et chaque conduite est à angles droits, d'un port à l'autre. Le fichier enregistré se rouvre et se réenregistre à l'identique.
+- **Performance** :
+  - un tracé prend moins de 5 ms (100 tracés en test unitaire) ;
+  - sur un dessin de 300 symboles et 150 connecteurs, suivre un équipement déplacé coûte 2,9 ms par image, et recalculer les 150 tracés 54 ms (une fois, au dépôt d'une sélection entière) ;
+  - l'arbre de 5 000 objets de V3 reste fluide (son test passe).
+- **Lint** : `npm run lint` vert, sans couleur hors des jetons ni libellé hors des traductions.
 
 ## 8. Corrigés au passage
 
@@ -180,3 +192,4 @@ Le test vérifie aussi que le fichier enregistré se rouvre et se réenregistre 
 - Les barres contextuelles propres au symbole et au connecteur : l'inspecteur et la palette suffisent pour l'instant.
 - L'évitement de tous les objets du dessin par le routeur : il évite les équipements, pas les textes ni les formes libres.
 - Le rattachement d'une extrémité existante à un autre port, en la glissant.
+- Le suivi pendant le glisser de nombreux équipements à la fois. Les tracés sont recalculés une fois par image, soit environ 54 ms pour 150 connecteurs : il faudra ne recalculer que les segments voisins des ports tant que la forme le permet.
