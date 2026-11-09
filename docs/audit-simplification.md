@@ -3,7 +3,7 @@
 Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier des synoptiques techniques GTB. Il ne doit pas devenir un outil de dessin général. Une règle s'applique partout : moins de fonctions inutiles, une meilleure expérience, aucune régression sur l'existant.
 
 - **Mesures** : relevées dans l'éditeur compilé depuis `master` (c1793877), disposition « canevas », avec les fichiers réels de `tests/fixtures/import/scorpio/`.
-- **État** : décidé le 9 novembre 2026. Les lots S0 à S3 viennent après V4. Deux points restent ouverts (section 8).
+- **État** : décidé le 9 novembre 2026. Les lots S0 à S3 viennent après V4.
 
 ## 1. Décisions
 
@@ -12,9 +12,10 @@ Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier d
 | Outils que le plan v2 garde (Main, Étoile, Crayon, Pipette, Loupe) | Gardés | Le menu Formes est celui de la section 4.2 du plan v2 : rectangle, ellipse, ligne, polygone, étoile |
 | Couleur ou police d'un objet stylé par classe | La modification change la règle de la classe, avec un avertissement | Voir le lot S2 |
 | Langues | Français et anglais | 57 fichiers de langue sont retirés en S3 |
+| Export | Tel quel | PNG, JPEG, BMP, WEBP et PDF restent, ainsi que jsPDF et svg2pdf.js |
 | Éditeur toujours intégré à SCorp-io ? | Non | L'enregistrement dans le navigateur et son bandeau de consentement restent, comme le bouton Accueil, le fil d'Ariane et le bouton Enregistrer de l'hôte |
 | Lots S0 à S3 avant V4 ? | Non, après V4 | L'ancienne disposition aura disparu : S1 et S3 ne touchent que la disposition « canevas » |
-| Fichiers réels du correctif d'import dans le dépôt ? | Oui | Ils entrent dans le corpus du lot S0 |
+| Fichiers réels du correctif d'import dans le corpus ? | Pas pour l'instant | Le corpus du lot S0 se limite aux fichiers du dépôt et aux fichiers construits pour lui |
 
 ## 2. Inventaire
 
@@ -97,7 +98,7 @@ Aucune recommandation ne touche la lecture.
 | Connecteur | V7 apporte les connecteurs orthogonaux |
 | Calques, onglet Code, menu contextuel, menu « … », grille, magnétisme, alignement | Essentiel ; V4 et V7 les font évoluer |
 | Enregistrement dans le navigateur et bandeau de consentement | Décision 4 : l'éditeur sert aussi hors de SCorp-io |
-| Export | Inchangé tant que le point ouvert 1 n'est pas tranché |
+| Export (PNG, JPEG, BMP, WEBP, PDF) | Décision : tel quel |
 | Liste blanche d'import (`sanitize.js`) | À ne jamais réduire : elle garantit la lecture des fichiers existants |
 | Modes de dessin du carré, du cercle et des formes à main levée dans `svgcanvas` | Les retirer ne gagnerait presque rien et compliquerait la reprise des versions amont |
 
@@ -214,7 +215,6 @@ Les lots viennent après V4, dans cet ordre.
 
 - **Corpus** :
   - les fichiers de `tests/fixtures/import/scorpio/` ;
-  - les cinq fichiers réels du correctif d'import : dessin Illustrator, dessin Inkscape de 1 Mo, dessin SVG-Edit, plan sombre avec feuille de style, synoptique ;
   - un fichier par famille d'éléments touchée : carré, cercle, polygone ordinaire et de l'extension, étoile, texte barré, espacement des mots, `textLength`, flou, forme de la bibliothèque.
 - **Scénario par fichier** : ouvrir, sélectionner, déplacer, redimensionner, pivoter, grouper, dégrouper, annuler, enregistrer, rouvrir.
 - **Liste figée** des commandes du registre et de leurs raccourcis (test unitaire). Tout retrait devient une différence visible et voulue.
@@ -275,8 +275,3 @@ Chaque retrait passe par les mêmes vérifications :
 | Extensions helloworld et overview_window | Aucune configuration de l'hôte ne les charge |
 | Vue à défilement | L'option `view: 'scroll'` retombe sur la vue sans bordure |
 | `tool_delete`, `tool_delete_multi`, `tool_move_top`, `tool_move_bottom` | Fusionnés avec `delete`, `move_front` et `move_back` ; les boutons gardent leur effet |
-
-## 8. Points ouverts
-
-1. **Export.** Faut-il garder le PNG seul, ou le PNG et le PDF ? Tant que ce n'est pas tranché, l'export reste tel quel. Si on garde le PNG et le PDF, seuls BMP, JPEG et WEBP quittent la liste ; jsPDF et svg2pdf.js restent. Avec le PNG seul, ces deux dépendances partent en S3.
-2. **Fichiers réels.** Les cinq fichiers du correctif d'import sont à fournir pour le lot S0. Ils doivent pouvoir être publiés dans le dépôt.
