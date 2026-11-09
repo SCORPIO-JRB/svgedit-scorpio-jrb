@@ -8,7 +8,9 @@ import { visitAndApproveStorage } from './helpers.js'
 // - The inventory records what the editor offers today: the commands of the
 //   registry and their shortcuts, the toolbar, the document, zoom and "…"
 //   menus, the controls of the Text section. S1 and S3 update it on purpose
-//   (S0_UPDATE=1 rewrites it); nothing else may change it.
+//   (S0_UPDATE=1 rewrites it); nothing else may change it. S1 did so.
+//   The canvas layout only: simplification-s1.spec.js checks that the
+//   classic layout stays as it was.
 // - Every family of element these lots touch (square, circle, polygons, star,
 //   shape of the library, freehand path, blur, rare text settings) still
 //   opens, moves, resizes, rotates, groups, undoes and saves as before.
@@ -68,13 +70,25 @@ const readInventory = () => {
   return { commands, toolbar, documentMenu, zoomMenu, actionsMenu }
 }
 
-/** The controls of the Text section, in their order, for the selected text. */
-const readTextSection = () => [...document.querySelectorAll('[data-section="text"] :is(se-input, se-spin-input, se-select, se-list, se-button)')]
-  .filter((control) => {
-    const box = control.getBoundingClientRect()
-    return box.width > 0 && box.height > 0 && getComputedStyle(control).visibility !== 'hidden'
-  })
-  .map((control) => control.id)
+/**
+ * The controls of the Text section, in their order, for the selected text:
+ * those shown, then those folded under "More options" (lot S1).
+ */
+const readTextSection = () => {
+  const shown = () => [...document.querySelectorAll('[data-section="text"] :is(se-input, se-spin-input, se-select, se-list, se-button)')]
+    .filter((control) => {
+      const box = control.getBoundingClientRect()
+      return box.width > 0 && box.height > 0 && getComputedStyle(control).visibility !== 'hidden'
+    })
+    .map((control) => control.id)
+  const before = shown()
+  const toggle = document.querySelector('[data-section="text"] .se-more-toggle')
+  if (!toggle) return { shown: before, more: [] }
+  toggle.click()
+  const more = shown().filter((id) => !before.includes(id))
+  toggle.click()
+  return { shown: before, more }
+}
 
 test.describe('Simplification net (S0)', () => {
   test.beforeEach(async ({ page }) => {
@@ -83,11 +97,12 @@ test.describe('Simplification net (S0)', () => {
   })
 
   test('the registry, the toolbar and the menus are those of the inventory', async ({ page }) => {
-    // The "…" menu is read with a rectangle selected, the Text section with a text.
+    // The "…" menu is read with a rectangle selected, the Text section with
+    // a text that has none of the rare settings (lot S1).
     await loadDrawing(page, read('familles.svg'))
     await select(page, ['rectangle'])
     const inventory = await page.evaluate(readInventory)
-    await select(page, ['texte-barre'])
+    await select(page, ['texte-simple'])
     inventory.textSection = await page.evaluate(readTextSection)
     if (process.env.S0_UPDATE === '1') {
       fs.writeFileSync(INVENTORY_FILE, JSON.stringify(inventory, null, 2) + '\n')
@@ -111,10 +126,9 @@ test.describe('Simplification net (S0)', () => {
       backspace: ['delete', 'tool_delete', 'tool_delete_multi'],
       delete: ['delete', 'tool_delete', 'tool_delete_multi'],
       'mod+shift+[': ['move_back', 'tool_move_bottom'],
-      'mod+shift+]': ['move_front', 'tool_move_top'],
-      // Two actions: the selection is locked, the layer view never runs.
-      // S1 takes the layer view out of the default extensions.
-      'mod+shift+l': ['lock_selection', 'tool_layerView']
+      'mod+shift+]': ['move_front', 'tool_move_top']
+      // Ctrl+Shift+L is the lock alone since S1, which took the layer view
+      // out of the default extensions of the canvas layout.
     })
   })
 

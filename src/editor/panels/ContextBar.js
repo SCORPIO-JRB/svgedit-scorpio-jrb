@@ -119,7 +119,11 @@ export const SHORTCUT_OF = {
   edit_text: 'select_children',
   edit_nodes: 'select_children',
   select_group_children: 'select_children',
-  tool_flip_h_multi: 'tool_flip_h'
+  tool_flip_h_multi: 'tool_flip_h',
+  // Their letters are gone (lot S1): the command that does the same.
+  tool_clone: 'duplicate',
+  tool_clone_multi: 'duplicate',
+  tool_group_elements: 'group'
 }
 
 /**

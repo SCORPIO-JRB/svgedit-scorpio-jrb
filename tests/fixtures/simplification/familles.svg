@@ -18,5 +18,6 @@
     <text id="texte-surligne" x="200" y="350" font-size="16" text-decoration="overline">Défaut</text>
     <text id="texte-espace" x="330" y="320" font-size="16" word-spacing="6" letter-spacing="1">Eau chaude</text>
     <text id="texte-longueur" x="330" y="350" font-size="16" textLength="120" lengthAdjust="spacingAndGlyphs">Départ</text>
+    <text id="texte-simple" x="480" y="320" font-size="16">Pompe P1</text>
   </g>
 </svg>

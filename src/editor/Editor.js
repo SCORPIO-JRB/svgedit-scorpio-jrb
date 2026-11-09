@@ -34,6 +34,7 @@ import { getParentsUntil } from '@svgedit/svgcanvas/common/util.js'
 // to 6 400 % (lot V2).
 import { clampZoom, nextZoomStep } from './view.js'
 import { ungroupSelected } from './binding.js'
+import { RETIRED_SHORTCUTS } from './simplification.js'
 
 const { $id, $click, decode64 } = SvgCanvas
 
@@ -653,8 +654,11 @@ class Editor extends EditorStartup {
     // were built: the table wins when both bind the same key.
     const buttonCommands = this.commands.list()
     buttonCommands.forEach((command) => this.commands.unregister(command.id))
+    // The canvas layout leaves out the letters that repeat another shortcut
+    // (lot S1): A for Ctrl+A, Shift+O and Shift+P for Tab and Shift+Tab.
+    const retired = this.layout?.canvas ? RETIRED_SHORTCUTS : []
     this.shortcuts.forEach((shortcut, index) => {
-      if (!shortcut.key) return
+      if (!shortcut.key || retired.includes(shortcut.id)) return
       const [spec, pd = false] = Array.isArray(shortcut.key) ? shortcut.key : [shortcut.key]
       this.commands.register({
         id: shortcut.id ?? `shortcut-${index}`,

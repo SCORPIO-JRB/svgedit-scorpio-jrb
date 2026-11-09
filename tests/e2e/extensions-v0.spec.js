@@ -83,10 +83,17 @@ const visible = (page, id) => page.locator(`#${id}`).isVisible()
 
 const errors = []
 
-test.beforeEach(async ({ page }) => {
+// The canvas layout no longer loads ext-shapes and ext-layer_view by default
+// (lot S1): the contract holds for them when the extensions option loads
+// them, as here. What each layout loads by default is checked at the end.
+const RETIRED = ['shapes', 'layer_view']
+const ALL = '?extensions=ext-shapes,ext-layer_view'
+
+test.beforeEach(async ({ page }, testInfo) => {
   errors.length = 0
   page.on('pageerror', (err) => errors.push(err.message))
-  await visitAndApproveStorage(page)
+  if (testInfo.titlePath.some((title) => title.startsWith('Default extensions'))) return
+  await visitAndApproveStorage(page, { query: ALL })
   await page.waitForFunction(() => window.svgEditor.extensionsAdded)
   await loadDrawing(page)
 })
@@ -256,5 +263,22 @@ test.describe('What each button does (V0)', () => {
     expect(await shown()).toEqual([true, false])
     await clickControl(page, 'tool_layerView')
     expect(await shown()).toEqual([true, true])
+  })
+})
+
+test.describe('Default extensions of each layout (S1)', () => {
+  const loaded = (page) => page.evaluate(() => Object.keys(window.svgEditor.svgCanvas.getExtensions()).sort())
+
+  test('the canvas layout loads every extension but ext-shapes and ext-layer_view', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await page.waitForFunction(() => window.svgEditor.extensionsAdded)
+    expect(await loaded(page)).toEqual(Object.keys(HOOKS).filter((name) => !RETIRED.includes(name)).sort())
+    expect(await page.evaluate(() => ['tool_shapelib', 'tool_layerView'].filter((id) => document.getElementById(id)))).toEqual([])
+  })
+
+  test('the classic layout loads them all, as before', async ({ page }) => {
+    await visitAndApproveStorage(page, { query: '?layout=classic' })
+    await page.waitForFunction(() => window.svgEditor.extensionsAdded)
+    expect(await loaded(page)).toEqual(Object.keys(HOOKS).sort())
   })
 })

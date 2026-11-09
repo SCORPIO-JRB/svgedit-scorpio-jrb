@@ -1,4 +1,5 @@
 import { mergeDeep } from '@svgedit/svgcanvas/common/util.js'
+import { defaultExtensionsOf } from './simplification.js'
 
 /**
 * Escapes special characters in a regular expression.
@@ -118,7 +119,7 @@ export default class ConfigObj {
       * @property {string[]} [extensions=[]] Extensions to load on startup. Use an array in `setConfig` and comma separated file names in the URL.Extension names must begin with "ext-".
       *   Note that as of version 2.7, paths containing "/", "\", or ":", are disallowed for security reasons.
       *   Although previous versions of this list would entirely override the default list, as of version 2.7, the defaults will always be added to this explicit list unless the configuration `noDefaultExtensions` is included.
-      *   See {@link module:SVGEditor~defaultExtensions}.
+      *   See {@link module:SVGEditor~defaultExtensions}. The canvas layout leaves ext-shapes and ext-layer_view out of the defaults (lot S1); this list still loads them.
       * @property {string[]} [allowedOrigins=[]] Used by `ext-xdomain-messaging.js` to indicate which origins are permitted for cross-domain messaging (e.g., between the embedded editor and main editor code).
       *   Besides explicit domains, one might add '*' to allow all domains (not recommended for privacy/data integrity of your user's content!),
       *   `window.location.origin` for allowing the same origin (should be safe if you trust all apps on your domain), 'null' to allow `file:///` URL usage
@@ -319,9 +320,15 @@ export default class ConfigObj {
   setupCurConfig () {
     const curConfig = { ...this.defaultConfig, ...this.curConfig } // Now safe to merge with priority for curConfig in the event any are already set
 
-    // Now deal with extensions and other array config
+    // Now deal with extensions and other array config: the defaults of the
+    // layout, then those asked for by `extensions`, each once, as the option
+    // says (they used to be dropped). The canvas layout no longer loads by
+    // default the extensions whose button it retired (lot S1).
     if (!curConfig.noDefaultExtensions) {
-      curConfig.extensions = [...this.defaultExtensions]
+      curConfig.extensions = [...new Set([
+        ...defaultExtensionsOf(this.defaultExtensions, curConfig.layout),
+        ...(curConfig.extensions ?? [])
+      ])]
     }
     // Export updated config
     this.curConfig = curConfig

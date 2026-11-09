@@ -212,8 +212,15 @@ test.describe('Zoom menu (V3)', () => {
     // Preview ▷ joins them in V6 (plan v2, 4.1 and 4.6)
     expect(shown).toEqual(['se-preview-button', 'se-panel-toggle', 'se-zoom-button'])
     await page.locator('#se-zoom-button').click()
-    // The layer view of ext-layer_view: its button, pressed by its entry.
+    // The source gives way to the Code tab: no entry, its shortcut stays.
+    await expect(page.locator('#se-zoom-menu [data-mirror="tool_source"]')).toHaveCount(0)
+    // The layer view of ext-layer_view, no longer loaded by default (lot
+    // S1): loaded, its button is pressed by its entry.
     const entry = page.locator('#se-zoom-menu [data-mirror="tool_layerView"]')
+    await expect(entry).toHaveCount(0)
+    await visitAndApproveStorage(page, { query: '?extensions=ext-layer_view' })
+    await page.waitForFunction(() => window.svgEditor.extensionsAdded)
+    await page.locator('#se-zoom-button').click()
     await expect(entry).toBeVisible()
     await expect(entry).toHaveAttribute('aria-checked', 'false')
     await expect(entry.locator('kbd')).toHaveText('Ctrl+Shift+L')
@@ -221,8 +228,6 @@ test.describe('Zoom menu (V3)', () => {
     expect(await page.evaluate(() => document.getElementById('tool_layerView').pressed)).toBe(true)
     await page.locator('#se-zoom-button').click()
     await expect(entry).toHaveAttribute('aria-checked', 'true')
-    // The source gives way to the Code tab: no entry, its shortcut stays.
-    await expect(page.locator('#se-zoom-menu [data-mirror="tool_source"]')).toHaveCount(0)
   })
 
   test('the steps zoom, an entry that does not apply is greyed with its shortcut, undo and redo follow the history', async ({ page }) => {
@@ -257,9 +262,11 @@ test.describe('Toolbar (V3)', () => {
       'select: tool_select tool_scale ext-panning',
       // The frame tool of lot V5 comes after Text.
       'create: tool_text tool_frame tools_shapes tools_paths',
-      'shapes: tool_rect tool_square tool_fhrect tool_ellipse tool_circle tool_fhellipse tool_line tool_star tool_polygon',
+      // Square, circle and the freehand shapes left it in lot S1, and so
+      // did the shapes button, which the Library drawer replaces.
+      'shapes: tool_rect tool_ellipse tool_line tool_star tool_polygon',
       'paths: tool_path tool_fhpath',
-      'insert: tool_image tool_connect tool_shapelib tool_library',
+      'insert: tool_image tool_connect tool_library',
       'more: tool_zoom tool_eyedropper'
     ])
     await expect(page.locator('#tools_left')).toHaveAttribute('role', 'toolbar')
@@ -326,12 +333,13 @@ test.describe('Inspector (V3)', () => {
     expect(await sections(page)).toEqual(['appearance', 'fill', 'stroke', 'layer', 'document', 'frames'])
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('Document')
     await select(page, ['r1'])
-    expect(await sections(page)).toEqual(['geometry', 'appearance', 'fill', 'stroke', 'effects', 'identity'])
+    // Effects only for an object that has a blur, since lot S1.
+    expect(await sections(page)).toEqual(['geometry', 'appearance', 'fill', 'stroke', 'identity'])
     await expect(page.locator('#se-actions-button')).toBeVisible()
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('Rectangle')
     await expect(page.locator('#se-tabpanel-properties .se-inspector-id')).toHaveText('#r1')
     await select(page, ['t1'])
-    expect(await sections(page)).toEqual(['geometry', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity'])
+    expect(await sections(page)).toEqual(['geometry', 'appearance', 'fill', 'stroke', 'text', 'identity'])
     await select(page, ['r1', 't1'])
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('2 objects')
     // The polystar panel shows with its tool.
@@ -348,7 +356,8 @@ test.describe('Inspector (V3)', () => {
     await expect(page.locator('#se-actions-button')).toHaveAttribute('aria-expanded', 'true')
     const clone = page.locator('#tool_clone')
     await expect(clone).toBeVisible()
-    expect(await clone.evaluate((el) => [el.hasAttribute('labelled'), el.shadowRoot.querySelector('.kbd').textContent])).toEqual([true, 'D'])
+    // Ctrl+D since lot S1, which took D away.
+    expect(await clone.evaluate((el) => [el.hasAttribute('labelled'), el.shadowRoot.querySelector('.kbd').textContent])).toEqual([true, 'Ctrl+D'])
     await clone.click()
     await expect(page.locator('#se-actions-menu')).toBeHidden()
     expect(await page.evaluate(() => document.querySelectorAll('#svgcontent rect').length)).toBe(3)

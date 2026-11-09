@@ -157,6 +157,10 @@ test.describe('Command registry (V1)', () => {
   })
 
   test('the layer view shortcut, given as a translation key, now works', async ({ page }) => {
+    // ext-layer_view is no longer loaded by default in the canvas layout
+    // (lot S1): the extensions option loads it.
+    await visitAndApproveStorage(page, { query: '?extensions=ext-layer_view' })
+    await page.waitForFunction(() => window.svgEditor.extensionsAdded)
     const command = await page.evaluate(() => window.svgEditor.commands.get('tool_layerView')?.shortcuts)
     expect(command).toEqual(['mod+shift+l'])
   })

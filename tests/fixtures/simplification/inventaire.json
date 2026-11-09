@@ -169,24 +169,15 @@
     "select_all": [
       "mod+a"
     ],
-    "select_all_a": [
-      "a"
-    ],
     "select_children": [
       "enter"
     ],
     "select_group_children": [],
-    "select_next": [
-      "shift+o"
-    ],
     "select_next_tab": [
       "tab"
     ],
     "select_parent": [
       "shift+enter"
-    ],
-    "select_previous": [
-      "shift+p"
     ],
     "select_previous_tab": [
       "shift+tab"
@@ -210,12 +201,6 @@
     "tool_clear": [
       "n"
     ],
-    "tool_clone": [
-      "d"
-    ],
-    "tool_clone_multi": [
-      "c"
-    ],
     "tool_delete": [
       "backspace",
       "delete"
@@ -223,9 +208,6 @@
     "tool_delete_multi": [
       "backspace",
       "delete"
-    ],
-    "tool_docprops": [
-      "shift+d"
     ],
     "tool_ellipse": [
       "e"
@@ -245,14 +227,8 @@
     "tool_frame": [
       "shift+f"
     ],
-    "tool_group_elements": [
-      "g"
-    ],
     "tool_italic": [
       "i"
-    ],
-    "tool_layerView": [
-      "mod+shift+l"
     ],
     "tool_line": [
       "l"
@@ -332,13 +308,10 @@
   },
   "toolbar": {
     "ext-panning": "select",
-    "tool_circle": "tools_shapes",
     "tool_connect": "insert",
     "tool_ellipse": "tools_shapes",
     "tool_eyedropper": "tools_more",
-    "tool_fhellipse": "tools_shapes",
     "tool_fhpath": "tools_paths",
-    "tool_fhrect": "tools_shapes",
     "tool_frame": "create",
     "tool_image": "insert",
     "tool_library": "insert",
@@ -348,8 +321,6 @@
     "tool_rect": "tools_shapes",
     "tool_scale": "select",
     "tool_select": "select",
-    "tool_shapelib": "insert",
-    "tool_square": "tools_shapes",
     "tool_star": "tools_shapes",
     "tool_text": "create",
     "tool_zoom": "tools_more",
@@ -359,8 +330,6 @@
   },
   "documentMenu": [
     "tool_clear",
-    "tool_docprops",
-    "tool_editor_homepage",
     "tool_editor_prefs",
     "tool_export",
     "tool_import",
@@ -388,29 +357,28 @@
     "zoom_out"
   ],
   "actionsMenu": [
+    "tool_align_menu",
     "tool_clone",
     "tool_delete",
     "tool_flip_h",
     "tool_flip_v",
     "tool_move_bottom",
     "tool_move_top",
-    "tool_position",
     "tool_topath"
   ],
-  "textSection": [
-    "tool_bold",
-    "tool_italic",
-    "tool_text_decoration_underline",
-    "tool_text_decoration_linethrough",
-    "tool_text_decoration_overline",
-    "tool_font_family",
-    "font_size",
-    "tool_text_anchor",
-    "tool_letter_spacing",
-    "tool_word_spacing",
-    "tool_line_height",
-    "tool_text_auto_width",
-    "tool_text_length",
-    "tool_length_adjust"
-  ]
+  "textSection": {
+    "shown": [
+      "tool_bold",
+      "tool_italic",
+      "tool_text_decoration_underline",
+      "tool_font_family",
+      "font_size",
+      "tool_text_anchor",
+      "tool_line_height",
+      "tool_text_auto_width"
+    ],
+    "more": [
+      "tool_letter_spacing"
+    ]
+  }
 }

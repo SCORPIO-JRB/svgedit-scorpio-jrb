@@ -3,7 +3,7 @@
 Le but est de rendre l'éditeur plus simple pour créer, intégrer et modifier des synoptiques techniques GTB. Il ne doit pas devenir un outil de dessin général. Une règle s'applique partout : moins de fonctions inutiles, une meilleure expérience, aucune régression sur l'existant.
 
 - **Mesures** : relevées dans l'éditeur compilé depuis `master` (b2a1dbd5), qui contient V0 à V7 et les textes de plusieurs lignes. Disposition « canevas », fichiers réels de `tests/fixtures/import/scorpio/`.
-- **État** : décidé le 9 novembre 2026. Le lot S0 est livré (section 7) ; S1 à S3 restent à faire.
+- **État** : décidé le 9 novembre 2026. Les lots S0 et S1 sont livrés (section 7) ; S2 et S3 restent à faire. Les sections 2 et 3 décrivent l'éditeur avant S1.
 
 ## 1. Décisions
 
@@ -129,7 +129,7 @@ Aucune recommandation ne touche la lecture.
 | Barré, surligné, espacement des mots, longueur du texte, flou | Affichés seulement quand l'objet en a déjà une valeur | Création | La section Texte passe de 14 à 9 réglages ; une valeur existante reste visible et modifiable |
 | Jointures, extrémités, espacement des lettres | Repliés sous « Plus d'options » | Outil | Sections plus courtes |
 | Aligner sur la page | Fusionné avec le menu Aligner, qui s'ouvre aussi pour un seul objet | Outil | Une seule façon d'aligner |
-| Propriétés du document (Maj+D) | Retirée une fois le choix « images incorporées ou liées » déplacé dans la section Document | Outil | Une seule place pour le document |
+| Propriétés du document (Maj+D) | Retirée une fois le choix « images incorporées ou liées » et « Ajuster au contenu » déplacés dans la section Document | Outil | Une seule place pour le document |
 | Langues | Français et anglais seulement | Outil | 57 fichiers en moins (environ 1 Mo) |
 | Bibliothèque de formes de SVG-Edit | Réduite aux catégories basic, arrow, flowchart et electronics | Création | Onglet Formes du tiroir lisible ; environ 330 Ko en moins |
 
@@ -142,21 +142,22 @@ Aucune recommandation ne touche la lecture.
 | Réorienter le chemin (menu « … » d'un chemin) | Outil | Sans usage pour un synoptique |
 | Page d'accueil SVG-Edit (menu Document) | Outil | Sans usage |
 | Vue du calque seul (extension `layer_view`) | Outil | Doublon de l'œil du panneau Calques, et son raccourci ne marche plus ; l'extension reste chargeable par l'option `extensions` |
-| Raccourcis D, C, G, A, Maj+O, Maj+P | Outil | Doublons ; Ctrl+D, Ctrl+G, Ctrl+A, Tab et Maj+Tab restent. Les boutons Dupliquer et Grouper du menu « … » appellent alors les commandes `duplicate` et `group` et affichent Ctrl+D et Ctrl+G |
+| Raccourcis D, C, G, A, Maj+O, Maj+P | Outil | Doublons ; Ctrl+D, Ctrl+G, Ctrl+A, Tab et Maj+Tab restent. Les boutons Dupliquer et Grouper du menu « … » font la même chose que les commandes `duplicate` et `group`, et affichent Ctrl+D et Ctrl+G |
 | Extensions helloworld et overview_window | Code | Jamais chargées |
 | Ancienne vue à défilement | Code | Remplacée par la vue sans bordure |
 | Enregistrements en double du registre | Code | Une commande par action |
 
 ### Gains attendus
 
-| Mesure | Avant | Après |
-| --- | --- | --- |
-| Outils de la barre | 22 | 17 |
-| Entrées du menu Formes | 9 | 5 |
-| Réglages de la section Texte | 14 | 9 |
-| Commandes du registre | 118 | environ 110 après S1, 106 après S3 |
-| Raccourcis attribués à deux commandes | 5 | 4 après S1, aucun après S3 |
-| Fichiers de langue | 59 | 2 |
+| Mesure | Avant | Après S1 (mesuré) | Après S3 (prévu) |
+| --- | --- | --- | --- |
+| Outils de la barre | 22 | 17 | 17 |
+| Entrées du menu Formes | 9 | 5 | 5 |
+| Réglages de la section Texte | 14 | 9, dont 1 replié | 9 |
+| Entrées du menu Document | 10 | 8 | 8 |
+| Commandes du registre | 118 | 110 | 106 |
+| Raccourcis attribués à deux commandes | 5 | 4 | aucun |
+| Fichiers de langue | 59 | 59 | 2 |
 
 À cela s'ajoutent environ 330 Ko de formes hors sujet et deux extensions en moins. Surtout, l'inspecteur affiche la vraie valeur des objets stylés par classe.
 
@@ -170,10 +171,10 @@ Pour chaque retrait, il faut faire trois vérifications :
 | Retrait | Dépendances | Effet sur les documents existants |
 | --- | --- | --- |
 | Carré, cercle, formes à main levée | Boutons de `LeftPanel.html`, menu `shapes` de `Toolbar.js` ; les modes restent dans `svgcanvas` | Aucun : ce sont des `rect`, `circle`, `ellipse` ordinaires |
-| Bouton Formes de SVG-Edit | Extension `ext-shapes`, contrat des extensions de V0 ; le tiroir lit `ext-shapes/shapelib/` | Aucun : une forme déjà posée est un chemin ordinaire. Vérifier que le tiroir trouve toujours les fichiers quand l'extension n'est plus chargée |
+| Bouton Formes de SVG-Edit | Extension `ext-shapes`, contrat des extensions de V0 ; le tiroir lit `ext-shapes/shapelib/`, et les noms des catégories dans les traductions de l'extension | Aucun : une forme déjà posée est un chemin ordinaire. Le tiroir lit lui-même fichiers et traductions quand l'extension n'est plus chargée |
 | Catégories de formes | `shapelib/index.json`, lu par l'extension et par le tiroir | Aucun |
 | Réglages rares du texte et flou | `TopPanel.js`, `Inspector.js` | Aucun : affichés dès que l'objet en a une valeur |
-| Propriétés du document | Boîte `imagePropertiesDialog`, commande `tool_docprops`, menu Document | Aucun, si le choix des images est déplacé avant |
+| Propriétés du document | Boîte `imagePropertiesDialog`, commande `tool_docprops`, menu Document | Aucun, si le choix des images et « Ajuster au contenu » sont déplacés avant. Les tailles prédéfinies de la boîte (640 × 480…) ne sont pas reprises : on tape L et H |
 | Vue du calque seul | Extension `layer_view`, contrat des extensions de V0 | Aucun ; le contrat est mis à jour volontairement |
 | Raccourcis en double | Registre de commandes, aide des raccourcis, palette | Aucun |
 | Langues | `locale/`, option `lang`, préférences | Aucun. Un navigateur réglé en allemand affiche l'éditeur en anglais |
@@ -204,7 +205,7 @@ Plus ▾ (Loupe Z, Pipette Ctrl+I)
 Géométrie     X  Y  L  H  angle
 Apparence     opacité
 Remplissage   ■ #160F23   ← classe .fond
-Contour       couleur · épaisseur · style        [Plus d'options : jointures, extrémités, marqueurs]
+Contour       couleur · épaisseur · style · marqueurs        [Plus d'options : jointures, extrémités]
 Texte         police · taille · gras · italique · souligné · alignement · interligne · largeur automatique
               [Plus d'options : espacement des lettres]
               (barré, surligné, espacement des mots, longueur : seulement si l'objet en a)
@@ -216,12 +217,14 @@ Le repère « ← classe .fond » s'inspire des styles partagés de Figma. Modif
 
 **Barre du haut, menus Document et Zoom** : inchangés, sauf « Page d'accueil SVG-Edit », « Propriétés du document » et « Vue du calque seul », qui disparaissent.
 
+**Menu « … »** : « Aligner et distribuer » s'ouvre aussi pour un seul objet. Il l'aligne alors sur la page, et la répartition et la référence, qui demandent plusieurs objets, laissent la place à une ligne qui le dit.
+
 ## 7. Plan de mise en œuvre
 
 | Lot | Contenu | Sortie SVG | État |
 | --- | --- | --- | --- |
 | S0 Filet | Tests seulement ; l'éditeur ne change pas | Inchangée | Livré |
-| S1 Masquer (2 à 3 j) | Retraits d'interface, réglages conditionnels et repliés, fusion d'« Aligner sur la page », Propriétés du document | Identique à l'octet | À faire |
+| S1 Masquer | Retraits d'interface, réglages conditionnels et repliés, fusion d'« Aligner sur la page », Propriétés du document | Identique à l'octet | Livré |
 | S2 Corriger (3 à 5 j) | Objets stylés par classe ; X, Y, L, H des polygones | Change volontairement | À faire ; avant le test utilisateur de V4 si sa tâche 4 reste telle quelle (section 3.1) |
 | S3 Nettoyer (3 à 5 j, après deux semaines d'usage de S1) | Langues, catégories de formes, extensions jamais chargées, vue à défilement, enregistrements en double | Identique | À faire |
 
@@ -229,7 +232,7 @@ Le repère « ← classe .fond » s'inspire des styles partagés de Figma. Modif
 
 `tests/e2e/simplification-s0.spec.js`, avec `tests/fixtures/simplification/` :
 - **Inventaire** (`inventaire.json`) : les 118 commandes et leurs raccourcis, la barre d'outils, les menus Document, Zoom et « … », les réglages de la section Texte. S1 et S3 le mettent à jour volontairement : `S0_UPDATE=1` le réécrit, et la différence se relit dans la demande de fusion.
-- **Raccourcis partagés** : les cinq connus (section 3.3) ; tout autre partage fait échouer le test. Un test montre que Ctrl+Maj+L verrouille la sélection sans toucher aux calques.
+- **Raccourcis partagés** : les cinq connus (section 3.3), quatre depuis S1 ; tout autre partage fait échouer le test. Un test montre que Ctrl+Maj+L verrouille la sélection sans toucher aux calques.
 - **Familles** (`familles.svg`) : carré, cercle, rectangle, ellipse, polygone ordinaire, étoile, hexagone de l'extension, forme de la bibliothèque, tracé à main levée, flou, texte barré, surligné, espacé, à longueur fixée. Pour chacun, on ouvre le fichier, on déplace l'objet, on le redimensionne par sa poignée, on le fait pivoter, puis on le groupe et on le dégroupe. On vérifie ensuite trois choses :
   - les attributs propres à la famille sont gardés (`shape`, `text-decoration`, `filter`…) ;
   - annuler les cinq étapes rend le texte d'origine ;
@@ -270,18 +273,51 @@ node tests/output/compare-output.mjs --ref=http://127.0.0.1:8010 --new=http://12
 npx playwright test tests/e2e/simplification-s0.spec.js
 ```
 
-### S1 Masquer
+### S1 Masquer (livré)
 
-- **Sortie** : sur tout le corpus, identique à l'octet à la référence.
-- **Mises à jour voulues** : inventaire de S0, contrat des extensions (`layer_view` et `shapes` retirés du chargement par défaut, chargeables par `extensions`), raccourcis partagés (Ctrl+Maj+L n'est plus qu'au verrou).
-- **Tests de bout en bout** :
-  - un fichier contenant un carré, un cercle, un flou ou un texte barré l'affiche, le sélectionne, le transforme et l'enregistre comme avant (filet de S0) ;
-  - les réglages rares apparaissent quand l'objet en a une valeur ;
-  - les boutons Dupliquer et Grouper du menu « … » font la même chose qu'avant, et Ctrl+D et Ctrl+G aussi ;
-  - le menu Aligner fonctionne pour un seul objet ;
-  - le choix des images fonctionne depuis la section Document ;
-  - l'onglet Formes du tiroir s'ouvre sans l'extension `ext-shapes` ;
-  - l'ancienne disposition est inchangée.
+Seule la disposition « canevas » change. `src/editor/simplification.js` liste ce que S1 retire. Un contrôle retiré reste dans la page, caché et sans raccourci (`#se-retired`), pour le code qui le pilote.
+
+**Ce qui disparaît ou se replie :**
+- **Barre d'outils** : le menu Formes garde rectangle, ellipse, ligne, étoile et polygone. Maj avec Rectangle ou Ellipse trace toujours un carré ou un cercle : les modes restent dans `svgcanvas`.
+- **Extensions** : `ext-shapes` et `ext-layer_view` ne sont plus chargées par défaut. L'onglet Formes du tiroir lit lui-même les formes et le nom de leurs catégories. Ctrl+Maj+L ne sert plus qu'au verrou.
+- **Menu « … »** : Réorienter le chemin et Aligner sur la page disparaissent. « Aligner et distribuer » s'ouvre aussi pour un seul objet, l'aligne sur la page et reste ouvert entre deux alignements. Dupliquer et Grouper affichent Ctrl+D et Ctrl+G, dans le menu comme dans la barre contextuelle.
+- **Menu Document** : Propriétés du document et Page d'accueil SVG-Edit disparaissent. La section Document reçoit le choix des images (incorporées ou par adresse) et « Ajuster au contenu ».
+- **Réglages rares** : barré, surligné, espacement des mots, longueur du texte et son ajustement, flou. Chacun n'apparaît que si l'un des objets sélectionnés en a une valeur. Affiché, il reste tant que la sélection ne change pas, pour qu'on puisse remettre une valeur qu'on vient d'ôter.
+- **« Plus d'options »** : jointures et extrémités sous Contour, espacement des lettres sous Texte. Un point marque le bouton quand l'objet a une valeur inhabituelle (jointure arrondie, espacement non nul). Les marqueurs restent visibles.
+- **Raccourcis** : D, C, G, A, Maj+O, Maj+P et Maj+D ne font plus rien.
+
+**Correction en passant** : l'option `extensions` était ignorée tant que les extensions par défaut se chargeaient, contrairement à sa documentation. Elle s'y ajoute désormais, sans doublon : c'est ce qui rend `ext-shapes` et `ext-layer_view` chargeables. Une extension du dossier `extensions` demandée par l'URL (`?extensions=ext-…`) se charge donc aussi. `lockExtensions` et `preventAllURLConfig` l'empêchent, comme avant.
+
+**Tests :**
+- `simplification-s1.spec.js`, 12 tests :
+  - les outils retirés sont hors de la vue et sans raccourci, et Maj trace un carré ;
+  - le tiroir montre les formes nommées et en insère une ;
+  - Ctrl+D, Ctrl+G, Ctrl+A et Tab agissent ; D, C, G, A, Maj+O et Maj+P ne font rien ;
+  - Aligner, pour un objet puis pour plusieurs ;
+  - la section Document ; les réglages rares et repliés ;
+  - les deux extensions chargées par l'option ;
+  - l'ancienne disposition comparée à un relevé fait sur `master` (`classique.json` : commandes, outils, menu Document, extensions et barre du haut pour sept sélections).
+- Mises à jour voulues :
+  - l'inventaire de S0, réécrit par `S0_UPDATE=1` ; le relevé de la section Texte se fait sur un texte simple ajouté à `familles.svg` ;
+  - les raccourcis partagés, quatre depuis S1 ;
+  - le contrat des extensions de V0, qui charge les deux extensions par l'option et vérifie ce que chaque disposition charge par défaut ;
+  - la barre d'outils de V3, la section Effets, le raccourci de Dupliquer, la vue du calque ;
+  - le test unitaire de `ConfigObj`.
+
+**Mesures à la livraison** (Chromium) :
+- `simplification-s1.spec.js` : 12 tests réussis ; `simplification-s0.spec.js` : 21 ;
+- suites touchées (V3, V4, V7, contrats des extensions, registre, presse-papiers, outils de texte, raccourcis, menu principal) : 172 tests réussis, après la mise à jour de `layout-v3` ;
+- sortie comparée à `master` : 25 allers-retours sur 25 et 73 scénarios sur 73 identiques ;
+- rapport de fidélité des fichiers du lot : aucune perte ;
+- `standard`, contrôles des couleurs et des libellés, `remark` : réussis.
+
+Firefox tourne en CI.
+
+**Refaire le relevé de l'ancienne disposition** (seulement si elle change volontairement) :
+
+```bash
+S1_CLASSIC_UPDATE=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8010 npx playwright test tests/e2e/simplification-s1.spec.js -g "Classic"
+```
 
 ### S2 Corriger
 

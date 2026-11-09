@@ -186,6 +186,27 @@ export class EditorLayout {
   }
 
   /**
+   * Takes a control out of the canvas layout (lot S1, simplification.js): it
+   * stays in the page, hidden and without shortcut, for the code that drives
+   * it. Call it before the control enters the page, so that its shortcut
+   * never becomes a command.
+   * @param {Element|null} el
+   * @returns {void}
+   */
+  retire (el) {
+    if (!el) return
+    if (!this.$retired) {
+      this.$retired = document.createElement('div')
+      this.$retired.id = 'se-retired'
+      this.$retired.hidden = true
+      this.$retired.setAttribute('aria-hidden', 'true')
+      this.root.append(this.$retired)
+    }
+    el.removeAttribute('shortcut')
+    this.$retired.append(el)
+  }
+
+  /**
    * The layer controls of LayersPanel, in the Layers tab: its buttons and the
    * move-to-layer list; the tree (LayerTree.js) takes the place of the table.
    * @param {DocumentFragment} fragment

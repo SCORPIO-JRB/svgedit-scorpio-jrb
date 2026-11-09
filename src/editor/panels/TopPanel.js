@@ -264,7 +264,9 @@ class TopPanel {
     this.hideTool('selected_panel')
     this.hideTool('angle_panel')
     this.hideTool('multiselected_panel')
-    if (!this.multiselected) { this.setAlignMenu(false) }
+    // The Align menu of the canvas layout takes one object too (lot S1): it
+    // stays open while that object is aligned.
+    if (!this.multiselected && !(elem && this.editor.layout?.canvas)) { this.setAlignMenu(false) }
     this.hideTool('g_panel')
     this.hideTool('rect_panel')
     this.hideTool('circle_panel')
@@ -1188,6 +1190,12 @@ class TopPanel {
    * @returns {void}
    */
   clickAlign (pos) {
+    // One object, which the Align menu of the canvas layout takes since lot
+    // S1: on the page, as Alt and a letter do; it cannot be distributed.
+    if (this.editor.svgCanvas.getSelectedElements().filter(Boolean).length === 1) {
+      if (!pos.startsWith('distrib')) this.editor.svgCanvas.alignSelectedElements(pos, 'page')
+      return
+    }
     let value = $id('tool_align_relative').value
     if (value === '') {
       value = 'selected'
