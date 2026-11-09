@@ -13,6 +13,8 @@ import { ViewController } from './view.js'
 import { GridLayer } from './grid.js'
 import { FrameLayer } from './frames.js'
 import { initStructure } from './structure.js'
+import { SymbolLibrary, SymbolPanel } from './symbols.js'
+import { LibraryDrawer } from './panels/LibraryDrawer.js'
 import { BindingPanel, ungroupSelected } from './binding.js'
 import { Preview } from './preview.js'
 import { EditorLayout } from './layout.js'
@@ -170,15 +172,22 @@ class EditorStartup {
     this.commands.register({ id: 'preview', label: 'preview.open', run: () => this.preview.open() })
     // Lock and visibility of objects (lot V7)
     initStructure(this)
+    // Symbol libraries (lot V7), in both layouts
+    this.symbols = new SymbolLibrary(this)
     // Frames to export, in the canvas layout (lot V5): their tool after
     // Text, their sections in the inspector.
     if (this.layout?.canvas) {
       this.frames = new FrameLayer(this)
       this.frames.addTool(this.layout.toolbar.bar)
+      // The Library drawer: symbols, shapes and images (lot V7)
+      this.library = new LibraryDrawer(this, this.layout.$stage)
+      this.library.addTool(this.layout.toolbar.bar)
       this.frames.buildInspector((name) => this.layout.inspector.body(name))
       this.frames.refreshInspector()
       // The binding and the data of the object, under its id and class (V6)
       this.binding = new BindingPanel(this, this.layout.inspector.body('identity'))
+      // The symbol of an instance of a library (lot V7)
+      this.symbolPanel = new SymbolPanel(this, this.layout.inspector.body('symbol'))
     }
 
     const { undoMgr } = this.svgCanvas

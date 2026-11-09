@@ -391,6 +391,7 @@ export class EditorLayout {
     this.paintPicker?.selectionChanged()
     this.editor.frames?.selectionChanged()
     this.editor.binding?.refresh()
+    this.editor.symbolPanel?.refresh()
   }
 
   /**
@@ -405,6 +406,7 @@ export class EditorLayout {
     this.editor.frames?.update()
     this.editor.frames?.refreshInspector()
     this.editor.binding?.refresh()
+    this.editor.symbolPanel?.refresh()
   }
 
   /**

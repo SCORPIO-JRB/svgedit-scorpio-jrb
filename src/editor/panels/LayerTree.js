@@ -540,7 +540,7 @@ export class LayerTree {
       return
     }
     // One undo step
-    svgCanvas.setVisible([row.el], row.hidden)
+    svgCanvas.setElementsVisible([row.el], row.hidden)
     this.invalidate()
   }
 
@@ -601,7 +601,7 @@ export class LayerTree {
       done = true
       const name = input.value.trim()
       if (commit && object) {
-        if (name !== titleOf(row.el)) editor.svgCanvas.setTitle(row.el, name)
+        if (name !== titleOf(row.el)) editor.svgCanvas.setElementTitle(row.el, name)
       } else if (commit && name && name !== row.name) {
         if (editor.svgCanvas.getCurrentDrawing().hasLayer(name)) {
           editor.toast(editor.i18next.t('notification.layerHasThatName'), { type: 'error' })

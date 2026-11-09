@@ -259,7 +259,7 @@ test.describe('Toolbar (V3)', () => {
       'create: tool_text tool_frame tools_shapes tools_paths',
       'shapes: tool_rect tool_square tool_fhrect tool_ellipse tool_circle tool_fhellipse tool_line tool_star tool_polygon',
       'paths: tool_path tool_fhpath',
-      'insert: tool_image tool_connect tool_shapelib',
+      'insert: tool_image tool_connect tool_shapelib tool_library',
       'more: tool_zoom tool_eyedropper'
     ])
     await expect(page.locator('#tools_left')).toHaveAttribute('role', 'toolbar')

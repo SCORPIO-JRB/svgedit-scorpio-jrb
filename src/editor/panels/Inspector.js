@@ -2,7 +2,7 @@
  * Properties tab of the right panel, in the canvas layout (lot V3; plan v2,
  * section 4.5): one inspector, with sections at fixed places.
  *
- * Order: actions on the selection, Geometry, Appearance, Fill, Stroke,
+ * Order: actions on the selection, Geometry, Symbol (lot V7), Appearance, Fill, Stroke,
  * Text, Effects, Identity, Extensions, Frame, Layer, Document, Frames. The
  * Layer section (lot V7) gives the current layer, without selection: its
  * name, opacity, blend mode, visibility and lock. A section
@@ -29,7 +29,7 @@ import { escapeHtml } from './TopBar.js'
 
 const { isValidUnit } = SvgCanvas
 
-export const SECTIONS = ['actions', 'geometry', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity', 'extensions', 'frame', 'layer', 'document', 'frames']
+export const SECTIONS = ['actions', 'geometry', 'symbol', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity', 'extensions', 'frame', 'layer', 'document', 'frames']
 
 /** Order of the geometry groups: position, size, then angle. */
 const GEOMETRY_ORDER = {

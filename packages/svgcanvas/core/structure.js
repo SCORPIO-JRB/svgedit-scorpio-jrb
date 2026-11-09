@@ -283,10 +283,10 @@ export const init = (canvas) => {
   canvas.isLocked = isLocked
   canvas.isLockedSelf = isLockedSelf
   canvas.setLocked = setLocked
-  canvas.setVisible = setVisible
+  canvas.setElementsVisible = setVisible
   canvas.findMarked = findMarked
-  canvas.getTitle = getTitle
-  canvas.setTitle = setTitle
+  canvas.getElementTitle = getTitle
+  canvas.setElementTitle = setTitle
   canvas.moveElementsTo = moveElementsTo
   canvas.lockedDrawingTarget = lockedDrawingTarget
   canvas.getBlendMode = getBlendMode

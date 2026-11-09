@@ -63,7 +63,23 @@ export const STEP_TEXTS = {
   'change frame': 'frame_change',
   'delete frame': 'frame_delete',
   'change id': 'change_id',
-  'change data': 'change_data'
+  'change data': 'change_data',
+  // Lot V7
+  lock: 'lock',
+  unlock: 'unlock',
+  show: 'show',
+  hide: 'hide',
+  rename: 'object_title',
+  reorder: 'reorder',
+  'layer style': 'layer_style',
+  'insert symbol': 'symbol_insert',
+  'update symbol': 'symbol_update',
+  'insert shape': 'shape_insert',
+  'insert image': 'image_insert',
+  'add connector': 'connector_add',
+  'change route': 'connector_route',
+  'change fluid': 'connector_fluid',
+  'apply template': 'template'
 }
 
 /** Names that give the number of objects. */

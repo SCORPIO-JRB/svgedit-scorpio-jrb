@@ -33,16 +33,15 @@ export const initStructure = (editor) => {
     {
       id: 'hide_selection',
       label: 'structure.hide',
-      // Before the layer view of ext-layer_view, which shares no key, and
-      // the lock, which shares Ctrl+Shift+L with it: with a selection, the
-      // lock runs; without, the layer view.
       shortcuts: 'mod+shift+h',
       when: () => selection().length > 0,
-      run: () => svgCanvas.setVisible(selection(), false)
+      run: () => svgCanvas.setElementsVisible(selection(), false)
     },
     {
       id: 'lock_selection',
       label: 'structure.lock',
+      // Shared with the layer view of ext-layer_view, registered later: with
+      // a selection the lock runs, without it the layer view.
       shortcuts: 'mod+shift+l',
       when: () => selection().length > 0,
       run: () => svgCanvas.setLocked(selection(), true)
@@ -51,7 +50,7 @@ export const initStructure = (editor) => {
       id: 'show_all',
       label: 'structure.show_all',
       when: () => svgCanvas.findMarked('hidden').length > 0,
-      run: () => svgCanvas.setVisible(svgCanvas.findMarked('hidden'), true)
+      run: () => svgCanvas.setElementsVisible(svgCanvas.findMarked('hidden'), true)
     },
     {
       id: 'unlock_all',

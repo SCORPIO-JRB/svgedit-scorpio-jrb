@@ -2434,3 +2434,207 @@
   gap: var(--se-space-2);
   width: 100%;
 }
+
+/* Symbol section of the inspector (lot V7) */
+.se-symbol-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--se-space-2);
+  width: 100%;
+}
+
+.se-symbol-panel[hidden] {
+  display: none;
+}
+
+.se-symbol-info {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--se-space-2);
+}
+
+.se-symbol-name {
+  font-weight: 600;
+}
+
+.se-symbol-version,
+.se-symbol-ports {
+  margin: 0;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+}
+
+.se-symbol-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--se-space-2);
+}
+
+/* Library drawer (lot V7): shapes, symbols and images, under the toolbar.
+—————————————————————————————*/
+
+.se-library {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 320px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 80px);
+  padding: var(--se-space-2) 0;
+  border: 1px solid var(--se-border);
+  border-radius: var(--se-radius-float);
+  background: var(--se-surface-raised);
+  box-shadow: var(--se-shadow-menu);
+  color: var(--se-text);
+}
+
+.se-library[hidden] {
+  display: none;
+}
+
+.se-library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--se-space-2) 0 var(--se-space-4);
+}
+
+.se-library-head h2 {
+  margin: 0;
+  font-size: var(--se-font-size-control);
+  font-weight: 600;
+}
+
+.se-library-tabs {
+  display: flex;
+  gap: 2px;
+  margin: var(--se-space-1) var(--se-space-3);
+  padding: 2px;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+.se-library-tabs[hidden] {
+  display: none;
+}
+
+.se-library-tabs [role="tab"] {
+  flex: 1;
+  min-height: 24px;
+  padding: 0 var(--se-space-2);
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.se-library-tabs [role="tab"][aria-selected="true"] {
+  background: var(--se-surface-raised);
+  color: var(--se-text);
+  font-weight: 600;
+}
+
+.se-library-tabs [role="tab"]:focus-visible,
+.se-library-item:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+}
+
+.se-library-body {
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--se-space-3);
+}
+
+.se-library-section h3 {
+  margin: var(--se-space-3) 0 var(--se-space-1);
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+  font-weight: 600;
+}
+
+.se-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: var(--se-space-1);
+}
+
+.se-library-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-size: var(--se-font-size-label);
+  cursor: grab;
+}
+
+.se-library-item:hover {
+  border-color: var(--se-border);
+  background: var(--se-control-hover);
+}
+
+.se-library-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  color: var(--se-icon);
+}
+
+.se-library-preview svg,
+.se-library-preview img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.se-library-preview path {
+  fill: currentColor;
+}
+
+/* A symbol keeps the colours of its instance. */
+.se-library-symbol path {
+  fill: revert-layer;
+}
+
+.se-library-symbol {
+  border-radius: var(--se-radius-field);
+  background: var(--se-canvas);
+}
+
+.se-library-label {
+  overflow: hidden;
+  max-width: 100%;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.se-library-empty,
+.se-library-help {
+  margin: var(--se-space-3);
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+}
+
+.se-library-help {
+  margin-bottom: 0;
+}
+
+.se-library-pick-row {
+  margin-top: var(--se-space-2);
+}

@@ -224,3 +224,179 @@ test.describe('Full tree (V7)', () => {
     await expect(item).toHaveAttribute('aria-description', /au moins un calque|at least one layer/)
   })
 })
+
+const PAGE = `<svg xmlns="${NS}" width="640" height="480">
+  <g class="layer"><title>Equipements</title><rect id="fond" x="0" y="0" width="640" height="480" fill="#160F23"/></g>
+</svg>`
+
+test.describe('Symbols and ports (V7)', () => {
+  test.beforeEach(async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, PAGE)
+  })
+
+  test('a symbol is a <symbol> in the defs, each use an instance; one undo step; its ports follow it', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const ed = window.svgEditor
+      const a = ed.symbols.insert('gtb-pompe', { x: 100, y: 100 })
+      const b = ed.symbols.insert('gtb-pompe', { x: 300, y: 100 })
+      const symbol = ed.svgCanvas.findSymbol('gtb-pompe')
+      return {
+        symbols: document.querySelectorAll('#svgcontent defs symbol').length,
+        href: a.getAttribute('href'),
+        box: [a.getAttribute('x'), a.getAttribute('y'), a.getAttribute('width'), a.getAttribute('height')],
+        attrs: [a.getAttribute('fill'), a.getAttribute('stroke'), a.getAttribute('class')],
+        version: symbol.getAttribute('se:version'),
+        ports: symbol.getAttribute('se:ports'),
+        instances: ed.svgCanvas.instancesOf(symbol).map((u) => u.id),
+        selected: ed.svgCanvas.getSelectedElements().filter(Boolean).map((el) => el.id),
+        bId: b.id,
+        portsA: ed.svgCanvas.portsOf(a).map((p) => `${p.id} ${p.x},${p.y} ${p.dir} ${p.kind}`)
+      }
+    })
+    expect(result.symbols).toBe(1)
+    expect(result.href).toBe('#gtb-pompe')
+    expect(result.box).toEqual(['80', '80', '40', '40'])
+    // The body of the symbol takes the colours of its instance (D4).
+    expect(result.attrs).toEqual(['#160F23', '#625A6E', 'equipement pompe'])
+    expect(result.version).toBe('1')
+    expect(result.ports).toBe('in 0 20 left in; out 40 20 right out; power 20 0 up power')
+    expect(result.instances).toHaveLength(2)
+    expect(result.selected).toEqual([result.bId])
+    expect(result.portsA).toEqual(['in 80,100 left in', 'out 120,100 right out', 'power 100,80 up power'])
+    expect(await steps(page)).toBe(2)
+    // Turned a quarter, the ports turn with it.
+    const turned = await page.evaluate(() => {
+      const use = document.querySelector('#svgcontent use')
+      use.setAttribute('transform', 'rotate(90 100 100)')
+      return window.svgEditor.svgCanvas.portsOf(use).map((p) => `${p.id} ${Math.round(p.x)},${Math.round(p.y)} ${p.dir}`)
+    })
+    expect(turned).toEqual(['in 100,80 up', 'out 100,120 down', 'power 120,100 right'])
+    // Any other object has the middle of its sides.
+    expect(await page.evaluate(() => window.svgEditor.svgCanvas.portsOf(document.getElementById('fond')).map((p) => p.id)))
+      .toEqual(['n', 'e', 's', 'w'])
+  })
+
+  test('the inspector names the symbol and its ports; a newer version of the library updates every instance in one step', async ({ page }) => {
+    await page.evaluate(() => {
+      window.svgEditor.symbols.insert('gtb-vanne-2v', { x: 100, y: 100 })
+      window.svgEditor.symbols.insert('gtb-vanne-2v', { x: 200, y: 100 })
+    })
+    await expect(page.locator('.se-symbol-panel')).toBeVisible()
+    await expect(page.locator('.se-symbol-version')).toHaveText(/1/)
+    await expect(page.locator('.se-symbol-ports')).toContainText('signal')
+    await expect(page.locator('#se-symbol-update')).toBeHidden()
+    // The library moves on: version 2, another drawing.
+    await page.evaluate(() => {
+      const def = window.svgEditor.symbols.definition('gtb-vanne-2v')
+      def.version = 2
+      def.body = '<rect x="0" y="10" width="40" height="20"/>'
+      window.svgEditor.symbolPanel.refresh()
+    })
+    await expect(page.locator('#se-symbol-update')).toBeVisible()
+    await expect(page.locator('#se-symbol-update')).toContainText('2')
+    const before = await steps(page)
+    await page.locator('#se-symbol-update').click()
+    const symbol = () => page.evaluate(() => {
+      const s = window.svgEditor.svgCanvas.findSymbol('gtb-vanne-2v')
+      return [s.getAttribute('se:version'), [...s.children].map((el) => el.localName).join(' ')]
+    })
+    expect(await symbol()).toEqual(['2', 'title rect'])
+    expect(await steps(page)).toBe(before + 1)
+    await expect(page.locator('#se-symbol-update')).toBeHidden()
+    await page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.undo())
+    expect((await symbol())[0]).toBe('1')
+    expect((await symbol())[1]).toContain('path')
+  })
+
+  test('the tree shows an instance by the name of its symbol', async ({ page }) => {
+    await page.evaluate(() => window.svgEditor.symbols.insert('gtb-chaudiere', { x: 100, y: 100 }))
+    await page.locator('#se-tab-layers').click()
+    const type = await page.locator('#se-tree .se-tree-row[data-kind="object"]').first().locator('.se-tree-type').textContent()
+    const name = await page.evaluate(() => window.svgEditor.symbols.label('symbols.boiler'))
+    expect(type).toBe(name)
+  })
+})
+
+test.describe('Library drawer (V7)', () => {
+  test.beforeEach(async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, PAGE)
+  })
+
+  test('opens from the toolbar, shows symbols by category, closes with Escape', async ({ page }) => {
+    const button = page.locator('#tool_library')
+    await button.click()
+    await expect(page.locator('#se-library')).toBeVisible()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.locator('#se-library-search')).toBeFocused()
+    expect(await page.locator('.se-library-item[data-kind="symbol"]').count()).toBe(18)
+    expect(await page.locator('.se-library-section h3').count()).toBe(4)
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#se-library')).toBeHidden()
+    expect(await page.evaluate(() => {
+      const active = document.activeElement
+      return active?.id === 'tool_library' || active?.shadowRoot?.activeElement != null || active?.closest?.('#tool_library') != null
+    })).toBe(true)
+  })
+
+  test('a symbol dragged onto the canvas lands where it is dropped, one undo step, selected; the drawer closes', async ({ page }) => {
+    await page.locator('#tool_library').click()
+    const area = page.locator('#workarea')
+    const box = await area.boundingBox()
+    const drop = { x: box.width - 300, y: 300 }
+    await page.locator('.se-library-item[data-key="gtb-vanne-3v"]').dragTo(area, { targetPosition: drop })
+    const point = await page.evaluate(([x, y]) => window.svgEditor.view.screenToDoc(x, y), [box.x + drop.x, box.y + drop.y])
+    const use = await page.evaluate(() => {
+      const u = window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean)[0]
+      return { tag: u?.localName, x: Number(u?.getAttribute('x')), y: Number(u?.getAttribute('y')) }
+    })
+    expect(use.tag).toBe('use')
+    expect(Math.abs(use.x + 20 - point.x)).toBeLessThan(1.5)
+    expect(Math.abs(use.y + 20 - point.y)).toBeLessThan(1.5)
+    expect(await steps(page)).toBe(1)
+    await expect(page.locator('#se-library')).toBeHidden()
+  })
+
+  test('the search looks into symbols and shapes, accents aside; a click puts a shape in the middle of the view', async ({ page }) => {
+    await page.locator('#tool_library').click()
+    await page.locator('#se-library-search').fill('echangeur')
+    await expect(page.locator('.se-library-item[data-key="gtb-echangeur"]')).toBeVisible()
+    await page.locator('#se-library-search').fill('heart')
+    await expect(page.locator('.se-library-item[data-kind="shape"]').first()).toBeVisible()
+    await expect(page.locator('.se-library-tabs')).toBeHidden()
+    await page.locator('#se-library-search').fill('')
+    await page.locator('#se-library-tab-shapes').click()
+    await page.locator('.se-library-item[data-key="basic/heart"]').click()
+    const shape = await page.evaluate(() => {
+      const el = window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean)[0]
+      const b = el.getBBox()
+      const c = window.svgEditor.view.center
+      return { tag: el.localName, w: Math.round(b.width), cx: Math.round(b.x + b.width / 2 - c.x), cy: Math.round(b.y + b.height / 2 - c.y), opacity: el.getAttribute('opacity') }
+    })
+    expect(shape.tag).toBe('path')
+    expect(shape.w).toBeLessThanOrEqual(80)
+    expect(Math.abs(shape.cx)).toBeLessThan(41)
+    // Opaque, as the style says: not the half opacity of a shape being drawn
+    expect(shape.opacity === null || shape.opacity === '1').toBe(true)
+    expect(await steps(page)).toBe(1)
+  })
+
+  test('images: those of the document, and a file of the computer', async ({ page }) => {
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mNk+M9Qz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC'
+    await page.locator('#tool_library').click()
+    await page.locator('#se-library-tab-images').click()
+    await expect(page.locator('.se-library-empty')).toBeVisible()
+    await page.locator('#se-library-file').setInputFiles({
+      name: 'point.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(png.split(',')[1], 'base64')
+    })
+    await expect.poll(() => page.evaluate(() => document.querySelectorAll('#svgcontent image').length)).toBe(1)
+    await page.locator('#tool_library').click()
+    await page.locator('#se-library-tab-images').click()
+    await expect(page.locator('.se-library-item[data-kind="image"]')).toHaveCount(1)
+    await page.locator('.se-library-item[data-kind="image"]').click()
+    await expect.poll(() => page.evaluate(() => document.querySelectorAll('#svgcontent image').length)).toBe(2)
+  })
+})

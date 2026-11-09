@@ -43,6 +43,7 @@ const EXEMPT_FILES = {
   'src/editor/components/sePalette.js': 'palette of document colours',
   'src/editor/text-styles.js': 'colours of the text styles written in the document (lot V4)',
   'src/editor/color-libraries.js': 'colours of the libraries offered for the document',
+  'src/editor/gtb-symbols.js': 'colours of a new instance of the GTB symbols, written in the document (lot V7)',
   'src/editor/components/PaintBox.js': 'swatch of the document paint',
   'src/editor/dialogs/editorPreferencesDialog.js': 'canvas backgrounds offered to the user',
   'src/editor/extensions/ext-eyedropper/ext-eyedropper.js': 'default paint copied by the eyedropper'
