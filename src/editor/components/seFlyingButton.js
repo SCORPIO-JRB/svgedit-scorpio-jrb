@@ -1,7 +1,7 @@
 /* globals svgEditor */
 import './seIcon.js'
 import { t } from '../locale.js'
-import { setControlName } from '../commands.js'
+import { adoptTitle, controlTitle } from '../commands.js'
 
 /**
  * Gives the keyboard focus to a button of a toolbar: its control takes the
@@ -196,7 +196,9 @@ export class FlyingButton extends HTMLElement {
     if (oldValue === newValue) return
     switch (name) {
       case 'title':
-        setControlName(this, this.$button, t(newValue), this.getAttribute('shortcut'), t)
+        // Removed by adoptTitle: the name stays.
+        if (newValue === null) break
+        adoptTitle(this, this.$button, newValue, t)
         break
       case 'pressed':
         if (newValue) {
@@ -236,7 +238,7 @@ export class FlyingButton extends HTMLElement {
    * @returns {any}
    */
   get title () {
-    return this.getAttribute('title')
+    return controlTitle(this)
   }
 
   /**
