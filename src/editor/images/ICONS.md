@@ -85,7 +85,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `group_elements.svg` | dessin propre | Grouper |
 | `handle.svg` | dessin propre | Coin des boutons qui ouvrent un menu d'outils — *sans référence* |
 | `height.svg` | `height` | Hauteur — *sans référence* |
-| `hello_world.svg` | `waving_hand` | Extension d'exemple « Hello World » |
+| `hello_world.svg` | `waving_hand` | Exemple « Hello World » de `packages/react-test` |
 | `home.svg` | dessin propre | Accueil de l'application hôte (barre supérieure) |
 | `image.svg` | `image` | Outil image |
 | `imagelib.svg` | `photo_library` | Bibliothèque d'images (extension archivée ext-imagelib) — *sans référence* |

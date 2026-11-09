@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360" class="synoptique">
+  <style>
+    svg.synoptique { font-family: Helvetica, Arial, sans-serif; }
+    .fond { fill: #160F23; }
+    .titre { font-family: 'Space Grotesk', Helvetica, sans-serif; font-weight: 500; fill: #CEB8FF; }
+    .titre-page { font-size: 34px; }
+    .tuyau { fill: none; stroke: #625A6E; stroke-width: 3; }
+    .tuyau.chaud { stroke: #F08A62; }
+    .equipement { fill: #9B92AA; }
+    .equipement.en-marche { fill: #5BD08A; }
+    .libelles { fill: #9B92AA; font-size: 15px; }
+  </style>
+  <g class="layer">
+    <title>Synoptique</title>
+    <rect id="fond" class="fond" x="0" y="0" width="640" height="360"/>
+    <text id="titre" class="titre titre-page" x="32" y="56">Chaufferie</text>
+    <polyline id="depart" class="tuyau chaud" points="60,200 300,200 300,260"/>
+    <rect id="pompe" class="equipement en-marche" x="280" y="180" width="40" height="40"/>
+    <g id="libelles" class="libelles">
+      <text id="libelle-pompe" x="330" y="205">Pompe de charge</text>
+    </g>
+  </g>
+</svg>

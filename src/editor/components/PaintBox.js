@@ -112,11 +112,15 @@ class PaintBox {
   /**
    * Paint of an element, as the box shows it.
    * @param {Element} elem
+   * @param {object} [svgcanvas] - Reads a paint that a rule gives
    * @returns {{color: string, opacity: number}|null|undefined} Undefined for
    *   an element without paint, null for a group whose children differ
    */
-  paintOf (elem) {
+  paintOf (elem, svgcanvas) {
     const { type } = this
+    // As drawn: a rule of the style sheets, or the style attribute, can give
+    // the paint (lot S2)
+    const styled = (el, name) => svgcanvas?.getStyledValue?.(el, name)?.value ?? el.getAttribute(name)
     switch (elem.tagName) {
       case 'use':
       case 'image':
@@ -128,7 +132,7 @@ class PaintBox {
         const childs = elem.getElementsByTagName('*')
         let gPaint = null
         for (let i = 0, len = childs.length; i < len; i++) {
-          const p = childs[i].getAttribute(type)
+          const p = styled(childs[i], type)
           if (i === 0) {
             gPaint = p
           } else if (gPaint !== p) {
@@ -138,12 +142,12 @@ class PaintBox {
         return gPaint === null ? null : { color: gPaint, opacity: 100 }
       }
       default: {
-        let opacity = Number.parseFloat(elem.getAttribute(type + '-opacity'))
+        let opacity = Number.parseFloat(styled(elem, type + '-opacity'))
         if (Number.isNaN(opacity)) {
           opacity = 1.0
         }
         const defColor = type === 'fill' ? 'black' : 'none'
-        return { color: elem.getAttribute(type) || defColor, opacity: opacity * 100 }
+        return { color: styled(elem, type) || defColor, opacity: opacity * 100 }
       }
     }
   }
@@ -155,7 +159,7 @@ class PaintBox {
      */
   update (svgcanvas, selectedElement) {
     if (!selectedElement) { return null }
-    const painted = this.paintOf(selectedElement)
+    const painted = this.paintOf(selectedElement, svgcanvas)
     if (painted === undefined) {
       // Don't change the current value
       return null
@@ -185,7 +189,7 @@ class PaintBox {
     let common
     for (const elem of elements) {
       if (!elem) { continue }
-      const painted = this.paintOf(elem)
+      const painted = this.paintOf(elem, svgcanvas)
       if (painted === undefined) { continue }
       if (painted === null || (common &&
         (common.color !== painted.color || common.opacity !== painted.opacity))) {

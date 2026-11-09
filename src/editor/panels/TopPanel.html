@@ -16,13 +16,15 @@
   <div class="selected_panel">
     <div class="tool_sep"></div>
     <se-button id="tool_clone" title="tools.clone" shortcut="D" src="clone.svg"></se-button>
-    <se-button id="tool_delete" title="tools.del" shortcut="Delete/Backspace" src="delete.svg"></se-button>
+    <se-button id="tool_delete" title="tools.del" shortcut-hint-only shortcut="Delete/Backspace" src="delete.svg">
+    </se-button>
   </div>
   <div class="selected_panel">
     <div class="tool_sep"></div>
-    <se-button id="tool_move_top" title="tools.move_top" shortcut="Ctrl+Shift+]" src="move_top.svg"></se-button>
-    <se-button id="tool_move_bottom" title="tools.move_bottom" shortcut="Ctrl+Shift+[" src="move_bottom.svg">
-    </se-button>
+    <se-button id="tool_move_top" title="tools.move_top" shortcut-hint-only shortcut="Ctrl+Shift+]"
+      src="move_top.svg"></se-button>
+    <se-button id="tool_move_bottom" title="tools.move_bottom" shortcut-hint-only shortcut="Ctrl+Shift+["
+      src="move_bottom.svg"></se-button>
   </div>
   <div class="selected_panel">
     <se-button id="tool_topath" title="tools.to_path" src="to_path.svg"></se-button>
@@ -45,10 +47,12 @@
   <div class="multiselected_panel">
     <div class="tool_sep"></div>
     <se-button id="tool_clone_multi" title="tools.clone" shortcut="C" src="clone.svg"></se-button>
-    <se-button id="tool_delete_multi" title="tools.del" shortcut="Delete/Backspace" src="delete.svg"></se-button>
+    <se-button id="tool_delete_multi" title="tools.del" shortcut-hint-only shortcut="Delete/Backspace"
+      src="delete.svg"></se-button>
   </div>
-  <!-- Ctrl+Shift+] and Ctrl+Shift+[ are bound by tool_move_top and
-       tool_move_bottom, which order a multi-selection too. -->
+  <!-- Delete, Ctrl+Shift+] and Ctrl+Shift+[ belong to the commands delete,
+       move_front and move_back of the editor (lot S3): the buttons show
+       them and do the same. -->
   <div class="multiselected_panel">
     <div class="tool_sep"></div>
     <se-button id="tool_move_top_multi" title="tools.move_top" shortcut="Ctrl+Shift+]"

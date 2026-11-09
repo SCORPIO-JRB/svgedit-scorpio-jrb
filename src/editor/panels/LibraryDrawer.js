@@ -7,8 +7,8 @@
  *   palette) and closes after an insertion, with Escape or its own button.
  * - Symbols: those of the symbol libraries (GTB by default, or the host's),
  *   by category. Shapes: the shape library of SVG-Edit (ext-shapes), read
- *   when first shown. Images: those the document already holds, and a file
- *   of the computer.
+ *   when first shown, whether the extension is loaded or not (lot S1).
+ *   Images: those the document already holds, and a file of the computer.
  * - The search looks into the three at once, accents and case aside.
  * - A click, Enter or Space puts the item in the middle of the view; a drag
  *   puts it where it is dropped. Each insertion is one undo step and leaves
@@ -211,13 +211,15 @@ export class LibraryDrawer {
     if (this.shapes) return Promise.resolve(this.shapes)
     if (this.shapesLoading) return this.shapesLoading
     const base = `${this.editor.configObj.curConfig.extPath}/ext-shapes/shapelib`
+    const names = this.loadShapeNames()
     this.shapesLoading = fetch(`${base}/index.json`)
       .then((response) => response.json())
       .then(({ lib }) => Promise.all(lib.map((category) => fetch(`${base}/${category}.json`)
         .then((response) => response.json())
         .then(({ data }) => Object.entries(data).map(([name, d]) => ({ category, name, d })))
         .catch(() => []))))
-      .then((lists) => {
+      .then(async (lists) => {
+        await names
         this.shapes = lists.flat()
         return this.shapes
       })
@@ -226,6 +228,31 @@ export class LibraryDrawer {
         return this.shapes
       })
     return this.shapesLoading
+  }
+
+  /**
+   * The names of the categories of shapes, from the translations of
+   * ext-shapes, when the extension has not added them: the canvas layout no
+   * longer loads it by default (lot S1). Without them, a category shows its
+   * key ("basic").
+   * @returns {Promise<void>}
+   */
+  async loadShapeNames () {
+    const { i18next, configObj } = this.editor
+    const lang = configObj.pref('lang')
+    if (!i18next?.hasResourceBundle || i18next.hasResourceBundle(lang, 'shapes')) return
+    const base = `${configObj.curConfig.extPath}/ext-shapes/locale`
+    const load = async (code) => (await import(/* @vite-ignore */ `${base}/${code}.js`)).default
+    let names = null
+    for (const code of [/^[A-Za-z-]+$/.test(lang) ? lang : null, 'en'].filter(Boolean)) {
+      try {
+        names = await load(code)
+        break
+      } catch {
+        // No translation in this language: English, as the extension does.
+      }
+    }
+    if (names && !i18next.hasResourceBundle(lang, 'shapes')) i18next.addResourceBundle(lang, 'shapes', names)
   }
 
   /**

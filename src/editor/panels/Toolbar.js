@@ -1,7 +1,8 @@
 /**
  * Floating toolbar of the canvas layout (lot V3; plan v2, section 4.2), at
  * the top left of the canvas: current layer ▾ | Select, Scale, Hand | Text,
- * Shapes ▾, Paths ▾ | Image, Connector, Library | More ▾.
+ * Frame, Shapes ▾ (rectangle, ellipse, line, star, polygon), Paths ▾ | Image,
+ * Connector, Library | More ▾.
  *
  * Declared order. Each tool declares its group and its rank with
  * `data-group` and `data-rank` instead of an index: "select", "create",
@@ -20,6 +21,7 @@
  */
 import { escapeHtml } from './TopBar.js'
 import { focusControl } from '../components/seFlyingButton.js'
+import { RETIRED_CONTROLS } from '../simplification.js'
 
 /** Groups of the bar, in order. */
 export const TOOL_GROUPS = ['select', 'create', 'insert', 'more']
@@ -99,7 +101,13 @@ export class Toolbar {
     const t = (key) => escapeHtml(editor.i18next.t(key))
     const img = escapeHtml(editor.configObj.curConfig.imgPath)
     const bar = fragment.querySelector('#tools_left')
-    const tools = [...bar.querySelectorAll('[data-group]')]
+    // Square, circle and the freehand shapes leave the Shapes menu (lot S1):
+    // Rectangle and Ellipse with Shift draw the first two.
+    const tools = [...bar.querySelectorAll('[data-group]')].filter((tool) => {
+      if (!RETIRED_CONTROLS.includes(tool.id)) return true
+      editor.layout.retire(tool)
+      return false
+    })
     // The wrappers of the old left panel (rectangle and ellipse groups) have
     // no place here: their tools go into the Shapes menu.
     bar.replaceChildren()

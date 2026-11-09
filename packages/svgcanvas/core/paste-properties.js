@@ -2,12 +2,19 @@
  * Copying the look of an object onto others (M7): Mod+Alt+C copies the fill,
  * the stroke, the opacity and, for a text, its font; Mod+Alt+V gives them to
  * the selected objects, as one undo step.
+ *
+ * On an object styled by a class (lot S4 of the simplification audit,
+ * docs/audit-simplification.md), the copy takes the values as drawn, those
+ * of the rules, and the paste changes a value where the target gets it: in
+ * its rule, as a field of the panel does (lot S2), with the same warning.
  * @module paste-properties
  * @license MIT
  */
 
 import * as hstry from './history.js'
 import { cloneContent, pinLineHeight, changesLayout, layoutText } from './text-lines.js'
+import { STYLED_PROPERTIES, getStyledValue, getShownValue } from './style-rules.js'
+import { changeStyledProperty } from './undo.js'
 
 const { BatchCommand, ChangeElementCommand } = hstry
 
@@ -80,8 +87,9 @@ const graphicsOf = (elem) => {
 }
 
 /**
- * The value of a property as the object shows it: its own attribute, or for
- * an inherited property, the one of the nearest group that sets it.
+ * The value of a property as the object shows it: the value a rule or its
+ * `style` attribute gives it (lot S4), else its own attribute, or for an
+ * inherited property, the one of the nearest group that sets it.
  * @param {Element} elem
  * @param {string} name
  * @returns {string|null}
@@ -90,6 +98,8 @@ const effectiveValue = (elem, name) => {
   const svgContent = svgCanvas.getSvgContent()
   let node = elem
   while (node && node.nodeType === 1 && node !== svgContent) {
+    const styled = getStyledValue(node, name)
+    if (styled) return styled.value
     if (node.hasAttribute(name)) return node.getAttribute(name)
     if (NOT_INHERITED.has(name)) return null
     node = node.parentNode
@@ -124,12 +134,18 @@ const hasCopiedProperties = () => Boolean(getCopiedProperties())
  * @function module:svgcanvas.SvgCanvas#getCopiedProperties
  * @returns {Object<string, Object<string, string|null>>|null}
  */
-const getCopiedProperties = () => {
+const getCopiedProperties = () => readCopied()?.groups ?? null
+
+/**
+ * The copied properties, and the values the source showed for those it did
+ * not set (lot S4); older data has none of the latter.
+ * @returns {{groups: Object<string, Object<string, string|null>>, shown: Object<string, string>}|null}
+ */
+const readCopied = () => {
   try {
     const data = JSON.parse(sessionStorage.getItem(PROPERTIES_ID))
-    return data && typeof data === 'object' && data.groups && typeof data.groups === 'object'
-      ? data.groups
-      : null
+    if (!data || typeof data !== 'object' || !data.groups || typeof data.groups !== 'object') return null
+    return { groups: data.groups, shown: data.shown && typeof data.shown === 'object' ? data.shown : {} }
   } catch {
     return null
   }
@@ -145,12 +161,20 @@ const copySelectedProperties = () => {
   const source = getSource()
   if (!source) return false
   const groups = {}
+  // What the source shows for a property it does not set: a target that
+  // gets the property from a rule takes it there (lot S4).
+  const shown = {}
   Object.entries(GROUPS).forEach(([group, { properties, elements }]) => {
     if (!elements.has(source.localName)) return
     groups[group] = Object.fromEntries(properties.map((name) => [name, effectiveValue(source, name)]))
+    properties.forEach((name) => {
+      if (groups[group][name] !== null || !STYLED_PROPERTIES.has(name)) return
+      const value = getShownValue(source, name)
+      if (value !== null) shown[name] = value
+    })
   })
   try {
-    sessionStorage.setItem(PROPERTIES_ID, JSON.stringify({ version: 1, groups }))
+    sessionStorage.setItem(PROPERTIES_ID, JSON.stringify({ version: 1, groups, shown }))
   } catch {
     return false
   }
@@ -177,13 +201,20 @@ const refersToMissing = (value) => {
  * objects are given: copied from a rectangle, a fill does not remove the font
  * of a text. A property the source did not set is removed. A reference to a
  * gradient this drawing lacks is left out.
+ * A target that gets a property from a rule or its `style` attribute is
+ * changed there, as by a field of the panel (lot S4): the rule takes the
+ * value of the source, or for a property the source did not set, the value
+ * it showed, unless the target shows it already. The editor asks before
+ * keeping a rule changed (`styleRulesChanged`).
  * @function module:svgcanvas.SvgCanvas#pasteProperties
  * @fires module:svgcanvas.SvgCanvas#event:changed
+ * @fires module:svgcanvas.SvgCanvas#event:styleRulesChanged
  * @returns {module:history.BatchCommand|null}
  */
 const pasteProperties = () => {
-  const groups = getCopiedProperties()
-  if (!groups) return null
+  const copied = readCopied()
+  if (!copied) return null
+  const { groups, shown } = copied
   const targets = []
   svgCanvas.getSelectedElements().filter(Boolean).forEach((elem) => {
     graphicsOf(elem).forEach((target) => {
@@ -192,6 +223,27 @@ const pasteProperties = () => {
   })
   const batchCmd = new BatchCommand('Paste properties')
   const changed = []
+  // The properties of each target changed where they come from (lot S4)
+  const styled = new Map()
+  Object.entries(groups).forEach(([group, values]) => {
+    if (!GROUPS[group] || !values) return
+    const applicable = targets.filter((target) => GROUPS[group].elements.has(target.localName))
+    GROUPS[group].properties.forEach((name) => {
+      if (!(name in values) || !STYLED_PROPERTIES.has(name)) return
+      const own = typeof values[name] === 'string'
+      const value = own ? values[name] : (typeof shown[name] === 'string' ? shown[name] : null)
+      if (value === null || refersToMissing(value)) return
+      // A value the source only showed is not written where the target
+      // already shows it: `normal` and `400` are the same weight.
+      const candidates = own ? applicable : applicable.filter((target) => getShownValue(target, name) !== value)
+      const rest = new Set(changeStyledProperty(name, value, candidates, (cmd) => batchCmd.addSubCommand(cmd)))
+      candidates.forEach((target) => {
+        if (rest.has(target)) return
+        if (!styled.has(target)) styled.set(target, new Set())
+        styled.get(target).add(name)
+      })
+    })
+  })
   targets.forEach((target) => {
     const oldValues = {}
     // A text of several lines is laid out again for its new font.
@@ -199,7 +251,7 @@ const pasteProperties = () => {
     Object.entries(groups).forEach(([group, values]) => {
       if (!GROUPS[group]?.elements.has(target.localName) || !values) return
       GROUPS[group].properties.forEach((name) => {
-        if (!(name in values)) return
+        if (!(name in values) || styled.get(target)?.has(name)) return
         const value = typeof values[name] === 'string' ? values[name] : null
         if (value !== null && refersToMissing(value)) return
         const old = target.getAttribute(name)
@@ -216,6 +268,8 @@ const pasteProperties = () => {
     if (Object.keys(oldValues).length) {
       const laidOut = content && Object.keys(oldValues).some((name) => changesLayout(target, name)) && layoutText(target)
       batchCmd.addSubCommand(new ChangeElementCommand(target, oldValues, undefined, laidOut ? content : undefined))
+      changed.push(target)
+    } else if (styled.has(target)) {
       changed.push(target)
     }
   })

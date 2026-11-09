@@ -162,14 +162,11 @@ describe('ViewController (V2)', () => {
     expect(view.center.y).toBeCloseTo(40, 9)
   })
 
-  it('leaves the scroll view to the scroll bars', () => {
+  it('is borderless whatever is asked: the scroll view left in lot S3', () => {
     const editor = fakeEditor()
     const view = new ViewController(editor, { mode: 'scroll' })
-    expect(view.borderless).toBe(false)
-    expect(editor.workarea.classList.contains('se-view-borderless')).toBe(false)
-    editor.workarea.scrollLeft = 500
-    view.panBy(100, 0)
-    expect(editor.workarea.scrollLeft).toBe(400)
-    expect(new ViewController(editor, { mode: 'nonsense' }).mode).toBe('borderless')
+    expect(view.mode).toBe('borderless')
+    expect(view.borderless).toBe(true)
+    expect(editor.workarea.classList.contains('se-view-borderless')).toBe(true)
   })
 })

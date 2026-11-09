@@ -5,13 +5,14 @@
  * - Left: home of the host application and its breadcrumb, when the host
  *   gives them (`homeUrl`, `breadcrumb`), then the name of the document ▾,
  *   which opens the document menu (#main_button: new, open, save, import,
- *   export, document properties, preferences).
+ *   export, preferences; document properties left it in lot S1).
  * - Middle: the save state.
  * - Right: Export ▾ and Save. Below 1 024 px, Export is only in the document
  *   menu. Undo and Redo are in the zoom menu, as in the mockups: their
  *   buttons stay in the bar, out of sight, for their shortcuts and state.
  * @module TopBar
  */
+import { RETIRED_CONTROLS } from '../simplification.js'
 
 export const escapeHtml = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -149,6 +150,12 @@ export class TopBar {
     if (!menu) {
       this.root.append(fragment)
       return
+    }
+    // Document properties and the home page of SVG-Edit leave the menu
+    // (lot S1): the Document section of the Properties tab holds the first.
+    for (const id of RETIRED_CONTROLS) {
+      const item = menu.querySelector(`#${id}`)
+      if (item) this.editor.layout.retire(item)
     }
     menu.removeAttribute('src')
     menu.setAttribute('label', this.editor.title || this.editor.i18next.t('layout.untitled'))

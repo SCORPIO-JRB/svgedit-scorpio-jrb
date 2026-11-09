@@ -1,4 +1,5 @@
 import { mergeDeep } from '@svgedit/svgcanvas/common/util.js'
+import { defaultExtensionsOf } from './simplification.js'
 
 /**
 * Escapes special characters in a regular expression.
@@ -51,7 +52,7 @@ export default class ConfigObj {
     /**
       * Preferences.
       * @interface module:SVGEditor.Prefs
-      * @property {string} [lang="en"] Two-letter language code. The language must exist in the Editor Preferences language list. Defaults to "en" if `locale.js` detection does not detect another language.
+      * @property {"en"|"fr"} [lang="en"] Language code: English or French since lot S3. Any other language gives English, and the preference becomes "en".
       * @property {string} [bkgd_color="#FFF"] Color hex for canvas background color. Defaults to white.
       * @property {string} [bkgd_url=""] Background raster image URL. This image will fill the background of the document; useful for tracing purposes.
       * @property {"embed"|"ref"} [img_save="embed"] Defines whether included raster images should be saved as Data URIs when possible, or as URL references. Settable in the Document Properties dialog.
@@ -118,12 +119,11 @@ export default class ConfigObj {
       * @property {string[]} [extensions=[]] Extensions to load on startup. Use an array in `setConfig` and comma separated file names in the URL.Extension names must begin with "ext-".
       *   Note that as of version 2.7, paths containing "/", "\", or ":", are disallowed for security reasons.
       *   Although previous versions of this list would entirely override the default list, as of version 2.7, the defaults will always be added to this explicit list unless the configuration `noDefaultExtensions` is included.
-      *   See {@link module:SVGEditor~defaultExtensions}.
+      *   See {@link module:SVGEditor~defaultExtensions}. The canvas layout leaves ext-shapes and ext-layer_view out of the defaults (lot S1); this list still loads them.
       * @property {string[]} [allowedOrigins=[]] Used by `ext-xdomain-messaging.js` to indicate which origins are permitted for cross-domain messaging (e.g., between the embedded editor and main editor code).
       *   Besides explicit domains, one might add '*' to allow all domains (not recommended for privacy/data integrity of your user's content!),
       *   `window.location.origin` for allowing the same origin (should be safe if you trust all apps on your domain), 'null' to allow `file:///` URL usage
       * @property {string} [paramurl] This was available via URL only. Allowed an un-encoded URL within the query string (use "url" or "source" with a data: URI instead)
-      * @property {Float} [canvas_expansion=3] The minimum area visible outside the canvas, as a multiple of the image dimensions. The larger the number, the more one can scroll outside the canvas. Scroll view only.
       * @property {"canvas"|"classic"} [layout="canvas"] The layout of the editor (lot V3): "canvas" puts the canvas under a top bar of 40 px, the tools in a floating bar and properties, layers and code in a right panel that Ctrl+\ hides; "classic" is the layout of SVG-Edit, kept until the end of V4. Read at start; `?layout=classic` in the URL.
       * @property {string} [homeUrl=""] Link of the home button of the top bar, given by the host application (canvas layout); http(s) only, never from the URL.
       * @property {Array<string|{label: string, href?: string}>} [breadcrumb=[]] Breadcrumb of the host application before the name of the document, such as `["Le Perreux", {label: "Synoptiques", href: "/synoptiques"}]` (canvas layout); never from the URL.
@@ -133,7 +133,6 @@ export default class ConfigObj {
       * @property {Array<{id: string, name: string, stroke: string, width: number, dash?: string, arrow?: boolean, className?: string}>|null} [fluids=null] Styles of the orthogonal connectors (lot V7), one per fluid; the first is that of the first connector. Null for the fluids of the editor (fluids.js); never from the URL.
       * @property {"auto"|"orthogonal"|"straight"} [connectorRouting="auto"] Route of a new connector (lot V7): orthogonal from a port of a symbol and straight between two plain objects ("auto"), always orthogonal, or always straight.
       * @property {Array<{id: string, name: string, description?: string, width?: number, height?: number, layers: Array<{name: string, locked?: boolean, content?: string}>, current?: string, frames?: Array<object>, grid?: {show?: boolean, snap?: boolean, step?: number}}>|null} [templates=null] Templates of the document menu (lot V7). Null for blank, technical diagram and synoptic 1 920 × 1 080; never from the URL.
-      * @property {"borderless"|"scroll"} [view="borderless"] The view of the drawing (lot V2): "borderless" has no edge and no scroll bar, the wheel scrolls it and Ctrl+wheel zooms from 1 % to 6 400 %; "scroll" is the canvas of SVG-Edit with scroll bars, kept until the end of V3. Read at start.
       * @property {PlainObject} [initFill] Init fill properties
       * @property {string} [initFill.color="FF0000"] The initial fill color. Must be a hex code string. Defaults to solid red.
       * @property {Float} [initFill.opacity=1] The initial fill opacity. Must be a number between 0 and 1
@@ -174,8 +173,6 @@ export default class ConfigObj {
 
     this.defaultConfig = {
       canvasName: 'default',
-      canvas_expansion: 3,
-      view: 'borderless',
       layout: 'canvas',
       homeUrl: '',
       breadcrumb: [],
@@ -270,7 +267,6 @@ export default class ConfigObj {
       // 'ext-imagelib',
       // 'ext-arrows',
       'ext-markers',
-      // 'ext-overview_window', disabled until we fix performance issue
       'ext-panning',
       'ext-shapes',
       'ext-polystar',
@@ -319,9 +315,15 @@ export default class ConfigObj {
   setupCurConfig () {
     const curConfig = { ...this.defaultConfig, ...this.curConfig } // Now safe to merge with priority for curConfig in the event any are already set
 
-    // Now deal with extensions and other array config
+    // Now deal with extensions and other array config: the defaults of the
+    // layout, then those asked for by `extensions`, each once, as the option
+    // says (they used to be dropped). The canvas layout no longer loads by
+    // default the extensions whose button it retired (lot S1).
     if (!curConfig.noDefaultExtensions) {
-      curConfig.extensions = [...this.defaultExtensions]
+      curConfig.extensions = [...new Set([
+        ...defaultExtensionsOf(this.defaultExtensions, curConfig.layout),
+        ...(curConfig.extensions ?? [])
+      ])]
     }
     // Export updated config
     this.curConfig = curConfig

@@ -65,8 +65,10 @@ in the API for more on this.
 
 ## Example
 
-The basic Hello world extension (in `/editor/extensions/ext-helloworld.js`)
-can be seen as an example on how to create a basic extension. This extension
+The basic Hello world extension of SVG-Edit
+(`src/editor/extensions/ext-helloworld/` in the upstream repository; this fork
+removed it, never loaded, in lot S3) can be seen as an example on how to create
+a basic extension. This extension
 adds a "mode" button to the bottom of the left panel that changes the mode,
 then shows a "Hello world" message whenever the canvas is clicked on. See
 [extension in action](https://svg-edit.github.io/svgedit/releases/latest/editor/svg-editor.html?extensions=ext-helloworld.js).

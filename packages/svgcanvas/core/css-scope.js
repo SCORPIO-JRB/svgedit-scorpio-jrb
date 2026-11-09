@@ -44,11 +44,12 @@ export const splitTopLevel = (text, separator) => {
 /**
  * The index just after a comment or a string that starts at `i`, or `i`
  * when none starts there.
+ * @function module:css-scope.skipInert
  * @param {string} text
  * @param {Integer} i
  * @returns {Integer}
  */
-const skipInert = (text, i) => {
+export const skipInert = (text, i) => {
   if (text[i] === '/' && text[i + 1] === '*') {
     const end = text.indexOf('*/', i + 2)
     return end === -1 ? text.length : end + 2
@@ -64,11 +65,12 @@ const skipInert = (text, i) => {
 
 /**
  * The index of the first `{`, `;` or `}` at the top level from `i`.
+ * @function module:css-scope.findStop
  * @param {string} text
  * @param {Integer} i
  * @returns {Integer} `text.length` when there is none
  */
-const findStop = (text, i) => {
+export const findStop = (text, i) => {
   let depth = 0
   while (i < text.length) {
     const next = skipInert(text, i)
@@ -88,11 +90,12 @@ const findStop = (text, i) => {
 
 /**
  * The index just after the block that opens at `open`.
+ * @function module:css-scope.blockEnd
  * @param {string} text
  * @param {Integer} open - Index of a `{`
  * @returns {Integer}
  */
-const blockEnd = (text, open) => {
+export const blockEnd = (text, open) => {
   let depth = 0
   let i = open
   while (i < text.length) {
