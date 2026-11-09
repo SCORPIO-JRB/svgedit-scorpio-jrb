@@ -579,6 +579,25 @@ test.describe('Code tab (V3)', () => {
     expect(await page.evaluate(() => document.getElementById('r1').getAttribute('x'))).toBe('100')
   })
 
+  // The field is transparent over its coloured twin: an opaque selection hid
+  // the selected code.
+  test('selected code stays readable, in both themes', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'reads ::selection through getComputedStyle')
+    const alpha = () => text(page).evaluate((el) => {
+      const parts = getComputedStyle(el, '::selection').backgroundColor.match(/[\d.]+/g).map(Number)
+      return parts.length === 4 ? parts[3] : 1
+    })
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate((theme) => { document.querySelector('.se-editor').dataset.seTheme = theme }, theme)
+      const value = await alpha()
+      expect(value, theme).toBeGreaterThan(0)
+      expect(value, theme).toBeLessThan(0.5)
+    }
+    // Code is not prose: no writing suggestions of the browser over it (the
+    // rewrite button of Edge on a selection).
+    await expect(text(page)).toHaveAttribute('writingsuggestions', 'false')
+  })
+
   test('a syntax error is shown with its line, and nothing is applied', async ({ page }) => {
     await select(page, ['r1'])
     await text(page).fill('<rect id="r1"\n  x="120"\n  y=100 />')

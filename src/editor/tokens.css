@@ -38,6 +38,8 @@
   --se-code-attr: #c9a0ff;
   --se-code-value: #a8d8a0;
   --se-code-comment: #8c8c8c;
+  /* Translucent: the coloured text under the field shows through it. */
+  --se-code-selection: rgb(106 171 241 / 35%);
   --se-control: #2a2a2a;
   --se-control-hover: #2a2a2a;
   --se-backdrop: rgb(0 0 0 / 55%);
@@ -192,6 +194,7 @@
   --se-code-attr: #7b3fb8;
   --se-code-value: #2d6e35;
   --se-code-comment: #6b6b6b;
+  --se-code-selection: rgb(30 102 182 / 25%);
   --se-control: #f2f2f2;
   --se-control-hover: #ebebeb;
   --se-backdrop: rgb(0 0 0 / 30%);
