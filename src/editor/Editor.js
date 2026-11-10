@@ -34,6 +34,7 @@ import { getParentsUntil } from '@svgedit/svgcanvas/common/util.js'
 // to 6 400 % (lot V2).
 import { clampZoom, nextZoomStep } from './view.js'
 import { ungroupSelected } from './binding.js'
+import { RETIRED_SHORTCUTS } from './simplification.js'
 
 const { $id, $click, decode64 } = SvgCanvas
 
@@ -97,31 +98,8 @@ class Editor extends EditorStartup {
     this.docprops = false
     this.configObj.preferences = false
     this.canvMenu = null
-    this.goodLangs = [
-      'ar',
-      'cs',
-      'de',
-      'en',
-      'es',
-      'fa',
-      'fr',
-      'fy',
-      'hi',
-      'it',
-      'ja',
-      'nl',
-      'pl',
-      'pt-BR',
-      'ro',
-      'ru',
-      'sk',
-      'sl',
-      'sv',
-      'tr',
-      'uk',
-      'zh-CN',
-      'zh-TW'
-    ]
+    // French and English (lot S3): any other language falls back to English.
+    this.goodLangs = ['en', 'fr']
 
     const modKey = isMac() ? 'meta+' : 'ctrl+'
     /**
@@ -653,8 +631,11 @@ class Editor extends EditorStartup {
     // were built: the table wins when both bind the same key.
     const buttonCommands = this.commands.list()
     buttonCommands.forEach((command) => this.commands.unregister(command.id))
+    // The canvas layout leaves out the letters that repeat another shortcut
+    // (lot S1): A for Ctrl+A, Shift+O and Shift+P for Tab and Shift+Tab.
+    const retired = this.layout?.canvas ? RETIRED_SHORTCUTS : []
     this.shortcuts.forEach((shortcut, index) => {
-      if (!shortcut.key) return
+      if (!shortcut.key || retired.includes(shortcut.id)) return
       const [spec, pd = false] = Array.isArray(shortcut.key) ? shortcut.key : [shortcut.key]
       this.commands.register({
         id: shortcut.id ?? `shortcut-${index}`,
@@ -854,101 +835,9 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   updateCanvas (center, newCtr) {
-    if (this.view?.borderless) {
-      // The borderless view places the drawing itself (lot V2).
-      this.view.layout({ center, newCtr })
-      return
-    }
-    const zoom = this.svgCanvas.getZoom()
-    const { workarea } = this
-    const cnvs = $id('svgcanvas')
-
-    let w = parseFloat(
-      getComputedStyle(workarea, null).width.replace('px', '')
-    )
-    let h = parseFloat(
-      getComputedStyle(workarea, null).height.replace('px', '')
-    )
-    const wOrig = w
-    const hOrig = h
-    const oldCtr = {
-      x: workarea.scrollLeft + wOrig / 2,
-      y: workarea.scrollTop + hOrig / 2
-    }
-    const multi = this.configObj.curConfig.canvas_expansion
-    w = Math.max(wOrig, this.svgCanvas.contentW * zoom * multi)
-    h = Math.max(hOrig, this.svgCanvas.contentH * zoom * multi)
-
-    if (w === wOrig && h === hOrig) {
-      workarea.style.overflow = 'hidden'
-    } else {
-      workarea.style.overflow = 'scroll'
-    }
-
-    const oldCanY =
-      parseFloat(getComputedStyle(cnvs, null).height.replace('px', '')) / 2
-    const oldCanX =
-      parseFloat(getComputedStyle(cnvs, null).width.replace('px', '')) / 2
-
-    cnvs.style.width = w + 'px'
-    cnvs.style.height = h + 'px'
-    const newCanY = h / 2
-    const newCanX = w / 2
-    const offset = this.svgCanvas.updateCanvas(w, h)
-    this.grid?.update()
-    this.frames?.update()
-    this.connectors?.updateOverlay()
-
-    const ratio = newCanX / oldCanX
-
-    const scrollX = w / 2 - wOrig / 2
-    const scrollY = h / 2 - hOrig / 2
-
-    if (!newCtr) {
-      const oldDistX = oldCtr.x - oldCanX
-      const newX = newCanX + oldDistX * ratio
-
-      const oldDistY = oldCtr.y - oldCanY
-      const newY = newCanY + oldDistY * ratio
-
-      newCtr = {
-        x: newX,
-        y: newY
-      }
-    } else {
-      newCtr.x += offset.x
-      newCtr.y += offset.y
-    }
-
-    if (center) {
-      // Go to top-left for larger documents
-      if (
-        this.svgCanvas.contentW >
-        parseFloat(getComputedStyle(workarea, null).width.replace('px', ''))
-      ) {
-        // Top-left
-        workarea.scrollLeft = offset.x - 10
-        workarea.scrollTop = offset.y - 10
-      } else {
-        // Center
-        workarea.scrollLeft = scrollX
-        workarea.scrollTop = scrollY
-      }
-    } else {
-      workarea.scrollLeft = newCtr.x - wOrig / 2
-      workarea.scrollTop = newCtr.y - hOrig / 2
-    }
-    if (this.configObj.curConfig.showRulers) {
-      this.rulers.updateRulers(cnvs, zoom)
-      workarea.scroll()
-    }
-
-    if (
-      this.configObj.urldata.storagePrompt !== true &&
-      this.storagePromptState === 'ignore'
-    ) {
-      if ($id('dialog_box') != null) $id('dialog_box').style.display = 'none'
-    }
+    // The borderless view places the drawing itself (lot V2), the only view
+    // since lot S3.
+    this.view?.layout({ center, newCtr })
   }
 
   /**
@@ -992,6 +881,8 @@ class Editor extends EditorStartup {
     // Deal with pathedit mode
     this.topPanel.togglePathEditMode(isNode, elems)
     this.topPanel.updateContextPanel()
+    // The rules of the style sheets that give the values shown (lot S2)
+    this.classStyles?.refresh()
     this.svgCanvas.runExtensions(
       'selectedChanged',
       /** @type {module:svgcanvas.SvgCanvas#event:ext_selectedChanged} */ {
@@ -1073,8 +964,10 @@ class Editor extends EditorStartup {
         // This occurs for the text elements in Firefox. Not for a
         // multi-selection: the panel would show the last changed element alone
         // (and, in the angle field, its own angle).
-      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode && !elem.closest?.('metadata')) {
-        // Not the frames to export, nor other data of the editor (lot V5).
+      } else if (elem && !this.multiselected && !this.selectedElement?.parentNode && !elem.closest?.('metadata') &&
+        elem.localName !== 'style') {
+        // Not the frames to export, nor other data of the editor (lot V5),
+        // nor a style sheet whose rule a step changed (lot S2).
         this.selectedElement = elem
       }
     })
@@ -1096,6 +989,7 @@ class Editor extends EditorStartup {
     if (this.selectedElement && mode === 'select') {
       this.bottomPanel.updateColorpickers()
     }
+    this.classStyles?.refresh()
 
     this.svgCanvas.runExtensions(
       'elementChanged',
@@ -1187,15 +1081,10 @@ class Editor extends EditorStartup {
    */
   zoomChanged (win, bbox, autoCenter) {
     // The borderless view has no scroll bar.
-    const scrbar = this.view?.borderless ? 0 : 15
     const zInfo = this.svgCanvas.setBBoxZoom(
       bbox,
-      parseFloat(
-        getComputedStyle(this.workarea, null).width.replace('px', '')
-      ) - scrbar,
-      parseFloat(
-        getComputedStyle(this.workarea, null).height.replace('px', '')
-      ) - scrbar
+      parseFloat(getComputedStyle(this.workarea, null).width.replace('px', '')),
+      parseFloat(getComputedStyle(this.workarea, null).height.replace('px', ''))
     )
     if (!zInfo) {
       return
@@ -1345,45 +1234,7 @@ class Editor extends EditorStartup {
     const zoom = this.svgCanvas.getZoom()
     const newZoom = clampZoom(level)
     if (!Number.isFinite(newZoom) || Math.abs(newZoom - zoom) < 1e-9) { return }
-    if (this.view?.borderless) {
-      this.view.zoomAt(newZoom, clientX, clientY)
-      this.showZoom(newZoom)
-      this.zoomDone()
-      this.svgCanvas.runExtensions('zoomChanged', newZoom)
-      return
-    }
-
-    const { workarea } = this
-    const area = workarea.getBoundingClientRect()
-    const anchorX = clientX ?? area.left + workarea.clientWidth / 2
-    const anchorY = clientY ?? area.top + workarea.clientHeight / 2
-    // Document point under the anchor, through the first layer's screen CTM
-    // (svgcontent itself carries an x/y offset).
-    const layer = this.svgCanvas.getSvgContent().querySelector('g')
-    const ctm = layer?.getScreenCTM?.()
-    this.svgCanvas.setZoom(newZoom)
-    if (!ctm) {
-      this.updateCanvas(true)
-    } else {
-      const inverse = ctm.inverse()
-      const point = {
-        x: inverse.a * anchorX + inverse.c * anchorY + inverse.e,
-        y: inverse.b * anchorX + inverse.d * anchorY + inverse.f
-      }
-      const width = parseFloat(getComputedStyle(workarea, null).width)
-      const height = parseFloat(getComputedStyle(workarea, null).height)
-      this.updateCanvas(false, {
-        x: point.x * newZoom - (anchorX - area.left) + width / 2,
-        y: point.y * newZoom - (anchorY - area.top) + height / 2
-      })
-      // Correct any residual offset (rulers, borders) by measuring where the
-      // point landed.
-      const after = layer.getScreenCTM()
-      if (after) {
-        workarea.scrollLeft += (after.a * point.x + after.c * point.y + after.e) - anchorX
-        workarea.scrollTop += (after.b * point.x + after.d * point.y + after.f) - anchorY
-      }
-    }
+    this.view?.zoomAt(newZoom, clientX, clientY)
     this.showZoom(newZoom)
     this.zoomDone()
     this.svgCanvas.runExtensions('zoomChanged', newZoom)

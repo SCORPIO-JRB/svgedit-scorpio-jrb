@@ -3,8 +3,7 @@
  *
  * One controller for every way of moving or zooming the drawing: the wheel,
  * a pinch, Space+drag, the middle button, the zoom field and menu, the zoom
- * tool, the overview and the keyboard. The rulers, the grid and the overview
- * follow it.
+ * tool and the keyboard. The rulers and the grid follow it.
  *
  * Borderless view, the default: the drawing has no edge. The camera is a
  * zoom and the position, in the view, of the origin of the drawing; nothing
@@ -15,11 +14,11 @@
  * is centred under the view again and the drawing moved on it by the same
  * amount, in one redraw. There is no scroll bar, the view never ends.
  *
- * Scroll view, option `view: 'scroll'`: the canvas of SVG-Edit, three times
- * the drawing, with scroll bars. Kept until the end of V3.
+ * It is the only view since lot S3: the scroll view of SVG-Edit (option
+ * `view: 'scroll'`, three times the drawing with scroll bars) was kept until
+ * the end of V3. That option now gives the borderless view.
  */
 
-export const VIEW_MODES = ['borderless', 'scroll']
 export const ZOOM_MIN = 0.01
 export const ZOOM_MAX = 64
 // The steps of the keyboard and of the zoom buttons, from 1 % to 6 400 %.
@@ -94,12 +93,10 @@ export const placeSurface = (camera, offset, slack) => {
 export class ViewController {
   /**
    * @param {object} editor The editor: its workarea, svgCanvas and $container
-   * @param {object} [options]
-   * @param {"borderless"|"scroll"} [options.mode="borderless"]
    */
-  constructor (editor, { mode = 'borderless' } = {}) {
+  constructor (editor) {
     this.editor = editor
-    this.mode = VIEW_MODES.includes(mode) ? mode : 'borderless'
+    this.mode = 'borderless'
     /** @type {Camera|null} What the view shows */
     this.camera = null
     /** @type {Camera|null} What was asked; differs from camera by less than a pixel */
@@ -108,10 +105,10 @@ export class ViewController {
     this.slack = 0
     this.size = null
     this.frame = null
-    if (this.borderless) editor.workarea.classList.add('se-view-borderless')
+    editor.workarea.classList.add('se-view-borderless')
     // A side panel that opens changes the view, not the window: the middle
     // of the view stays where it is, and the rulers follow.
-    if (this.borderless && typeof ResizeObserver === 'function') {
+    if (typeof ResizeObserver === 'function') {
       this.resizeObserver = new ResizeObserver(() => {
         const { width, height } = this.viewport
         if (this.size && (width !== this.size.width || height !== this.size.height)) editor.updateCanvas()
@@ -120,8 +117,11 @@ export class ViewController {
     }
   }
 
+  /**
+   * @returns {boolean} Always true since lot S3; kept for the extensions that read it
+   */
   get borderless () {
-    return this.mode === 'borderless'
+    return true
   }
 
   get workarea () {
@@ -234,19 +234,12 @@ export class ViewController {
    */
   panBy (dx, dy) {
     if (!dx && !dy) return
-    if (!this.borderless) {
-      this.workarea.scrollLeft -= dx
-      this.workarea.scrollTop -= dy
-      return
-    }
     if (!this.target) this.layout()
     this.apply({ ...this.target, x: this.target.x + dx, y: this.target.y + dy })
   }
 
   /**
    * Zooms, keeping the point of the drawing under the anchor where it is.
-   * The zoom set on the canvas must already be the new one in the scroll view
-   * (see Editor.zoomAt).
    * @param {number} level
    * @param {number} [clientX] The anchor, in client coordinates; the middle of the view by default
    * @param {number} [clientY]
@@ -273,11 +266,6 @@ export class ViewController {
    * @returns {void}
    */
   centerOn (x, y) {
-    if (!this.borderless) {
-      const zoom = this.canvas.getZoom()
-      this.editor.updateCanvas(false, { x: x * zoom, y: y * zoom })
-      return
-    }
     if (!this.target) this.layout()
     const { width, height } = this.viewport
     const { zoom } = this.target
@@ -290,7 +278,8 @@ export class ViewController {
    * @returns {{x: number, y: number}} The point of the drawing under a point of the screen
    */
   screenToDoc (clientX, clientY) {
-    if (this.borderless && this.camera) {
+    // Before the first layout, the drawing as the browser places it.
+    if (this.camera) {
       const { left, top } = this.origin
       const { zoom, x, y } = this.camera
       return { x: (clientX - left - x) / zoom, y: (clientY - top - y) / zoom }
@@ -310,7 +299,7 @@ export class ViewController {
    * @returns {{x: number, y: number}} Where a point of the drawing is on the screen
    */
   docToScreen (x, y) {
-    if (this.borderless && this.camera) {
+    if (this.camera) {
       const { left, top } = this.origin
       const { zoom } = this.camera
       return { x: left + this.camera.x + x * zoom, y: top + this.camera.y + y * zoom }

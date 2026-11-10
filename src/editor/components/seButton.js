@@ -1,7 +1,7 @@
 /* globals svgEditor */
 import './seIcon.js'
 import { t } from '../locale.js'
-import { setControlName, bindElementCommand, unbindElementCommand } from '../commands.js'
+import { adoptTitle, controlTitle, bindElementCommand, unbindElementCommand } from '../commands.js'
 const template = document.createElement('template')
 template.innerHTML = `
   <style>
@@ -132,7 +132,9 @@ export class ToolButton extends HTMLElement {
     if (oldValue === newValue) return
     switch (name) {
       case 'title':
-        setControlName(this, this.$div, t(newValue), this.getAttribute('shortcut'), t)
+        // Removed by adoptTitle: the name stays.
+        if (newValue === null) break
+        adoptTitle(this, this.$div, newValue, t)
         this.$label.textContent = this.seTooltip?.label ?? ''
         this.$kbd.textContent = this.seTooltip?.shortcut ?? ''
         break
@@ -180,7 +182,7 @@ export class ToolButton extends HTMLElement {
    * @returns {any}
    */
   get title () {
-    return this.getAttribute('title')
+    return controlTitle(this)
   }
 
   /**

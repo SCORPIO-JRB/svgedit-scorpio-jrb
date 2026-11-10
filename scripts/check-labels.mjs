@@ -25,8 +25,7 @@ const EXEMPT_DIRS = {
   'src/editor/tests': 'test harness pages',
   'src/editor/images': 'icons',
   'src/editor/fonts': 'fonts',
-  'src/editor/components/jgraduate': 'colour picker plug-ins, replaced by se-color-field in V3',
-  'src/editor/extensions/ext-helloworld': 'sample extension, not loaded by default'
+  'src/editor/components/jgraduate': 'colour picker plug-ins, replaced by se-color-field in V3'
 }
 const EXEMPT_FILES = {
   'src/editor/index.html': 'host page',

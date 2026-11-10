@@ -13,6 +13,7 @@ import { ViewController } from './view.js'
 import { GridLayer } from './grid.js'
 import { FrameLayer } from './frames.js'
 import { initStructure } from './structure.js'
+import { initClassStyles } from './class-styles.js'
 import { SymbolLibrary, SymbolPanel } from './symbols.js'
 import { LibraryDrawer } from './panels/LibraryDrawer.js'
 import { ConnectorTool, ConnectorPanel } from './connectors.js'
@@ -80,6 +81,10 @@ class EditorStartup {
     this.configObj.load()
     this.theme?.set(this.configObj.pref('theme'))
     const { i18next, langParam } = await putLocale(this.configObj.pref('lang'), this.goodLangs)
+    // The extensions load their strings in the language of the preference:
+    // a language the editor does not have (one of those that lot S3 took
+    // out) becomes the one it fell back to, or their labels would show keys.
+    if (langParam !== this.configObj.pref('lang')) this.configObj.pref('lang', langParam)
     // The language of the interface, for screen readers; the page gets it
     // only when it declares none.
     this.$container?.setAttribute('lang', langParam)
@@ -150,7 +155,7 @@ class EditorStartup {
     )
     // One controller for every move and zoom of the view, and the grid it
     // draws over the whole view (lot V2).
-    this.view = new ViewController(this, { mode: this.configObj.curConfig.view })
+    this.view = new ViewController(this)
     this.grid = new GridLayer(this)
     // The snapping takes the neighbours in the view.
     this.svgCanvas.setVisibleRectProvider(() => this.view.visibleRect())
@@ -174,6 +179,8 @@ class EditorStartup {
     this.commands.register({ id: 'preview', label: 'preview.open', run: () => this.preview.open() })
     // Lock and visibility of objects (lot V7)
     initStructure(this)
+    // Values given by a rule of the style sheets: changed there, after asking (lot S2)
+    this.classStyles = initClassStyles(this)
     // Symbol libraries (lot V7), in both layouts
     this.symbols = new SymbolLibrary(this)
     // Orthogonal connectors: ports, tool, route, elbows, fluids (lot V7)
@@ -484,13 +491,11 @@ class EditorStartup {
     // Zoom with Ctrl/Cmd + wheel and with a trackpad pinch (which browsers send
     // as a wheel event with ctrlKey), anchored on the cursor and proportional
     // to the gesture. Alt + wheel is kept as an alias. A plain wheel scrolls,
-    // and Shift + wheel scrolls horizontally: the view does it in the
-    // borderless view, which has no scroll bar (lot V2), the browser in the
-    // scroll view.
+    // and Shift + wheel scrolls horizontally: the view does it, as it has no
+    // scroll bar (lot V2).
     this.workarea.addEventListener('wheel', (e) => {
       const unit = e.deltaMode === 1 ? 33 : (e.deltaMode === 2 ? 400 : 1)
       if (!(e.ctrlKey || e.metaKey || e.altKey)) {
-        if (!this.view.borderless) { return }
         e.preventDefault()
         let dx = e.deltaX * unit
         let dy = e.deltaY * unit
@@ -568,46 +573,9 @@ class EditorStartup {
         }
       })
     })
-    // ref: https://stackoverflow.com/a/1038781
-    function getWidth () {
-      return Math.max(
-        document.body.scrollWidth,
-        document.documentElement.scrollWidth,
-        document.body.offsetWidth,
-        document.documentElement.offsetWidth,
-        document.documentElement.clientWidth
-      )
-    }
-
-    function getHeight () {
-      return Math.max(
-        document.body.scrollHeight,
-        document.documentElement.scrollHeight,
-        document.body.offsetHeight,
-        document.documentElement.offsetHeight,
-        document.documentElement.clientHeight
-      )
-    }
-    const winWh = {
-      width: getWidth(),
-      height: getHeight()
-    }
-
+    // The point in the middle of the view stays there.
     window.addEventListener('resize', () => {
-      if (this.view.borderless) {
-        // The point in the middle of the view stays there.
-        this.updateCanvas()
-        return
-      }
-      Object.entries(winWh).forEach(([type, val]) => {
-        const curval = (type === 'width') ? window.innerWidth - 15 : window.innerHeight
-        this.workarea['scroll' + (type === 'width' ? 'Left' : 'Top')] -= (curval - val) / 2
-        winWh[type] = curval
-      })
-    })
-
-    this.workarea.addEventListener('scroll', () => {
-      this.rulers.manageScroll()
+      this.updateCanvas()
     })
 
     $id('stroke_width').value = this.configObj.curConfig.initStroke.width

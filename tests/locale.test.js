@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { putLocale, t } from '../src/editor/locale.js'
 
-const goodLangs = ['en', 'fr', 'de']
+// The languages of the editor since lot S3.
+const goodLangs = ['en', 'fr']
 const originalNavigator = {
   userLanguage: navigator.userLanguage,
   language: navigator.language
@@ -62,10 +63,17 @@ describe('locale loader', () => {
 
   test('uses navigator.language with supported locale', async () => {
     Reflect.deleteProperty(navigator, 'userLanguage')
-    setNavigatorProp('language', 'de')
+    setNavigatorProp('language', 'fr')
 
     const result = await putLocale('', goodLangs)
-    expect(result.langParam).toBe('de')
+    expect(result.langParam).toBe('fr')
+    expect(t('common.cancel')).toBe('Annuler')
+  })
+
+  test('a language taken out by lot S3 falls back to English', async () => {
+    const result = await putLocale('de', goodLangs)
+    expect(result.langParam).toBe('en')
+    expect(t('common.cancel')).toBe('Cancel')
   })
 
   test('uses explicit lang parameter over navigator', async () => {

@@ -63,13 +63,15 @@ export const lengthOf = (value) => {
 }
 
 /**
- * The stroke width of a shape, as its field shows it: its own, or the one it
- * is drawn with (inherited from a group).
+ * The stroke width of a shape, as its field shows it: its own (a rule, its
+ * style attribute, its attribute), or the one it is drawn with (inherited
+ * from a group).
+ * @param {object} svgCanvas
  * @param {Element} elem
  * @returns {string|number}
  */
-export const strokeWidthOf = (elem) => {
-  const own = elem.getAttribute('stroke-width')
+export const strokeWidthOf = (svgCanvas, elem) => {
+  const own = styledAttribute(svgCanvas, elem, 'stroke-width')
   if (own !== null) return lengthOf(own)
   const drawn = elem.ownerDocument?.defaultView?.getComputedStyle?.(elem)?.strokeWidth
   return drawn ? lengthOf(drawn) : '1'
@@ -91,3 +93,16 @@ export const shapesOf = (elements) => elements.flatMap((elem) => {
   }
   return SHAPES.has(elem.tagName) ? [elem] : []
 })
+
+/**
+ * The value of a property of an element as it is drawn when a rule of the
+ * style sheets or its `style` attribute gives it (lot S2), else its
+ * attribute. A field showed the attribute, which these two override: on an
+ * object styled by a class, the fill read black.
+ * @param {object} svgCanvas
+ * @param {Element} elem
+ * @param {string} name - A property, in lower case
+ * @returns {string|null}
+ */
+export const styledAttribute = (svgCanvas, elem, name) =>
+  svgCanvas?.getStyledValue?.(elem, name)?.value ?? elem.getAttribute(name)

@@ -157,6 +157,10 @@ test.describe('Command registry (V1)', () => {
   })
 
   test('the layer view shortcut, given as a translation key, now works', async ({ page }) => {
+    // ext-layer_view is no longer loaded by default in the canvas layout
+    // (lot S1): the extensions option loads it.
+    await visitAndApproveStorage(page, { query: '?extensions=ext-layer_view' })
+    await page.waitForFunction(() => window.svgEditor.extensionsAdded)
     const command = await page.evaluate(() => window.svgEditor.commands.get('tool_layerView')?.shortcuts)
     expect(command).toEqual(['mod+shift+l'])
   })
@@ -201,5 +205,34 @@ test.describe('Tooltips (V1)', () => {
       }
     })
     expect(control).toEqual({ role: 'button', name: 'Undo (Ctrl+Z)', keys: 'Control+Z', disabled: 'true', title: null })
+  })
+
+  test('a control with a tooltip shows no native tooltip as well', async ({ page }) => {
+    const found = await page.evaluate(() => {
+      const offenders = []
+      const controls = []
+      const collect = (root) => {
+        for (const el of root.querySelectorAll('*')) {
+          if (el.seTooltip?.label) controls.push(el)
+          if (el.shadowRoot) collect(el.shadowRoot)
+        }
+      }
+      collect(document)
+      for (const control of controls) {
+        // The browser shows the title of the element under the pointer, or
+        // of the nearest element above it.
+        for (let node = control; node; node = node.parentNode ?? node.host) {
+          if (node.nodeType === 1 && node.hasAttribute('title')) offenders.push(`${control.id || control.localName}: ${node.id || node.localName}`)
+        }
+        for (const el of control.shadowRoot?.querySelectorAll('[title]') ?? []) {
+          offenders.push(`${control.id || control.localName}: ${el.localName}`)
+        }
+      }
+      return { count: controls.length, offenders, title: document.getElementById('tool_select').title }
+    })
+    expect(found.count).toBeGreaterThan(20)
+    expect(found.offenders).toEqual([])
+    // The title stays the name of the button.
+    expect(found.title).toBe('tools.mode_select')
   })
 })

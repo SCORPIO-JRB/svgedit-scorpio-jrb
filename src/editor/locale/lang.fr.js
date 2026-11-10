@@ -686,6 +686,25 @@ export default {
     kind_signal: 'signal',
     kind_any: 'libre'
   },
+  classstyles: {
+    one: "{{what}} vient de la règle {{selector}}, qui s'applique à {{objects}}. Modifier la règle ?",
+    several: 'Ces valeurs viennent des règles {{rules}}. Modifier ces règles ?',
+    rule: '{{selector}} ({{objects}})',
+    objects_one: '{{count}} objet',
+    objects_other: '{{count}} objets',
+    what_color: 'Cette couleur',
+    what_width: 'Cette épaisseur',
+    what_font: 'Cette police',
+    what_size: 'Cette taille',
+    what_opacity: 'Cette opacité',
+    what_other: 'Cette valeur',
+    what_several: 'Ces valeurs',
+    modify_one: 'Modifier la règle',
+    modify_other: 'Modifier les règles',
+    kept: 'La modification est gardée : Ctrl+Z la défait.',
+    from_rule: 'Valeurs de la règle {{selector}}',
+    from_rules: 'Valeurs des règles {{selectors}}'
+  },
   structure: {
     hide: 'Masquer la sélection',
     lock: 'Verrouiller la sélection',

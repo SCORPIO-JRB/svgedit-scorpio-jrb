@@ -49,17 +49,6 @@ class Rulers {
   }
 
   /**
-   * @type {Module}
-  */
-  manageScroll () {
-    // The rulers of the borderless view are drawn for the view alone, and
-    // again at each move (see view.js).
-    if (this.editor.view?.borderless) return
-    if (this.rulerX) this.rulerX.scrollLeft = this.editor.workarea.scrollLeft
-    if (this.rulerY) this.rulerY.scrollTop = this.editor.workarea.scrollTop
-  }
-
-  /**
    *
    * @param {HTMLDivElement} [scanvas]
    * @param {Float} [zoom]
@@ -72,9 +61,9 @@ class Rulers {
     let d; let i
     const limit = 30000
     const contentElem = this.svgCanvas.getSvgContent()
-    // Borderless view: the rulers measure the view, from the origin of the
-    // drawing in it.
-    const view = this.editor.view?.borderless && this.editor.view.camera ? this.editor.view : null
+    // The rulers measure the view, from the origin of the drawing in it;
+    // before its first layout, the canvas.
+    const view = this.editor.view?.camera ? this.editor.view : null
     const units = getTypeMap()
     const unit = units[this.editor.configObj.curConfig.baseUnit] // 1 = 1px
 

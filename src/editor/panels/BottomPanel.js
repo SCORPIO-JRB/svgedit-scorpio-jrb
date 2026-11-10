@@ -1,7 +1,7 @@
 import SvgCanvas from '@svgedit/svgcanvas'
 import { jGraduate } from '../components/jgraduate/jQuery.jGraduate.js'
 import BottomPanelHtml from './BottomPanel.html'
-import { commonValueOf, shapesOf, strokeWidthOf } from './panelValues.js'
+import { commonValueOf, shapesOf, strokeWidthOf, styledAttribute } from './panelValues.js'
 
 const { $id } = SvgCanvas
 
@@ -42,7 +42,7 @@ class BottomPanel {
       const { relative } = e.detail
       const shapes = shapesOf(this.editor.svgCanvas.getSelectedElements())
       this.editor.svgCanvas.changeSelectedAttributeEach('stroke-width', (elem) => {
-        const current = Number(strokeWidthOf(elem))
+        const current = Number(strokeWidthOf(this.editor.svgCanvas, elem))
         return Number.isFinite(current) ? relative(current) : undefined
       }, shapes)
       return
@@ -167,7 +167,7 @@ class BottomPanel {
       // A field showing "Mixed": each element's own opacity changes, in percent.
       const { relative } = evt.detail
       this.editor.svgCanvas.changeSelectedAttributeEach('opacity', (elem) => {
-        const current = Number.parseFloat(elem.getAttribute('opacity') ?? 1)
+        const current = Number.parseFloat(styledAttribute(this.editor.svgCanvas, elem, 'opacity') ?? 1)
         return Number.isFinite(current) ? relative(current * 100) / 100 : undefined
       })
       return
@@ -272,19 +272,20 @@ class BottomPanel {
   showCommonValues (elements) {
     const { svgCanvas } = this.editor
     const shapes = shapesOf(elements)
-    const width = commonValueOf(shapes, strokeWidthOf)
+    const styled = (elem, name) => styledAttribute(svgCanvas, elem, name)
+    const width = commonValueOf(shapes, (elem) => strokeWidthOf(svgCanvas, elem))
     if (width === undefined) {
       $id('stroke_width').mixed = true
     } else {
       $id('stroke_width').value = width
     }
-    const dash = commonValueOf(shapes, (elem) => elem.getAttribute('stroke-dasharray') || 'none')
+    const dash = commonValueOf(shapes, (elem) => styled(elem, 'stroke-dasharray') || 'none')
     if (dash === undefined) {
       $id('stroke_style').mixed = true
     } else {
       $id('stroke_style').value = dash
     }
-    const opacity = commonValueOf(elements, (elem) => elem.getAttribute('opacity') ?? '1')
+    const opacity = commonValueOf(elements, (elem) => styled(elem, 'opacity') ?? '1')
     if (opacity === undefined) {
       $id('opacity').mixed = true
     } else {

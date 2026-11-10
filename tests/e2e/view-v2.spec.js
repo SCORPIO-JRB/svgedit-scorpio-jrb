@@ -243,13 +243,13 @@ test('fitting the zoom to a tiny object stays within 6 400 %', async ({ page }) 
   expect(Math.abs(tiny.x + tiny.width / 2 - (area.x + area.width / 2))).toBeLessThan(1)
 })
 
-test('the scroll view stays available with the option view: "scroll"', async ({ page }) => {
+test('the option view: "scroll" gives the borderless view since lot S3', async ({ page }) => {
   await page.goto('/index.html?view=scroll')
   await page.waitForFunction(() => window.svgEditor?.extensionsAdded)
   const layout = await page.evaluate(() => ({
     mode: window.svgEditor.view.mode,
     overflow: getComputedStyle(document.getElementById('workarea')).overflow
   }))
-  expect(layout.mode).toBe('scroll')
-  expect(layout.overflow).not.toBe('hidden')
+  expect(layout.mode).toBe('borderless')
+  expect(layout.overflow).toBe('hidden')
 })

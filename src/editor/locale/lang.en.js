@@ -683,6 +683,25 @@ export default {
     kind_signal: 'signal',
     kind_any: 'any'
   },
+  classstyles: {
+    one: '{{what}} comes from the rule {{selector}}, which applies to {{objects}}. Change the rule?',
+    several: 'These values come from the rules {{rules}}. Change these rules?',
+    rule: '{{selector}} ({{objects}})',
+    objects_one: '{{count}} object',
+    objects_other: '{{count}} objects',
+    what_color: 'This colour',
+    what_width: 'This width',
+    what_font: 'This font',
+    what_size: 'This size',
+    what_opacity: 'This opacity',
+    what_other: 'This value',
+    what_several: 'These values',
+    modify_one: 'Change the rule',
+    modify_other: 'Change the rules',
+    kept: 'The change is kept: Ctrl+Z undoes it.',
+    from_rule: 'Values of the rule {{selector}}',
+    from_rules: 'Values of the rules {{selectors}}'
+  },
   structure: {
     hide: 'Hide selection',
     lock: 'Lock selection',

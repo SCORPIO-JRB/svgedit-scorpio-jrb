@@ -25,6 +25,7 @@
  */
 import { escapeHtml } from './TopBar.js'
 import { isShown } from './Inspector.js'
+import { controlTitle } from '../commands.js'
 
 /** Distance from the rotation zone to the bar, in pixels. */
 export const BAR_GAP = 12
@@ -118,7 +119,11 @@ export const SHORTCUT_OF = {
   edit_text: 'select_children',
   edit_nodes: 'select_children',
   select_group_children: 'select_children',
-  tool_flip_h_multi: 'tool_flip_h'
+  tool_flip_h_multi: 'tool_flip_h',
+  // Their letters are gone (lot S1): the command that does the same.
+  tool_clone: 'duplicate',
+  tool_clone_multi: 'duplicate',
+  tool_group_elements: 'group'
 }
 
 /**
@@ -598,7 +603,7 @@ export class ContextBar {
       case 'text': {
         const original = this.original(id)
         if (!original) return null
-        const title = original.getAttribute('title')
+        const title = controlTitle(original)
         const label = type === 'text' ? this.t(TEXT_LABELS[id] ?? title) : (title ? this.t(title) : id)
         const src = original.getAttribute('src')
         const el = type === 'text'
@@ -719,7 +724,7 @@ export class ContextBar {
   buildList (id) {
     const original = this.original(id)
     if (!original) return null
-    const title = original.getAttribute('title')
+    const title = controlTitle(original)
     const label = title ? this.t(title) : id
     const el = document.createElement('button')
     el.type = 'button'
@@ -976,7 +981,7 @@ export class ContextBar {
       } else {
         const original = this.original(id)
         if (!this.applies(original) || original.hasAttribute('disabled')) continue
-        items.push({ id, label: this.t(TEXT_LABELS[id] ?? original.getAttribute('title')), hint: hintOf(editor.commands, id), run: () => original.click() })
+        items.push({ id, label: this.t(TEXT_LABELS[id] ?? controlTitle(original)), hint: hintOf(editor.commands, id), run: () => original.click() })
       }
     }
     return items

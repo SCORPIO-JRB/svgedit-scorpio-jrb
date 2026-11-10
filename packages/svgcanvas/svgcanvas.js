@@ -29,6 +29,7 @@ import {
   changeSelectedAttributeMethod,
   changeSelectedAttributeEachMethod,
   changeSelectedAttributesMethod,
+  changeStyledProperty,
   groupHistoryMethod
 } from './core/undo.js'
 import { init as selectionInit } from './core/selection.js'
@@ -105,6 +106,7 @@ import {
 } from './common/util.js'
 
 import dataStorage from './core/dataStorage.js'
+import { getStyledValue, getShownValue, findStyleSource, elementsStyledBy, readStyleRules } from './core/style-rules.js'
 
 // Shapes that convertToPath turns into a path.
 const CONVERTIBLE_TO_PATH = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
@@ -1455,6 +1457,15 @@ class SvgCanvas {
     this.changeSelectedAttributeEach = changeSelectedAttributeEachMethod // Give each element its own new value, as one undo step.
     this.changeSelectedAttributes = changeSelectedAttributesMethod // Several attributes, as one undo step.
     this.groupHistory = groupHistoryMethod // The changes of a function, as one undo step.
+    // Where a value comes from: a rule of the style sheets, the style attribute (lot S2).
+    this.getStyledValue = (elem, prop) => getStyledValue(elem, prop)
+    this.findStyleSource = (elem, prop) => findStyleSource(elem, prop)
+    this.countStyledBy = (rule, prop) => elementsStyledBy(rule, prop, this.getSvgContent()).length
+    this.hasStyleRules = () => readStyleRules(this.getSvgContent()).length > 0
+    // The value as drawn, and a change of a property where it comes from, for
+    // a change that makes its own step: the eyedropper (lot S4).
+    this.getShownValue = (elem, prop) => getShownValue(elem, prop)
+    this.changeStyledProperty = changeStyledProperty
     this.setBlurNoUndo = setBlurNoUndo // Sets the `stdDeviation` blur value on the selected element without being undoable.
     this.setBlurOffsets = setBlurOffsets // Sets the `x`, `y`, `width`, `height` values of the filter element in order to make the blur not be clipped. Removes them if not neeeded.
     this.setBlur = setBlur // Adds/updates the blur filter to the selected element.

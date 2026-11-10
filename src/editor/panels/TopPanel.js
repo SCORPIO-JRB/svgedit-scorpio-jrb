@@ -3,10 +3,11 @@
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import topPanelHTML from './TopPanel.html'
-import { commonValueOf, lengthOf, roundForField, strokeWidthOf } from './panelValues.js'
+import { commonValueOf, lengthOf, roundForField, strokeWidthOf, styledAttribute } from './panelValues.js'
 import { askText } from '../components/askText.js'
 import { stepTargets } from '../history-steps.js'
 import { renameId, ungroupSelected } from '../binding.js'
+import { controlTitle } from '../commands.js'
 
 const { $qa, $id, $click, isValidUnit, getTypeMap, convertUnit } = SvgCanvas
 
@@ -21,6 +22,15 @@ const SIZED_ALONE = new Set(['path', 'polyline', 'g', 'text', 'use'])
 // or, for a <use>, an x and a y that its transform moves (the fields showed
 // "null" for an import, placed by its transform only).
 const POSITIONED_BY_BOX = new Set(['path', 'polyline', 'g', 'use'])
+/**
+ * The kind of an element for its geometry fields. A polygon of a file is
+ * placed and sized by its box, as a polyline (lot S2: it had the angle
+ * alone); one of the star and polygon tool, which has its `shape`, keeps
+ * the panel of the tool.
+ * @param {Element} elem
+ * @returns {string|undefined}
+ */
+const geometryKind = (elem) => elem?.nodeName === 'polygon' && !elem.hasAttribute('shape') ? 'polyline' : elem?.nodeName
 // Shapes that can be converted to a path.
 const CONVERTIBLE = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
 // Text fields of the panel, the attribute each one shows and its default.
@@ -161,7 +171,7 @@ class TopPanel {
           const childs = this.selectedElement.getElementsByTagName('*')
           let gWidth = null
           for (i = 0, len = childs.length; i < len; i++) {
-            const swidth = lengthOf(childs[i].getAttribute('stroke-width'))
+            const swidth = lengthOf(styledAttribute(this.editor.svgCanvas, childs[i], 'stroke-width'))
 
             if (i === 0) {
               gWidth = swidth
@@ -177,20 +187,20 @@ class TopPanel {
         default: {
           this.editor.bottomPanel.updateColorpickers(false)
 
-          $id('stroke_width').value = strokeWidthOf(this.selectedElement)
-          $id('stroke_style').value =
-            this.selectedElement.getAttribute('stroke-dasharray') || 'none'
+          // As drawn: a rule of the style sheets can give these (lot S2)
+          const styled = (name) => styledAttribute(this.editor.svgCanvas, this.selectedElement, name)
+          $id('stroke_width').value = strokeWidthOf(this.editor.svgCanvas, this.selectedElement)
+          $id('stroke_style').value = styled('stroke-dasharray') || 'none'
           $id('stroke_style').setAttribute('value', $id('stroke_style').value)
 
-          let attr =
-            this.selectedElement.getAttribute('stroke-linejoin') || 'miter'
+          let attr = styled('stroke-linejoin') || 'miter'
 
           if ($id('linejoin_' + attr)) {
             this.setStrokeOpt($id('linejoin_' + attr))
             $id('stroke_linejoin').setAttribute('value', attr)
           }
 
-          attr = this.selectedElement.getAttribute('stroke-linecap') || 'butt'
+          attr = styled('stroke-linecap') || 'butt'
           if ($id('linecap_' + attr)) {
             this.setStrokeOpt($id('linecap_' + attr))
             $id('stroke_linecap').setAttribute('value', attr)
@@ -202,7 +212,7 @@ class TopPanel {
     // All elements including image and group have opacity
     if (this.selectedElement) {
       const opacPerc =
-        (this.selectedElement.getAttribute('opacity') || 1.0) * 100
+        (styledAttribute(this.editor.svgCanvas, this.selectedElement, 'opacity') || 1.0) * 100
       $id('opacity').value = opacPerc
       $id('elem_id').value = this.selectedElement.id
       $id('elem_class').value = this.selectedElement.getAttribute('class') ?? ''
@@ -262,7 +272,9 @@ class TopPanel {
     this.hideTool('selected_panel')
     this.hideTool('angle_panel')
     this.hideTool('multiselected_panel')
-    if (!this.multiselected) { this.setAlignMenu(false) }
+    // The Align menu of the canvas layout takes one object too (lot S1): it
+    // stays open while that object is aligned.
+    if (!this.multiselected && !(elem && this.editor.layout?.canvas)) { this.setAlignMenu(false) }
     this.hideTool('g_panel')
     this.hideTool('rect_panel')
     this.hideTool('circle_panel')
@@ -278,6 +290,7 @@ class TopPanel {
     this.hideTool('scale_panel')
     if (elem) {
       const elname = elem.nodeName
+      const kind = geometryKind(elem)
 
       const angle = this.editor.svgCanvas.getRotationAngle(elem)
       $id('angle').value = angle
@@ -298,9 +311,9 @@ class TopPanel {
         this.displayTool('selected_panel')
         this.displayTool('angle_panel')
         // Elements in this array already have coord fields
-        if (['line', 'circle', 'ellipse', 'polygon'].includes(elname)) {
+        if (['line', 'circle', 'ellipse', 'polygon'].includes(kind)) {
           this.hideTool('xy_panel')
-        } else if (POSITIONED_BY_BOX.has(elname)) {
+        } else if (POSITIONED_BY_BOX.has(kind)) {
           // The box without the stroke, as for a multi-selection.
           this.showSelectionPosition(this.editor.svgCanvas.getSelectionBox?.([elem]))
         } else {
@@ -334,7 +347,7 @@ class TopPanel {
           this.displayTool('xy_panel')
         }
         // W and H of a path, a group or a text alone.
-        if (SIZED_ALONE.has(elname)) {
+        if (SIZED_ALONE.has(kind)) {
           this.showSelectionSize(this.editor.svgCanvas.getSelectionBox?.([elem]), elname === 'text')
         }
 
@@ -446,16 +459,15 @@ class TopPanel {
             this.editor.svgCanvas.hasTextDecoration('line-through')
           $id('tool_text_decoration_overline').pressed =
             this.editor.svgCanvas.hasTextDecoration('overline')
-          $id('tool_font_family').value = elem.getAttribute('font-family')
+          const styled = (name) => styledAttribute(this.editor.svgCanvas, elem, name)
+          $id('tool_font_family').value = styled('font-family')
           $id('tool_text_anchor').setAttribute(
             'value',
             elem.getAttribute('text-anchor')
           )
-          $id('font_size').value = elem.getAttribute('font-size')
-          $id('tool_letter_spacing').value =
-            elem.getAttribute('letter-spacing') ?? 0
-          $id('tool_word_spacing').value =
-            elem.getAttribute('word-spacing') ?? 0
+          $id('font_size').value = styled('font-size')
+          $id('tool_letter_spacing').value = styled('letter-spacing') ?? 0
+          $id('tool_word_spacing').value = styled('word-spacing') ?? 0
           $id('tool_line_height').value = this.editor.svgCanvas.getLineHeight()
           // A text of fixed width can become as wide as its lines again
           $id('tool_text_auto_width').disabled = !this.editor.svgCanvas.getTextWidth()
@@ -985,7 +997,7 @@ class TopPanel {
     ;[trigger, ...popup.querySelectorAll('se-button')].forEach((button) => {
       button.tabIndex = 0
       button.setAttribute('role', 'button')
-      button.setAttribute('aria-label', i18next.t(button.getAttribute('title')))
+      button.setAttribute('aria-label', i18next.t(controlTitle(button)))
       button.addEventListener('keydown', press(button))
     })
     trigger.setAttribute('aria-haspopup', 'true')
@@ -1026,14 +1038,14 @@ class TopPanel {
    */
   showCommonTextValues (texts) {
     TEXT_FIELDS.forEach(([id, attr, fallback]) => {
-      const value = commonValueOf(texts, (text) => text.getAttribute(attr) ?? fallback)
+      const value = commonValueOf(texts, (text) => styledAttribute(this.editor.svgCanvas, text, attr) ?? fallback)
       if (value === undefined) {
         $id(id).mixed = true
       } else {
         $id(id).value = value ?? ''
       }
     })
-    const family = commonValueOf(texts, (text) => text.getAttribute('font-family'))
+    const family = commonValueOf(texts, (text) => styledAttribute(this.editor.svgCanvas, text, 'font-family'))
     if (family === undefined) {
       $id('tool_font_family').mixed = true
     } else {
@@ -1054,15 +1066,15 @@ class TopPanel {
   }
 
   /**
-   * Moves a multi-selection, or a path, polyline, group or imported file
-   * alone, by its X or Y field, which describe its box without the stroke;
+   * Moves a multi-selection, or a path, polyline, polygon of a file, group
+   * or imported file alone, by its X or Y field, which describe its box without the stroke;
    * another element alone keeps the field's own meaning (its x or y).
    * @param {Event} e
    * @returns {void}
    */
   changeSelectionPosition (e) {
     const alone = this.editor.selectedElement
-    if (!this.multiselected && !POSITIONED_BY_BOX.has(alone?.tagName)) {
+    if (!this.multiselected && !POSITIONED_BY_BOX.has(geometryKind(alone))) {
       this.attrChanger(e)
       return
     }
@@ -1116,7 +1128,7 @@ class TopPanel {
    */
   changeEachAttribute (relative, attr, elements, fallback) {
     this.editor.svgCanvas.changeSelectedAttributeEach(attr, (elem) => {
-      const current = Number.parseFloat(elem.getAttribute(attr) ?? fallback)
+      const current = Number.parseFloat(styledAttribute(this.editor.svgCanvas, elem, attr) ?? fallback)
       return Number.isFinite(current) ? relative(current) : undefined
     }, elements)
   }
@@ -1186,6 +1198,12 @@ class TopPanel {
    * @returns {void}
    */
   clickAlign (pos) {
+    // One object, which the Align menu of the canvas layout takes since lot
+    // S1: on the page, as Alt and a letter do; it cannot be distributed.
+    if (this.editor.svgCanvas.getSelectedElements().filter(Boolean).length === 1) {
+      if (!pos.startsWith('distrib')) this.editor.svgCanvas.alignSelectedElements(pos, 'page')
+      return
+    }
     let value = $id('tool_align_relative').value
     if (value === '') {
       value = 'selected'
@@ -1218,7 +1236,7 @@ class TopPanel {
     const valid = isValidUnit(attr, val, this.selectedElement)
 
     if (!valid) {
-      e.target.value = this.selectedElement.getAttribute(attr)
+      e.target.value = styledAttribute(this.editor.svgCanvas, this.selectedElement, attr)
       this.editor.toast(this.editor.i18next.t('notification.invalidAttrValGiven'), { type: 'error' })
       return false
     }

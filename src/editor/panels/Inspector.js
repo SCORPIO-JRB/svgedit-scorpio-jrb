@@ -22,10 +22,16 @@
  * of the head of the tab, each with its name and shortcut, until V4 moves
  * them into the contextual bar. The menu stays inside #tools_top, where
  * TopPanel finds them.
+ *
+ * Since lot S1 of the simplification audit, the settings rarely made in a
+ * synoptic show only when the selection has a value for them (RARE_SETTINGS),
+ * and joins, caps and letter spacing fold under "More options"
+ * (MORE_SETTINGS).
  * @module Inspector
  */
 import SvgCanvas from '@svgedit/svgcanvas'
 import { escapeHtml } from './TopBar.js'
+import { RETIRED_CONTROLS, SHOWN_SHORTCUTS } from '../simplification.js'
 
 const { isValidUnit } = SvgCanvas
 
@@ -112,6 +118,47 @@ const orderOf = (el) => {
  * @returns {boolean}
  */
 export const isShown = (el) => !el.hidden && el.style?.display !== 'none' && !el.classList?.contains('se-inspector-off')
+
+/**
+ * Settings rarely made in a synoptic (lot S1): each shows only when one of
+ * the selected objects already has a value for it, which then stays
+ * readable and editable. They are still read, shown and saved; the Code tab
+ * gives them to an object that has none.
+ * @type {Record<string, (el: Element, canvas: any) => boolean>}
+ */
+export const RARE_SETTINGS = {
+  tool_text_decoration_linethrough: (el) => decorationOf(el).includes('line-through'),
+  tool_text_decoration_overline: (el) => decorationOf(el).includes('overline'),
+  tool_word_spacing: (el, canvas) => hasValue(el, 'word-spacing', ['0', 'normal'], canvas),
+  tool_text_length: (el) => hasValue(el, 'textLength', ['0']),
+  tool_length_adjust: (el) => hasValue(el, 'textLength', ['0']) || hasValue(el, 'lengthAdjust'),
+  // The group of the blur, in Effects.
+  blur: (el, canvas) => Number(canvas?.getBlur?.(el)) > 0
+}
+
+/**
+ * Settings folded under "More options" (lot S1), by section, with the values
+ * that need no mention: the toggle shows a mark when an object has another.
+ */
+export const MORE_SETTINGS = {
+  stroke: { stroke_linejoin: ['stroke-linejoin', ['miter']], stroke_linecap: ['stroke-linecap', ['butt']] },
+  text: { tool_letter_spacing: ['letter-spacing', ['0', 'normal']] }
+}
+
+const decorationOf = (el) => `${el.getAttribute?.('text-decoration') ?? ''} ${el.style?.textDecoration ?? ''}`
+
+/**
+ * @param {Element} el
+ * @param {string} name An attribute, or a property of the style attribute
+ *   or of a rule of the style sheets (lot S2)
+ * @param {string[]} [none] Values that count as none
+ * @param {object} [canvas]
+ * @returns {boolean}
+ */
+const hasValue = (el, name, none = [], canvas = null) => {
+  const value = (canvas?.getStyledValue?.(el, name)?.value ?? el.getAttribute?.(name) ?? el.style?.getPropertyValue?.(name) ?? '').trim()
+  return value !== '' && !none.includes(value) && !none.includes(String(Number.parseFloat(value)))
+}
 
 /** Names of the types of element, for the head of the tab. */
 const TYPE_KEYS = {
@@ -230,6 +277,12 @@ export class Inspector {
   put (el, name) {
     const body = this.body(name)
     if (name === 'actions') this.labelVerbs(el)
+    // The fold of More options stays last (lot S1).
+    const more = [...body.children].find((child) => child.classList.contains('se-more'))
+    if (more && el !== more) {
+      body.insertBefore(el, more)
+      return
+    }
     if (name === 'geometry') {
       const order = orderOf(el)
       const next = [...body.children].find((child) => child !== el && orderOf(child) > order)
@@ -252,17 +305,22 @@ export class Inspector {
    */
   attachTop (fragment, zones) {
     const top = fragment.querySelector('#tools_top')
+    // Lot S1: Reorient path and Align to the page leave the "…" menu; Clone
+    // and Group show the shortcut of the command that does the same, now
+    // that D, C and G are gone.
+    for (const id of RETIRED_CONTROLS) {
+      const el = top.querySelector(`#${id}`)
+      if (el) this.editor.layout.retire(el)
+    }
+    for (const [id, shortcut] of Object.entries(SHOWN_SHORTCUTS)) {
+      const button = top.querySelector(`#${id}`)
+      button?.setAttribute('shortcut', shortcut)
+      button?.setAttribute('shortcut-hint-only', '')
+    }
+    this.buildAlignGroup(top)
+    const letters = top.querySelector('.text_panel')
+    if (letters) this.fold(letters, 'text')
     for (const el of [...top.children]) {
-      // Align to the page goes with the verbs, the blur with the effects.
-      if (el.querySelector?.('#blur') && el.querySelector('#tool_position')) {
-        const wrapper = document.createElement('div')
-        wrapper.className = el.className
-        const position = el.querySelector('#tool_position')
-        // In the menu of verbs, the list says what it does.
-        position.setAttribute('label', 'tools.align_to_page')
-        wrapper.append(position)
-        this.put(wrapper, 'actions')
-      }
       const section = sectionOfTopGroup(el)
       if (!section) continue
       if (section in zones) zones[section](el)
@@ -288,6 +346,81 @@ export class Inspector {
     // The width of the stroke has no label in the bottom bar; here it has a
     // field of its own, named as in the mockups.
     this.root.querySelector('#stroke_width')?.setAttribute('label', 'layout.stroke_width')
+    this.fold(this.body('stroke'), 'stroke')
+  }
+
+  /**
+   * Align opens for one object too (lot S1), in place of Align to the page:
+   * its group leaves the verbs of a multi-selection and shows for both. One
+   * object aligns on the page; the distribution and the reference, which
+   * need several, give way to a line that says so.
+   * @param {Element} top #tools_top, before it enters the page
+   * @returns {void}
+   */
+  buildAlignGroup (top) {
+    const align = top.querySelector('#align_menu')
+    const group = align?.closest('.multiselected_panel')
+    if (!group) return
+    const wrapper = document.createElement('div')
+    wrapper.className = 'selected_panel multiselected_panel se-align-group'
+    group.after(wrapper)
+    wrapper.append(align)
+    const note = document.createElement('p')
+    note.className = 'se-align-page'
+    note.textContent = this.editor.i18next.t('tools.align_to_page')
+    align.querySelector('#tool_align_popup')?.append(note)
+  }
+
+  /**
+   * Folds the settings of MORE_SETTINGS under a "More options" button, at the
+   * end of their container (lot S1). They keep their ids and handlers.
+   * @param {Element|null} container
+   * @param {"stroke"|"text"} name
+   * @returns {void}
+   */
+  fold (container, name) {
+    if (!container) return
+    const controls = Object.keys(MORE_SETTINGS[name]).map((id) => container.querySelector(`#${id}`)).filter(Boolean)
+    if (!controls.length) return
+    const more = document.createElement('div')
+    more.className = 'se-more'
+    more.dataset.more = name
+    more.innerHTML = `<button type="button" class="se-more-toggle" aria-expanded="false" aria-controls="se-more-${name}"
+      >${escapeHtml(this.editor.i18next.t('common.more_opts'))}</button><div class="se-more-body" id="se-more-${name}" hidden></div>`
+    const toggle = more.querySelector('.se-more-toggle')
+    const body = more.querySelector('.se-more-body')
+    body.append(...controls)
+    toggle.addEventListener('click', () => {
+      body.hidden = !body.hidden
+      toggle.setAttribute('aria-expanded', String(!body.hidden))
+    })
+    container.append(more)
+  }
+
+  /**
+   * The rare settings that the selection has, and the mark of the folds that
+   * hide a value.
+   * @param {Element[]} selected
+   * @returns {void}
+   */
+  refreshRare (selected) {
+    const canvas = this.editor.svgCanvas
+    // A setting shown for a selection stays while it is selected: removing
+    // its value (line-through clicked off) does not take the button away.
+    const same = this.rareFor?.length === selected.length && selected.every((el, i) => el === this.rareFor[i])
+    if (!same) this.rareShown = new Set()
+    this.rareFor = selected
+    for (const [id, test] of Object.entries(RARE_SETTINGS)) {
+      if (selected.some((el) => test(el, canvas))) this.rareShown.add(id)
+      const control = this.root.querySelector(`#${id}`)
+      const target = id === 'blur' ? control?.closest('.selected_panel') : control
+      target?.classList.toggle('se-inspector-off', !this.rareShown.has(id))
+    }
+    for (const [name, settings] of Object.entries(MORE_SETTINGS)) {
+      const set = selected.some((el) => Object.values(settings).some(([attr, none]) => hasValue(el, attr, none, canvas)))
+      this.root.querySelector(`[data-more="${name}"] .se-more-toggle`)?.classList.toggle('se-more-set', set)
+    }
+    this.root.querySelector('#tool_align_popup')?.toggleAttribute('data-single', selected.length === 1)
   }
 
   /**
@@ -304,7 +437,9 @@ export class Inspector {
 
   /**
    * Document fields, shown without selection: title, size, grid and
-   * snapping; the rest stays in the document properties and preferences.
+   * snapping, and since lot S1 what only the Document properties dialog
+   * offered: the size of the content, the images included as data or as a
+   * reference. The rest is in the preferences.
    * @returns {void}
    */
   buildDocumentSection () {
@@ -318,8 +453,11 @@ export class Inspector {
       <label class="se-check"><input type="checkbox" id="se-doc-grid">${t('layout.grid')}</label>
       <label class="se-check"><input type="checkbox" id="se-doc-gridsnap">${t('layout.grid_snapping')}</label>
       <label class="se-check"><input type="checkbox" id="se-doc-objectsnap">${t('layout.object_snapping')}</label>
+      <label class="se-field se-field-wide">${t('config.included_images')}<select id="se-doc-images">
+        <option value="embed">${t('config.image_opt_embed')}</option>
+        <option value="ref">${t('config.image_opt_ref')}</option></select></label>
       <div class="se-section-links">
-        <button type="button" class="se-link-button" data-target="tool_docprops">${t('tools.docprops')}…</button>
+        <button type="button" class="se-link-button" id="se-doc-fit">${t('tools.fitToContent')}</button>
         <button type="button" class="se-link-button" data-target="tool_editor_prefs">${t('config.editor_prefs')}…</button>
       </div>`
     const field = (id) => body.querySelector(`#${id}`)
@@ -340,6 +478,20 @@ export class Inspector {
     }
     field('se-doc-width').addEventListener('change', resize)
     field('se-doc-height').addEventListener('change', resize)
+    // The size of the content, as "Fit to content" of the dialog did.
+    field('se-doc-fit').addEventListener('click', () => {
+      if (!editor.svgCanvas.setResolution('fit', 'fit')) {
+        editor.toast(editor.i18next.t('notification.noContentToFitTo'), { type: 'error' })
+        return
+      }
+      editor.updateCanvas()
+      this.refreshDocument()
+    })
+    // As the dialog saved it: a preference, read when the document is saved.
+    field('se-doc-images').addEventListener('change', (e) => {
+      editor.configObj.pref('img_save', e.target.value)
+      editor.$container.querySelector('#se-img-prop')?.setAttribute('save', e.target.value)
+    })
     field('se-doc-grid').addEventListener('change', (e) => editor.grid?.setVisible(e.target.checked))
     const snapping = (key) => (e) => editor.setConfig({ [key]: e.target.checked })
     field('se-doc-gridsnap').addEventListener('change', snapping('gridSnapping'))
@@ -479,6 +631,7 @@ export class Inspector {
     body.querySelector('#se-doc-grid').checked = Boolean(editor.grid?.visible)
     body.querySelector('#se-doc-gridsnap').checked = Boolean(curConfig.gridSnapping)
     body.querySelector('#se-doc-objectsnap').checked = curConfig.objectSnapping !== false
+    body.querySelector('#se-doc-images').value = editor.configObj.pref('img_save') === 'ref' ? 'ref' : 'embed'
   }
 
   /**
@@ -516,6 +669,7 @@ export class Inspector {
   refresh () {
     const { editor } = this
     const selected = editor.svgCanvas?.getSelectedElements().filter(Boolean) ?? []
+    this.refreshRare(selected)
     const none = this.refreshSections()
     if (none) {
       this.refreshLayer()

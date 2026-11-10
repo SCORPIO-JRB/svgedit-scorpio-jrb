@@ -9,18 +9,23 @@ import { NS } from './namespaces.js'
 import * as hstry from './history.js'
 import { BBOX_AFFECTING_ATTRS } from './history.js'
 import {
-  getRotationAngle, getBBox as utilsGetBBox, setHref, getStrokedBBoxDefaultVisible
+  getRotationAngle, getBBox as utilsGetBBox, setHref, getStrokedBBoxDefaultVisible, setStyleProperty
 } from './utilities.js'
 import {
   isGecko
 } from '../common/browser.js'
-import { getTextSource, setTextSource, changesLayout, pinLineHeight, layoutText } from './text-lines.js'
+import {
+  getTextSource, setTextSource, changesLayout, pinLineHeight, layoutText, cloneContent, sameContent
+} from './text-lines.js'
+import {
+  STYLED_PROPERTIES, readStyleRules, findStyleSource, elementsStyledBy, rewriteStyleSheet, cssValueOf, sameCssValue
+} from './style-rules.js'
 import {
   transformPoint, transformListToTransform, getTransformList
 } from './math.js'
 
 const {
-  UndoManager, HistoryEventTypes
+  UndoManager, HistoryEventTypes, ChangeElementCommand, ChangeStyleSheetCommand, setStyleSheetText
 } = hstry
 
 let svgCanvas = null
@@ -189,6 +194,95 @@ export const ffClone = (elem) => {
 }
 
 /**
+* Changes a property where its value comes from (lot S2 of the
+* simplification audit): in the `style` attribute of an element that sets it
+* there, in the rule of a style sheet that gives it. An attribute would
+* change nothing on screen, as both win over it. A value the element only
+* inherits stays written as its attribute.
+* This happens while a change is recorded (changeSelectedAttribute): the
+* changes join it, and so make one step. The texts that a rule lays out
+* again (several lines, a fixed width) are laid out, whichever they are.
+* The editor is told which rules changed (`styleRulesChanged`), to have them
+* confirmed.
+* A change that makes its own step ("Paste properties", the eyedropper) gives
+* `record`, which receives the commands instead (lot S4).
+* @function module:svgcanvas.SvgCanvas#changeStyledProperty
+* @param {string} attr
+* @param {string|Float} newValue
+* @param {Element[]} elems
+* @param {(cmd: module:history.Command) => void} [record] - The change being
+*   recorded by default
+* @fires module:svgcanvas.SvgCanvas#event:styleRulesChanged
+* @returns {Element[]} The elements whose attribute is still to be written
+*/
+export const changeStyledProperty = (attr, newValue, elems, record) => {
+  const { undoMgr } = svgCanvas
+  if (!STYLED_PROPERTIES.has(attr) || (!record && !undoMgr.isRecordingChange()) ||
+    newValue === '' || newValue === null || newValue === undefined) return elems
+  record ??= (cmd) => undoMgr.recordInChange(cmd)
+  const content = svgCanvas.getSvgContent()
+  const rules = readStyleRules(content)
+  if (!rules.length && !elems.some((elem) => elem?.hasAttribute?.('style'))) return elems
+  const rest = []
+  const ruled = new Map()
+  for (const elem of elems) {
+    const source = elem && findStyleSource(elem, attr, rules)
+    if (!source) {
+      rest.push(elem)
+    } else if (source.kind === 'style') {
+      if (!source.shorthand && sameCssValue(attr, source.value, newValue)) continue
+      const old = elem.getAttribute('style')
+      setStyleProperty(elem, attr, cssValueOf(attr, newValue) + (source.important ? ' !important' : ''))
+      if (elem.getAttribute('style') !== old) record(new ChangeElementCommand(elem, { style: old }, 'style'))
+    } else if (source.shorthand || !sameCssValue(attr, source.value, newValue)) {
+      if (!ruled.has(source.rule)) ruled.set(source.rule, source.selector)
+    }
+  }
+  if (!ruled.size) return rest
+  const edited = [...ruled.keys()]
+  const styled = new Map(edited.map((rule) => [rule, elementsStyledBy(rule, attr, content, rules)]))
+  const texts = [...new Set([...styled.values()].flat())].filter((elem) => changesLayout(elem, attr))
+  const contents = texts.map((text) => {
+    const before = cloneContent(text)
+    pinLineHeight(text)
+    return before
+  })
+  const commands = []
+  for (const style of new Set(edited.map((rule) => rule.style))) {
+    const oldText = style.textContent
+    const edits = edited.filter((rule) => rule.style === style).map((rule) => ({ rule, prop: attr, value: newValue }))
+    const text = rewriteStyleSheet(oldText, edits)
+    if (text === oldText) continue
+    setStyleSheetText(style, text)
+    const cmd = new ChangeStyleSheetCommand(style, oldText, `Change ${attr}`)
+    record(cmd)
+    commands.push(cmd)
+  }
+  texts.forEach((text, i) => {
+    layoutText(text)
+    if (!sameContent(contents[i], text)) record(new ChangeElementCommand(text, {}, attr, contents[i]))
+  })
+  const selected = svgCanvas.getSelectedElements().filter(Boolean)
+  setTimeout(() => {
+    selected.forEach((elem) => { if (elem.parentNode) svgCanvas.selectorManager.requestSelector(elem).resize() })
+  }, 0)
+  if (commands.length) {
+    /**
+     * Rules of the style sheets were rewritten instead of attributes.
+     * @event module:svgcanvas.SvgCanvas#event:styleRulesChanged
+     * @type {{property: string, value: string, rules: Array<{selector: string, count: Integer}>, commands: module:history.ChangeStyleSheetCommand[]}}
+     */
+    svgCanvas.call('styleRulesChanged', {
+      property: attr,
+      value: String(newValue),
+      rules: edited.map((rule) => ({ selector: ruled.get(rule), count: styled.get(rule).length })),
+      commands
+    })
+  }
+  return rest
+}
+
+/**
 * This function makes the changes to the elements. It does not add the change
 * to the history stack.
 * @param {string} attr - Attribute name
@@ -217,7 +311,7 @@ export const changeSelectedAttributeNoUndoMethod = (attr, newValue, elems) => {
     // Editing node
     svgCanvas.pathActions.moveNode(attr, newValue)
   }
-  elems = elems ?? selectedElements
+  elems = changeStyledProperty(attr, newValue, elems ?? selectedElements)
   let i = elems.length
   const noXYElems = ['g', 'polyline', 'path']
 

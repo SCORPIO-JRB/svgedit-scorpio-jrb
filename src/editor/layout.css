@@ -791,9 +791,80 @@
   margin: 4px 8px;
 }
 
-#se-actions-menu #tool_position {
-  align-self: flex-start;
-  margin: 4px 8px;
+/* Lot S1: one object aligns on the page; the distribution and the
+   reference, which need several, give way to a line that says so. */
+.se-layout-canvas #tool_align_popup .se-align-page {
+  display: none;
+  margin: 4px 2px;
+  color: var(--se-text-secondary);
+}
+
+.se-layout-canvas #tool_align_popup[data-single] .se-align-page {
+  display: block;
+}
+
+.se-layout-canvas #tool_align_popup[data-single] .align_row + .align_row {
+  display: none;
+}
+
+/* Lot S1: what the canvas layout no longer offers stays in the page, out of
+   sight; a rare setting shows only when the selection has a value for it. */
+#se-retired,
+.se-layout-canvas .se-inspector .se-inspector-off {
+  display: none !important;
+}
+
+/* "More options": the settings folded at the end of their section. */
+.se-layout-canvas .se-inspector .se-more {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--se-space-2);
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--se-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle::after {
+  content: " ▾";
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle[aria-expanded="true"]::after {
+  content: " ▴";
+}
+
+/* A folded setting has a value that is not the usual one. */
+.se-layout-canvas .se-inspector .se-more-toggle.se-more-set::before {
+  content: "● ";
+  color: var(--se-accent);
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle:hover {
+  color: var(--se-text);
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: 2px;
+}
+
+.se-layout-canvas .se-inspector .se-more-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--se-space-2);
+  width: 100%;
+}
+
+.se-layout-canvas .se-inspector .se-more-body[hidden] {
+  display: none;
 }
 
 /* Document section: the same fields, the label inside the box. */
@@ -2736,4 +2807,20 @@
   display: flex;
   justify-content: flex-end;
   margin-top: var(--se-space-3);
+}
+
+/* The rules of the style sheets that give the values of a section (lot
+   S2): « Remplissage ← .fond ». */
+.se-layout-canvas .se-inspector .se-rule-note {
+  overflow: hidden;
+  min-width: 0;
+  margin-inline-start: 6px;
+  color: var(--se-accent);
+  font-weight: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.se-layout-canvas .se-inspector .se-rule-note::before {
+  content: "← ";
 }

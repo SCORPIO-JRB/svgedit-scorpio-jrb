@@ -92,7 +92,10 @@ describe('Stroke width shown', () => {
   })
 
   it('is the shape\'s own width, or 1', () => {
-    expect(strokeWidthOf(shape({ 'stroke-width': '5px' }))).toBe('5')
-    expect(strokeWidthOf(shape({}))).toBe('1')
+    expect(strokeWidthOf({}, shape({ 'stroke-width': '5px' }))).toBe('5')
+    expect(strokeWidthOf({}, shape({}))).toBe('1')
+    // A rule of the style sheets gives it (lot S2)
+    const styled = { getStyledValue: (elem, name) => name === 'stroke-width' ? { value: '0.5mm' } : null }
+    expect(strokeWidthOf(styled, shape({ 'stroke-width': '5px' }))).toBe('1.89')
   })
 })
