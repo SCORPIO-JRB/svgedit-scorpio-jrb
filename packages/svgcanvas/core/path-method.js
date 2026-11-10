@@ -309,7 +309,7 @@ export const addPointGripMethod = (index, x, y) => {
       id: `pathpointgrip_${index}`,
       display: 'none',
       r: 4,
-      fill: '#0FF',
+      fill: '#FFF',
       stroke: '#00F',
       'stroke-width': 2,
       cursor: 'move',
@@ -330,6 +330,10 @@ export const addPointGripMethod = (index, x, y) => {
       }
     })
   }
+  // A grip serves the next path too: it starts unselected.
+  pointGrip.style.fill = ''
+  pointGrip.style.stroke = ''
+  pointGrip.classList.remove('se-node-selected')
   if (x && y) {
     // set up the point grip element and display it
     assignAttributes(pointGrip, {
@@ -599,7 +603,11 @@ export class Segment {
    */
   select (y) {
     if (this.ptgrip) {
-      this.ptgrip.setAttribute('stroke', y ? '#0FF' : '#00F')
+      // A selected node takes the colour of the guides, the others stay
+      // white (lot Chemins).
+      this.ptgrip.style.fill = y ? 'var(--se-guide, #e0115f)' : ''
+      this.ptgrip.style.stroke = y ? 'var(--se-guide, #e0115f)' : ''
+      this.ptgrip.classList.toggle('se-node-selected', y)
       this.segsel.setAttribute('display', y ? 'inline' : 'none')
       if (this.ctrlpts) {
         this.selectCtrls(y)
@@ -1106,7 +1114,8 @@ export class Path {
   */
   selectPt (pt, ctrlNum) {
     this.clearSelection()
-    if (!pt) {
+    // The first node is 0: only no node at all means the last one.
+    if (pt === undefined || pt === null) {
       this.eachSeg(function (i) {
         // 'this' is the segment here.
         if (this.prev) {
@@ -1167,7 +1176,8 @@ export class Path {
         this.selected_pts.push(index)
       }
     })
-    this.selected_pts.sort()
+    // In the order of the path: the deletion runs from the last node.
+    this.selected_pts.sort((a, b) => a - b)
     let i = this.selected_pts.length
     const grips = []
     grips.length = i
