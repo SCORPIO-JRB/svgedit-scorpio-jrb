@@ -35,6 +35,11 @@ const isAdditive = (evt) => Boolean(evt?.shiftKey || evt?.ctrlKey || evt?.metaKe
 
 /** Distance, in screen pixels, within which a click reaches a path or an end. */
 const REACH = 6
+/**
+ * How far, in screen pixels, the pointer goes from a click of the pen before
+ * the drag bends the segment: below, a hand that shakes leaves it straight.
+ */
+const BEND_AFTER = 4
 
 /**
 * @function module:path-actions.init
@@ -261,6 +266,15 @@ class PathActions {
   #extend = null
   /** The path the last drawing merged into, put in node editing at mouse up. */
   #merged = null
+  /** The path a click of the pen has just ended, put in node editing at mouse up. */
+  #finished = null
+  /** Points of the drawing taken back by Ctrl+Z, that Ctrl+Y puts back. */
+  #undonePoints = []
+  /** Where the drag of a node started, for Shift (in screen units). */
+  #dragOrigin = null
+  /** Where the pen was pressed (screen units), and whether the drag bends. */
+  #downAt = null
+  #bending = false
 
   /**
   * This function converts a polyline (created by the fh_path tool) into
@@ -505,10 +519,12 @@ class PathActions {
       let x = mouseX / zoom
       let y = mouseY / zoom
       let stretchy = getElement('path_stretch_line')
+      // Shift keeps the new segment at a multiple of 45°: the angle then wins
+      // over the ends of paths.
+      const angled = evt.shiftKey && Boolean(svgCanvas.getDrawnPath())
       // The end of an open path under the pointer (lot Chemins): a drawing
       // started there extends that path; one ended there joins it.
-      const end = this.#subpath ? null : this.#openEndAt(x, y, this.#extend)
-      this.#newPoint = [x, y]
+      const end = this.#subpath || angled ? null : this.#openEndAt(x, y, this.#extend)
 
       if (svgCanvas.getGridSnapping()) {
         x = snapToGrid(x)
@@ -516,6 +532,10 @@ class PathActions {
         mouseX = snapToGrid(mouseX)
         mouseY = snapToGrid(mouseY)
       }
+      // The point a drag from here bends the segment to: the one placed, so
+      // after the grid and the angle (else a slight drag during the click
+      // bent the segment to the raw point, off the angle).
+      this.#newPoint = [x, y]
       if (!svgCanvas.getDrawnPath()) {
         this.#extend = end ? { elem: end.elem, sub: end.sub, end: end.end } : null
       }
@@ -531,15 +551,20 @@ class PathActions {
 
       if (!stretchy) {
         stretchy = document.createElementNS(NS.SVG, 'path')
+        // The segment that follows the pointer, in the blue of the nodes.
         assignAttributes(stretchy, {
           id: 'path_stretch_line',
-          stroke: '#22C',
-          'stroke-width': '0.5',
-          fill: 'none'
+          class: 'se-pen-line',
+          stroke: '#1e66b6',
+          'stroke-width': 1,
+          fill: 'none',
+          style: 'pointer-events:none'
         })
         getElement('selectorParentGroup').append(stretchy)
       }
       stretchy.setAttribute('display', 'inline')
+      this.#downAt = [mouseX, mouseY]
+      this.#bending = false
 
       let keep = null
       let index
@@ -547,6 +572,7 @@ class PathActions {
       const drawnPath = svgCanvas.getDrawnPath()
       if (!drawnPath) {
         const dAttr = `M${x},${y} `
+        this.#undonePoints = []
         /* drawnPath = */ svgCanvas.setDrawnPath(svgCanvas.addSVGElementsFromJson({
           element: 'path',
           curStyles: true,
@@ -598,19 +624,21 @@ class PathActions {
           }
         }
 
-        // get path element that we are in the process of creating
-        id = svgCanvas.getId()
+        // The path element being created: the drawing itself, not the
+        // element of the latest id, which a reused id makes another one.
+        const newpath = drawnPath
+        id = newpath.id
 
         // Remove previous path object if previously created
         svgCanvas.removePath_(id)
-
-        const newpath = getElement(id)
         let newseg
         let sSeg
         const len = seglist.numberOfItems
         // if we clicked on an existing point, then we are done this path, commit it
         // (i, i+1) are the x,y that were clicked on
         if (clickOnPoint) {
+          // No segment to bend by dragging from here.
+          this.#newPoint = null
           // if clicked on any other point but the first OR
           // the first point was clicked on and there are less than 3 points
           // then leave the path open
@@ -642,6 +670,7 @@ class PathActions {
 
           // This will signal to commit the path
           // const element = newpath; // Other event handlers define own `element`, so this was probably not meant to interact with them or one which shares state (as there were none); I therefore adding a missing `var` to avoid a global
+          this.#undonePoints = []
           /* drawnPath = */ svgCanvas.setDrawnPath(null)
           svgCanvas.setStarted(false)
 
@@ -661,6 +690,8 @@ class PathActions {
             path.selectPt()
             return false
           }
+          // The path ended: the mouse up puts it in node editing.
+          this.#finished = newpath
           // else, create a new point, update path element
         } else {
           // Checks if current target or parents are #svgcontent
@@ -668,6 +699,7 @@ class PathActions {
             svgCanvas.getMouseTarget(evt)
           ))) {
             // Clicked outside canvas, so don't make point
+            this.#newPoint = null
             return false
           }
 
@@ -694,6 +726,8 @@ class PathActions {
             )
 
           drawnPath.pathSegList.appendItem(newseg)
+          this.#undonePoints = []
+          this.#newPoint = [svgCanvas.round(x), svgCanvas.round(y)]
 
           x *= zoom
           y *= zoom
@@ -716,7 +750,8 @@ class PathActions {
     path.storeD()
     const additive = isAdditive(evt)
     this.#added = false
-    this.#rubberBase = null;
+    this.#rubberBase = null
+    this.#dragOrigin = [startX, startY];
 
     ({ id } = evt.target)
     let curPt
@@ -784,22 +819,40 @@ class PathActions {
     * @param {Float} mouseY
     * @returns {void}
     */
-  mouseMove (mouseX, mouseY) {
+  mouseMove (mouseX, mouseY, { shift = false } = {}) {
+    const rawX = mouseX
+    const rawY = mouseY
     const zoom = svgCanvas.getZoom()
     this.#hasMoved = true
     const drawnPath = svgCanvas.getDrawnPath()
     if (svgCanvas.getCurrentMode() === 'path') {
+      const seglist = drawnPath?.pathSegList
+      const index = drawnPath ? seglist.numberOfItems - 1 : -1
+      // Shift: the line from the last point, or the handle being pulled
+      // from the point just placed, keeps a multiple of 45°, as the click
+      // will place it.
+      const origin = !shift || !drawnPath
+        ? null
+        : this.#newPoint ?? [seglist.getItem(index).x, seglist.getItem(index).y]
+      if (origin) {
+        ({ x: mouseX, y: mouseY } = snapToAngle(origin[0] * zoom, origin[1] * zoom, mouseX, mouseY))
+      }
       // The end of an open path within reach attracts the line (lot Chemins).
-      const end = this.#newPoint ? null : this.showEndAt(mouseX / zoom, mouseY / zoom)
+      const end = this.#newPoint || origin ? null : this.showEndAt(mouseX / zoom, mouseY / zoom)
+      if (origin) getElement('path_end_hint')?.setAttribute('display', 'none')
       if (end) {
         mouseX = end.x * zoom
         mouseY = end.y * zoom
       }
       if (!drawnPath) { return }
-      const seglist = drawnPath.pathSegList
-      const index = seglist.numberOfItems - 1
 
       if (this.#newPoint) {
+        // A slight move during the click leaves the segment straight: the
+        // handles come out once the pointer is a few pixels away.
+        if (!this.#bending) {
+          if (this.#downAt && Math.hypot(rawX - this.#downAt[0], rawY - this.#downAt[1]) < BEND_AFTER) return
+          this.#bending = true
+        }
         // First point
         // if (!index) { return; }
 
@@ -875,6 +928,10 @@ class PathActions {
     }
     // if we are dragging a point, let's move it
     if (path.dragging) {
+      if (shift && this.#dragOrigin) {
+        // Shift: the move from where the drag started keeps 45° steps.
+        ({ x: mouseX, y: mouseY } = snapToAngle(this.#dragOrigin[0], this.#dragOrigin[1], mouseX, mouseY))
+      }
       const pt = svgCanvas.getPointFromGrip({
         x: path.dragging[0],
         y: path.dragging[1]
@@ -947,10 +1004,11 @@ class PathActions {
         return { keep: false, element: null }
       }
       if (!drawnPath) {
-        element = getElement(svgCanvas.getId())
+        element = this.#finished ?? getElement(svgCanvas.getId())
         svgCanvas.setStarted(false)
         this.#firstCtrl = null
       }
+      this.#finished = null
 
       return {
         keep: true,
@@ -980,9 +1038,19 @@ class PathActions {
       rubberBox.setAttribute('display', 'none')
 
       if (rubberBox.getAttribute('width') <= 2 && rubberBox.getAttribute('height') <= 2) {
-        // A click beside the path leaves node editing, unless Shift or
-        // Ctrl ask to keep the selection of nodes.
-        if (!this.#rubberBase) pathActionsMethod.toSelectMode(evt.target)
+        if (evt.target === path.elem) {
+          // A click on the path edited keeps the editing of its nodes: it
+          // only unselects them, as the stroke itself is not selected here
+          // (lot Chemins). Shift or Ctrl keep them.
+          if (!this.#rubberBase) {
+            path.clearSelection()
+            path.addPtsToSelection([])
+          }
+        } else if (!this.#rubberBase) {
+          // A click beside the path leaves node editing, unless Shift or
+          // Ctrl ask to keep the selection of nodes.
+          pathActionsMethod.toSelectMode(evt.target)
+        }
       } else {
         // The editor learns which nodes the band selected.
         path.addPtsToSelection([])
@@ -1105,24 +1173,108 @@ class PathActions {
     this.#currentPath = null
     this.#extend = null
     this.#merged = null
+    this.#finished = null
+    this.#undonePoints = []
     getElement('path_end_hint')?.setAttribute('display', 'none')
     if (drawnPath) {
-      const elem = getElement(svgCanvas.getId())
-      const psl = getElement('path_stretch_line')
-      psl.parentNode.removeChild(psl)
-      elem.parentNode.removeChild(elem)
+      // The drawing itself: the element of the latest id may be another one
+      // (a reused id), and an undo may have taken the drawing out of the
+      // document with its layer or group. Either made this throw.
+      getElement('path_stretch_line')?.remove()
+      drawnPath.remove()
       const pathpointgripContainer = getElement('pathpointgrip_container')
-      const elements = pathpointgripContainer.querySelectorAll('*')
-      for (const el of elements) {
+      for (const el of pathpointgripContainer?.querySelectorAll('*') ?? []) {
         el.setAttribute('display', 'none')
       }
       this.#firstCtrl = null
+      this.#newPoint = null
       svgCanvas.setDrawnPath(null)
       svgCanvas.setStarted(false)
     } else if (svgCanvas.getCurrentMode() === 'pathedit') {
       this.toSelectMode()
     }
     if (path) { path.init().show(false) }
+  }
+
+  /**
+   * Whether a path is being drawn with the pen.
+   * @returns {boolean}
+   */
+  isDrawing () {
+    return svgCanvas.getCurrentMode() === 'path' && Boolean(svgCanvas.getDrawnPath())
+  }
+
+  /**
+   * Hides the handles of the point last placed, and puts the line that
+   * follows the pointer back on the last point of the drawing.
+   * @param {SVGPathElement} drawnPath
+   * @returns {void}
+   */
+  #afterPointChange (drawnPath) {
+    const zoom = svgCanvas.getZoom()
+    for (const id of ['ctrlpointgrip_1c1', 'ctrlpointgrip_0c2', 'ctrlLine_1']) {
+      getElement(id)?.setAttribute('display', 'none')
+    }
+    const seglist = drawnPath.pathSegList
+    const last = seglist.getItem(seglist.numberOfItems - 1)
+    const x = last.x * zoom
+    const y = last.y * zoom
+    getElement('path_stretch_line')?.setAttribute('d', `M${x} ${y} ${x} ${y}`)
+    svgCanvas.removePath_(drawnPath.id)
+  }
+
+  /**
+   * Takes back the last point of the path being drawn, or the drawing itself
+   * when only its first point is left (lot Chemins). The history is left as
+   * it is: the drawing enters it only when it ends.
+   * @returns {boolean} Whether a drawing was in progress
+   */
+  undoDrawnPoint () {
+    if (!this.isDrawing()) return false
+    const drawnPath = svgCanvas.getDrawnPath()
+    const seglist = drawnPath.pathSegList
+    const count = seglist.numberOfItems
+    // Adding a subpath, the grips of the path edited come first.
+    const offset = this.#subpath && path ? path.segs.length : 0
+    if (count <= 1) {
+      getElement('path_stretch_line')?.remove()
+      getElement('path_end_hint')?.setAttribute('display', 'none')
+      for (const id of [`pathpointgrip_${offset}`, 'ctrlpointgrip_1c1', 'ctrlpointgrip_0c2', 'ctrlLine_1']) {
+        getElement(id)?.setAttribute('display', 'none')
+      }
+      svgCanvas.removePath_(drawnPath.id)
+      drawnPath.remove()
+      this.#firstCtrl = null
+      this.#newPoint = null
+      this.#extend = null
+      this.#undonePoints = []
+      svgCanvas.setDrawnPath(null)
+      svgCanvas.setStarted(false)
+      return true
+    }
+    this.#undonePoints.push(seglist.getItem(count - 1))
+    seglist.removeItem(count - 1)
+    getElement(`pathpointgrip_${count - 1 + offset}`)?.setAttribute('display', 'none')
+    this.#afterPointChange(drawnPath)
+    return true
+  }
+
+  /**
+   * Puts back the last point Ctrl+Z took back from the drawing.
+   * @returns {boolean} Whether a drawing was in progress
+   */
+  redoDrawnPoint () {
+    if (!this.isDrawing()) return false
+    const seg = this.#undonePoints.pop()
+    if (!seg) return true
+    const drawnPath = svgCanvas.getDrawnPath()
+    const seglist = drawnPath.pathSegList
+    const offset = this.#subpath && path ? path.segs.length : 0
+    const zoom = svgCanvas.getZoom()
+    svgCanvas.addPointGrip(seglist.numberOfItems + offset, seg.x * zoom, seg.y * zoom)
+    seglist.appendItem(seg)
+    this.#afterPointChange(drawnPath)
+    return true
   }
 
   /**
