@@ -630,7 +630,10 @@ class TopPanel {
    * @returns {void}
    */
   clickUndo () {
-    const { undoMgr } = this.editor.svgCanvas
+    const { undoMgr, pathActions } = this.editor.svgCanvas
+    // While a path is drawn with the pen, its last point is taken back; the
+    // steps before the drawing are left as they are (lot Chemins).
+    if (pathActions.undoDrawnPoint()) return
     if (undoMgr.getUndoStackSize() > 0) {
       this.goToHistory(undoMgr.getUndoStackSize() - 1)
     }
@@ -641,7 +644,8 @@ class TopPanel {
    * @returns {void}
    */
   clickRedo () {
-    const { undoMgr } = this.editor.svgCanvas
+    const { undoMgr, pathActions } = this.editor.svgCanvas
+    if (pathActions.redoDrawnPoint()) return
     if (undoMgr.getRedoStackSize() > 0) {
       this.goToHistory(undoMgr.getUndoStackSize() + 1)
     }
