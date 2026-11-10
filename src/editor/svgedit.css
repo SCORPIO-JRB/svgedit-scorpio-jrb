@@ -95,6 +95,25 @@
   stroke: var(--se-selection);
 }
 
+/*
+ * Handles of the corners (lot Coins): a ring with a dot, inside each corner
+ * that a drag rounds. It grows under the pointer and while dragged.
+ */
+#selectorCornerGrips .se-corner-ring {
+  fill: var(--se-node-fill);
+  stroke: var(--se-selection);
+  transition: r 80ms ease-out;
+}
+
+#selectorCornerGrips .se-corner-dot {
+  fill: var(--se-selection);
+}
+
+#selectorCornerGrips .se-corner:hover .se-corner-ring,
+#selectorCornerGrips .se-corner-active .se-corner-ring {
+  r: 5.5px;
+}
+
 #workarea {
   grid-area: workarea;
   background-color: var(--se-canvas);

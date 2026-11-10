@@ -844,6 +844,7 @@ export default {
     delete_nodes: 'Delete points',
     extend_path: 'Extend the path',
     join_paths: 'Join the paths',
+    round_corners: 'Round the corners',
     layer_create: 'Create a layer',
     layer_delete: 'Delete the layer',
     layer_duplicate: 'Duplicate the layer',

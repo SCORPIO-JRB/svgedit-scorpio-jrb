@@ -1324,6 +1324,8 @@ const setRectRadiusMethod = (val) => {
   if (!Number.isFinite(radius) || radius < 0) {
     return
   }
+  // The next rectangle is drawn with it (lot Coins).
+  svgCanvas.cornerActions?.remember(radius)
 
   const oldRx = selected.getAttribute('rx')
   const oldRy = selected.getAttribute('ry')

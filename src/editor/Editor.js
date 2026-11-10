@@ -646,6 +646,21 @@ class Editor extends EditorStartup {
   }
 
   /**
+   * While a rectangle is drawn, the arrows change its radius, as in
+   * Illustrator (lot Coins): ↑ and ↓ by one unit (Shift: ten), ← makes its
+   * corners sharp, → as round as they get. They move nothing then: nothing
+   * is selected.
+   * @param {KeyboardEvent} e
+   * @returns {boolean} Whether the key acted on the drawing
+   */
+  drawingRadiusKey (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return false
+    if (!this.svgCanvas.cornerActions?.drawingKey(e.key, e.shiftKey)) return false
+    e.preventDefault()
+    return true
+  }
+
+  /**
    *  @lends module:SVGEditor~Actions */
   /**
    * editor shortcuts init
@@ -688,6 +703,7 @@ class Editor extends EditorStartup {
       const onControl = origin?.nodeType === 1 && origin !== document.body && origin !== document.documentElement
       if (onControl && NAVIGATION_KEYS.has(e.key)) return
       if (this.penHistoryKey(e)) return
+      if (this.drawingRadiusKey(e)) return
       this.commands.dispatch(e)
     })
 

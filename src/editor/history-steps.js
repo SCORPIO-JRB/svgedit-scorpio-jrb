@@ -85,7 +85,9 @@ export const STEP_TEXTS = {
   'move path point(s)': 'move_nodes',
   'delete path node(s)': 'delete_nodes',
   'extend path': 'extend_path',
-  'join paths': 'join_paths'
+  'join paths': 'join_paths',
+  // Lot Coins
+  'round corners': 'round_corners'
 }
 
 /** Names that give the number of objects. */

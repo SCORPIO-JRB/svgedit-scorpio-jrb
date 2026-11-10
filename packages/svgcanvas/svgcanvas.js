@@ -43,6 +43,7 @@ import { init as structureInit } from './core/structure.js'
 import { init as portsInit } from './core/ports.js'
 import { init as symbolsInit } from './core/symbols.js'
 import { init as connectorsInit } from './core/connectors.js'
+import { init as cornerActionsInit } from './core/corner-actions.js'
 import {
   init as jsonInit,
   getJsonFromSvgElements,
@@ -293,6 +294,7 @@ class SvgCanvas {
     portsInit(this)
     symbolsInit(this)
     connectorsInit(this)
+    cornerActionsInit(this)
 
     // prevent links from being followed in the canvas
     const handleLinkInCanvas = e => {
@@ -491,6 +493,9 @@ class SvgCanvas {
 
   setCurrentMode (cm) {
     this.currentMode = cm
+    // The handles of the corners show in the selection and node editing
+    // only (lot Coins).
+    this.cornerActions?.schedule()
     return this.currentMode
   }
 

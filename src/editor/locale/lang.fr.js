@@ -847,6 +847,7 @@ export default {
     delete_nodes: 'Supprimer des points',
     extend_path: 'Prolonger le chemin',
     join_paths: 'Joindre les chemins',
+    round_corners: 'Arrondir les coins',
     layer_create: 'Créer un calque',
     layer_delete: 'Supprimer le calque',
     layer_duplicate: 'Dupliquer le calque',
