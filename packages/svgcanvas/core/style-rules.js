@@ -593,9 +593,18 @@ export const rewriteStyleSheet = (text, edits) => {
   return text
 }
 
+/**
+ * An opaque rgb() colour in hexadecimal. A colour with transparency stays as
+ * written: in hexadecimal it would be opaque, and the panel, "Copy
+ * properties" and the eyedropper would lose it (an imported floor plan fills
+ * its rooms with rgba(255, 255, 255, .1)).
+ * @param {string} color
+ * @returns {string}
+ */
 const toHex = (color) => {
   const match = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/i.exec(color)
-  if (!match || (match[4] !== undefined && Number.parseFloat(match[4]) === 0)) return color
+  if (!match) return color
+  if (match[4] !== undefined && Number.parseFloat(match[4]) / (match[4].endsWith('%') ? 100 : 1) < 1) return color
   return '#' + match.slice(1, 4).map((n) => Number(n).toString(16).padStart(2, '0')).join('')
 }
 

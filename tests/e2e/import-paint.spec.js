@@ -72,6 +72,17 @@ test.describe('Paint of an imported shape', () => {
     expect(await page.locator('#svgcontent g.layer defs').count()).toBe(0)
   })
 
+  test('a colour with transparency given by a class rule of an opened drawing', async ({ page }) => {
+    // Lot S2 keeps the rules of an opened drawing; their colours were read
+    // in hexadecimal, opaque.
+    await page.evaluate((ns) => {
+      const canvas = window.svgEditor.svgCanvas
+      canvas.setSvgString(`<svg xmlns="${ns}" width="640" height="480"><style>.room { fill: rgba(255, 255, 255, .1); stroke: rgb(0 0 0 / 40%) }</style>` +
+        '<g class="layer"><title>L</title><rect id="ruled" class="room" x="10" y="10" width="100" height="100"/></g></svg>')
+    }, NS)
+    expect(await shown(page, 'ruled')).toEqual({ fill: 'FFFFFF 10 %', stroke: '000000 40 %', width: '1' })
+  })
+
   // A room may be drawn by a polyline: it used to keep its colour, and the
   // opacity went on top of the transparency of that colour.
   for (const id of ['room', 'corridor']) {
