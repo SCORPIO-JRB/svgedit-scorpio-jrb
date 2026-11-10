@@ -410,6 +410,11 @@ class Editor extends EditorStartup {
         label: 'tools.delete',
         key: ['delete/backspace', true],
         fn: () => {
+          // In node editing, the selected nodes (lot Chemins).
+          if (this.svgCanvas.getMode() === 'pathedit') {
+            this.svgCanvas.pathActions.deletePathNode()
+            return
+          }
           if (this.selectedElement || this.multiselected) {
             this.svgCanvas.deleteSelectedElements()
           }
@@ -1355,12 +1360,18 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   moveSelected (dx, dy) {
+    const step = this.configObj.curConfig.gridSnapping
+      ? this.configObj.curConfig.snappingStep
+      : 1
+    if (this.svgCanvas.getMode() === 'pathedit') {
+      // In node editing, the arrows move the selected nodes (lot Chemins),
+      // in a row one undo step.
+      this.svgCanvas.undoMgr.merging('nudge', () => this.svgCanvas.pathActions.moveSelectedPoints(dx * step, dy * step))
+      return
+    }
     if (this.selectedElement || this.multiselected) {
       // Arrow keys move by document units (one grid step when snapping),
       // whatever the zoom. moveSelectedElements expects screen pixels.
-      const step = this.configObj.curConfig.gridSnapping
-        ? this.configObj.curConfig.snappingStep
-        : 1
       const multi = this.svgCanvas.getZoom() * step
       // Nudges in a row are one undo step (lot V5).
       this.svgCanvas.undoMgr.merging('nudge', () => this.svgCanvas.moveSelectedElements(dx * multi, dy * multi))

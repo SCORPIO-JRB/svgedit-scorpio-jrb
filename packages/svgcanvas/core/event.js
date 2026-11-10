@@ -676,6 +676,11 @@ const updateTransformList = (svgRoot, element, dx, dy) => {
 const mouseMoveEvent = (evt) => {
   // Without a gesture, the mouse only shows what a click would select.
   if (!svgCanvas.getStarted()) {
+    if (svgCanvas.getCurrentMode() === 'path') {
+      // The pen shows the end of a path it would extend (lot Chemins).
+      const pt = transformPoint(evt.clientX, evt.clientY, svgCanvas.getrootSctm())
+      svgCanvas.pathActions.showEndAt(pt.x, pt.y)
+    }
     updateHover(evt)
     return
   }
@@ -1478,7 +1483,11 @@ const mouseUpEvent = (evt) => {
             t = t.firstChild
           }
           if (selectedElements[0].nodeName === 'path' && !selectedElements[1]) {
-            svgCanvas.pathActions.select(selectedElements[0])
+            // Alt+click on the outline of a path already selected adds a
+            // node there, in node editing (lot Chemins, as in Vecta).
+            const addNode = evt.altKey && tempJustSelected !== t && t === selectedElements[0] &&
+              svgCanvas.pathActions.addPointOnPath(t, realX, realY)
+            if (!addNode) svgCanvas.pathActions.select(selectedElements[0])
             // if it was a path
             // else, if it was selected and this is a shift-click, remove it from selection
           } else if (evt.shiftKey && tempJustSelected !== t) {

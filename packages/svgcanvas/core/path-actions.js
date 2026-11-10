@@ -8,11 +8,15 @@
 
 import { NS } from './namespaces.js'
 import { shortFloat } from './units.js'
-import { ChangeElementCommand, BatchCommand } from './history.js'
+import { ChangeElementCommand, BatchCommand, RemoveElementCommand } from './history.js'
 import {
   transformPoint, snapToAngle, rectsIntersect,
-  transformListToTransform, getTransformList
+  transformListToTransform, getTransformList, getMatrix
 } from './math.js'
+import {
+  readPath, writePath, nearestPoint, insertNode, nodeIndex, openEnds,
+  transformSubpath, joinSubpaths
+} from './path-points.js'
 import {
   assignAttributes, getElement, getRotationAngle, snapToGrid,
   getBBox
@@ -20,6 +24,17 @@ import {
 
 let svgCanvas = null
 let path = null
+
+/**
+ * Shift or Ctrl (Cmd on a Mac) add a node to the selection, or take it out
+ * (lot Chemins, as in Vecta).
+ * @param {MouseEvent} evt
+ * @returns {boolean}
+ */
+const isAdditive = (evt) => Boolean(evt?.shiftKey || evt?.ctrlKey || evt?.metaKey)
+
+/** Distance, in screen pixels, within which a click reaches a path or an end. */
+const REACH = 6
 
 /**
 * @function module:path-actions.init
@@ -238,6 +253,14 @@ class PathActions {
   #firstCtrl = null
   #currentPath = null
   #hasMoved = false
+  /** A node was added by Alt+click at mouse down (lot Chemins). */
+  #added = false
+  /** Nodes kept selected by a rubber band drawn with Shift or Ctrl. */
+  #rubberBase = null
+  /** The end of an open path the drawing extends: {elem, sub, end}. */
+  #extend = null
+  /** The path the last drawing merged into, put in node editing at mouse up. */
+  #merged = null
 
   /**
   * This function converts a polyline (created by the fh_path tool) into
@@ -316,6 +339,155 @@ class PathActions {
     return element
   }
 
+  /** Open ends of each path, read again only when its d or transform change. */
+  #endsCache = new WeakMap()
+
+  /**
+   * The end of an open path within reach of a point, that the pen can extend
+   * or join (lot Chemins): a path of the layer or group being edited, shown,
+   * not locked and not a connector.
+   * @param {Float} x In user units of the drawing
+   * @param {Float} y
+   * @param {{elem: Element, sub: Integer, end: string}} [skip] An end not to
+   *   find, the one the drawing starts from
+   * @returns {{elem: SVGPathElement, sub: Integer, end: 'start'|'end', x: Float, y: Float}|null}
+   */
+  #openEndAt (x, y, skip) {
+    const context = svgCanvas.getCurrentGroup?.() || svgCanvas.getCurrentDrawing?.()?.getCurrentLayer?.()
+    if (!context?.children) return null
+    const reach = (REACH + 2) / svgCanvas.getZoom()
+    const drawn = svgCanvas.getDrawnPath?.()
+    let best = null
+    for (const elem of context.children) {
+      if (elem.tagName !== 'path' || elem === drawn || elem.getAttribute('display') === 'none') continue
+      if (svgCanvas.isLocked?.(elem) || elem.hasAttributeNS(NS.SE, 'connector')) continue
+      const d = elem.getAttribute('d')
+      const transform = elem.getAttribute('transform')
+      let cached = this.#endsCache.get(elem)
+      if (cached?.d !== d || cached?.transform !== transform) {
+        const m = getMatrix(elem)
+        const ends = openEnds(readPath(d)).map((end) => ({ ...end, ...transformPoint(end.x, end.y, m) }))
+        cached = { d, transform, ends }
+        this.#endsCache.set(elem, cached)
+      }
+      for (const end of cached.ends) {
+        if (skip?.elem === elem && skip.sub === end.sub && skip.end === end.end) continue
+        const distance = Math.hypot(end.x - x, end.y - y)
+        if (distance <= reach && (!best || distance < best.distance)) best = { elem, ...end, distance }
+      }
+    }
+    return best
+  }
+
+  /**
+   * Shows, in the pen tool, the end of an open path that a click there
+   * would extend or join, and returns it (lot Chemins).
+   * @param {Float} x In user units of the drawing
+   * @param {Float} y
+   * @returns {{elem: SVGPathElement, sub: Integer, end: string, x: Float, y: Float}|null}
+   */
+  showEndAt (x, y) {
+    const hit = svgCanvas.getCurrentMode() === 'path' && !this.#subpath
+      ? this.#openEndAt(x, y, this.#extend)
+      : null
+    let hint = getElement('path_end_hint')
+    if (!hit) {
+      hint?.setAttribute('display', 'none')
+      return null
+    }
+    if (!hint) {
+      hint = document.createElementNS(NS.SVG, 'circle')
+      assignAttributes(hint, {
+        id: 'path_end_hint',
+        r: 7,
+        fill: 'none',
+        'stroke-width': 2,
+        style: 'stroke: var(--se-guide, #e0115f); pointer-events: none'
+      })
+      getElement('selectorParentGroup').append(hint)
+    }
+    const zoom = svgCanvas.getZoom()
+    assignAttributes(hint, { cx: hit.x * zoom, cy: hit.y * zoom, display: 'inline' })
+    return hit
+  }
+
+  /**
+   * Puts the drawing in the path it extends, or joins with the end it ends
+   * on, in one undo step (lot Chemins). The drawing itself is removed: it
+   * never entered the history.
+   * @param {SVGPathElement} drawnElem The drawing, in user units
+   * @param {{elem: SVGPathElement, sub: Integer, end: string}|null} target
+   *   The end of an open path the drawing ends on
+   * @returns {SVGPathElement} The path that holds the result
+   */
+  #commitJoin (drawnElem, target) {
+    const source = this.#extend
+    this.#extend = null
+    const survivor = source?.elem ?? target.elem
+    const toLocal = getMatrix(survivor).inverse()
+    const [drawnInUser] = readPath(drawnElem.getAttribute('d'))
+    const drawn = transformSubpath(drawnInUser, toLocal)
+    const subpaths = readPath(survivor.getAttribute('d'))
+    // Ending on the other end of the path it extends closes it.
+    const close = Boolean(source && target && target.elem === source.elem && target.sub === source.sub)
+    let targetSub = null
+    let targetSubpaths = null
+    if (target && !close) {
+      if (target.elem === survivor) {
+        targetSub = subpaths[target.sub]
+      } else {
+        targetSubpaths = readPath(target.elem.getAttribute('d'))
+        targetSub = transformSubpath(targetSubpaths[target.sub], toLocal.multiply(getMatrix(target.elem)))
+      }
+    }
+    const own = source ? source.sub : target.sub
+    subpaths[own] = joinSubpaths({
+      drawn,
+      source: source ? subpaths[source.sub] : null,
+      sourceEnd: source?.end,
+      target: targetSub,
+      targetEnd: target?.end,
+      close
+    })
+    // Another subpath of the same path, now inside the joined one.
+    if (source && targetSub && target.elem === survivor) subpaths.splice(target.sub, 1)
+
+    // Two paths, or two parts of one, become one; otherwise a path grows.
+    const batch = new BatchCommand(source && targetSub ? 'Join paths' : 'Extend path')
+    const oldD = survivor.getAttribute('d')
+    survivor.setAttribute('d', writePath(subpaths, shortFloat))
+    batch.addSubCommand(new ChangeElementCommand(survivor, { d: oldD }))
+    if (targetSubpaths) {
+      const other = target.elem
+      targetSubpaths.splice(target.sub, 1)
+      if (targetSubpaths.length) {
+        const otherD = other.getAttribute('d')
+        other.setAttribute('d', writePath(targetSubpaths, shortFloat))
+        batch.addSubCommand(new ChangeElementCommand(other, { d: otherD }))
+      } else {
+        const { nextSibling, parentNode } = other
+        svgCanvas.removePath_(other.id)
+        other.remove()
+        batch.addSubCommand(new RemoveElementCommand(other, nextSibling, parentNode))
+      }
+    }
+
+    getElement('path_stretch_line')?.remove()
+    getElement('path_end_hint')?.setAttribute('display', 'none')
+    svgCanvas.getCurrentDrawing?.()?.releaseId?.(drawnElem.id)
+    svgCanvas.removePath_(drawnElem.id)
+    drawnElem.remove()
+    svgCanvas.setDrawnPath(null)
+    svgCanvas.setStarted(false)
+    this.#firstCtrl = null
+    // Its nodes changed: the next node editing reads them again.
+    svgCanvas.removePath_(survivor.id)
+    svgCanvas.addCommandToHistory(batch)
+    svgCanvas.call('changed', [survivor])
+    this.#merged = survivor
+    return survivor
+  }
+
   /**
   * @param {MouseEvent} evt
   * @param {Element} mouseTarget
@@ -333,6 +505,9 @@ class PathActions {
       let x = mouseX / zoom
       let y = mouseY / zoom
       let stretchy = getElement('path_stretch_line')
+      // The end of an open path under the pointer (lot Chemins): a drawing
+      // started there extends that path; one ended there joins it.
+      const end = this.#subpath ? null : this.#openEndAt(x, y, this.#extend)
       this.#newPoint = [x, y]
 
       if (svgCanvas.getGridSnapping()) {
@@ -340,6 +515,18 @@ class PathActions {
         y = snapToGrid(y)
         mouseX = snapToGrid(mouseX)
         mouseY = snapToGrid(mouseY)
+      }
+      if (!svgCanvas.getDrawnPath()) {
+        this.#extend = end ? { elem: end.elem, sub: end.sub, end: end.end } : null
+      }
+      if (end) {
+        // Exactly on the end.
+        x = end.x
+        y = end.y
+        mouseX = x * zoom
+        mouseY = y * zoom
+        this.#newPoint = [x, y]
+        getElement('path_end_hint')?.setAttribute('display', 'none')
       }
 
       if (!stretchy) {
@@ -369,10 +556,29 @@ class PathActions {
             opacity: svgCanvas.getOpacity() / 2
           }
         }))
+        if (this.#extend) {
+          // The drawing looks like the path it extends, which it joins.
+          const style = globalThis.getComputedStyle?.(this.#extend.elem)
+          if (style) {
+            assignAttributes(svgCanvas.getDrawnPath(), {
+              stroke: style.stroke, 'stroke-width': style.strokeWidth, fill: 'none'
+            })
+          }
+        }
         // set stretchy line to first point
         stretchy.setAttribute('d', `M${mouseX} ${mouseY} ${mouseX} ${mouseY}`)
         index = this.#subpath ? path.segs.length : 0
         svgCanvas.addPointGrip(index, mouseX, mouseY)
+      } else if (end) {
+        // The drawing ends on the end of an open path: a last segment to it,
+        // as the stretchy line draws it, then the two are joined.
+        const seglist = drawnPath.pathSegList
+        const sSeg = stretchy.pathSegList.getItem(1)
+        seglist.appendItem(sSeg.pathSegType === 4
+          ? drawnPath.createSVGPathSegLinetoAbs(end.x, end.y)
+          : drawnPath.createSVGPathSegCurvetoCubicAbs(end.x, end.y, sSeg.x1 / zoom, sSeg.y1 / zoom, end.x, end.y))
+        this.#commitJoin(drawnPath, end)
+        return false
       } else {
         // determine if we clicked on an existing point
         const seglist = drawnPath.pathSegList
@@ -409,7 +615,13 @@ class PathActions {
           // the first point was clicked on and there are less than 3 points
           // then leave the path open
           // otherwise, close the path
-          if (i <= 1 && len >= 2) {
+          if (this.#extend) {
+            // A click on a point of the drawing ends the extension, open.
+            if (len < 2) { return false }
+            stretchy.remove()
+            this.#commitJoin(drawnPath, null)
+            return false
+          } else if (i <= 1 && len >= 2) {
             // Create end segment
             const absX = seglist.getItem(0).x
             const absY = seglist.getItem(0).y
@@ -501,7 +713,10 @@ class PathActions {
     // TODO: Make sure currentPath isn't null at this point
     if (!path) { return undefined }
 
-    path.storeD();
+    path.storeD()
+    const additive = isAdditive(evt)
+    this.#added = false
+    this.#rubberBase = null;
 
     ({ id } = evt.target)
     let curPt
@@ -511,9 +726,9 @@ class PathActions {
       path.dragging = [startX, startY]
       const seg = path.segs[curPt]
 
-      // only clear selection if shift is not pressed (otherwise, add
-      // node to selection)
-      if (!evt.shiftKey) {
+      // only clear selection if neither Shift nor Ctrl is pressed
+      // (otherwise, add node to selection or take it out)
+      if (!additive) {
         if (path.selected_pts.length <= 1 || !seg.selected) {
           path.clearSelection()
         }
@@ -530,10 +745,22 @@ class PathActions {
       curPt = Number(parts[0])
       const ctrlNum = Number(parts[1])
       path.selectPt(curPt, ctrlNum)
+    } else if (evt.altKey) {
+      // Alt+click on the outline adds a node there, the shape unchanged; it
+      // can be dragged at once (lot Chemins).
+      const zoom = svgCanvas.getZoom()
+      const index = this.addPointAt(startX / zoom, startY / zoom, { record: false })
+      if (index !== null) {
+        this.#added = true
+        path.cur_pt = index
+        path.dragging = [startX, startY]
+      }
     }
 
     // Start selection box
     if (!path.dragging) {
+      // With Shift or Ctrl, the band adds to the nodes already selected.
+      this.#rubberBase = additive ? [...path.selected_pts] : null
       let rubberBox = svgCanvas.getRubberBox()
       if (!rubberBox) {
         rubberBox = svgCanvas.setRubberBox(
@@ -562,6 +789,12 @@ class PathActions {
     this.#hasMoved = true
     const drawnPath = svgCanvas.getDrawnPath()
     if (svgCanvas.getCurrentMode() === 'path') {
+      // The end of an open path within reach attracts the line (lot Chemins).
+      const end = this.#newPoint ? null : this.showEndAt(mouseX / zoom, mouseY / zoom)
+      if (end) {
+        mouseX = end.x * zoom
+        mouseY = end.y * zoom
+      }
       if (!drawnPath) { return }
       const seglist = drawnPath.pathSegList
       const index = seglist.numberOfItems - 1
@@ -660,6 +893,7 @@ class PathActions {
         path.movePts(diffX, diffY)
       }
     } else {
+      const base = this.#rubberBase ?? []
       path.selected_pts = []
       path.eachSeg(function (_i) {
         const seg = this
@@ -677,7 +911,7 @@ class PathActions {
           height: 0
         }
 
-        const sel = rectsIntersect(rbb, ptBb)
+        const sel = rectsIntersect(rbb, ptBb) || base.includes(seg.index)
 
         this.select(sel)
         // Note that addPtsToSelection is not being run
@@ -704,6 +938,14 @@ class PathActions {
     // Create mode
     if (svgCanvas.getCurrentMode() === 'path') {
       this.#newPoint = null
+      if (this.#merged) {
+        // As after a drawing, the nodes of the result are edited.
+        const merged = this.#merged
+        this.#merged = null
+        svgCanvas.setStarted(false)
+        pathActionsMethod.toEditMode(merged)
+        return { keep: false, element: null }
+      }
       if (!drawnPath) {
         element = getElement(svgCanvas.getId())
         svgCanvas.setStarted(false)
@@ -725,20 +967,27 @@ class PathActions {
       path.dragctrl = false
       path.update()
 
-      if (this.#hasMoved) {
-        path.endChanges('Move path point(s)')
+      if (this.#hasMoved || this.#added) {
+        path.endChanges(this.#added ? 'Add path point' : 'Move path point(s)')
       }
 
-      if (!evt.shiftKey && !this.#hasMoved) {
+      if (!isAdditive(evt) && !this.#hasMoved) {
         path.selectPt(lastPt)
       }
+      this.#added = false
     } else if (rubberBox?.getAttribute('display') !== 'none') {
       // Done with multi-node-select
       rubberBox.setAttribute('display', 'none')
 
       if (rubberBox.getAttribute('width') <= 2 && rubberBox.getAttribute('height') <= 2) {
-        pathActionsMethod.toSelectMode(evt.target)
+        // A click beside the path leaves node editing, unless Shift or
+        // Ctrl ask to keep the selection of nodes.
+        if (!this.#rubberBase) pathActionsMethod.toSelectMode(evt.target)
+      } else {
+        // The editor learns which nodes the band selected.
+        path.addPtsToSelection([])
       }
+      this.#rubberBase = null
 
       // else, move back to select mode
     } else {
@@ -854,6 +1103,9 @@ class PathActions {
   clear () {
     const drawnPath = svgCanvas.getDrawnPath()
     this.#currentPath = null
+    this.#extend = null
+    this.#merged = null
+    getElement('path_end_hint')?.setAttribute('display', 'none')
     if (drawnPath) {
       const elem = getElement(svgCanvas.getId())
       const psl = getElement('path_stretch_line')
@@ -953,6 +1205,86 @@ class PathActions {
     */
   linkControlPoints (linkPoints) {
     svgCanvas.setLinkControlPoints(linkPoints)
+  }
+
+  /**
+   * Adds a node to the path in node editing where its outline passes near a
+   * point, the shape unchanged (Alt+click, lot Chemins). The new node is the
+   * only one selected.
+   * @param {Float} x In user units of the drawing
+   * @param {Float} y
+   * @param {object} [options]
+   * @param {boolean} [options.record=true] Add the step to the history; at
+   *   mouse down, the mouse up records it with the drag that may follow
+   * @returns {Integer|null} Index of the new node, null when the point is
+   *   not on the outline or is on a node already
+   */
+  addPointAt (x, y, { record = true } = {}) {
+    const elem = path?.elem
+    const found = elem && this.#outlineAt(elem, x, y)
+    if (!found) return null
+    const { subpaths, hit } = found
+    if (!insertNode(subpaths, hit.sub, hit.seg, hit.t)) return null
+    if (record) path.storeD()
+    elem.setAttribute('d', writePath(subpaths, shortFloat))
+    const index = nodeIndex(subpaths, hit.sub, hit.seg)
+    path.init().update()
+    path.clearSelection()
+    path.addPtsToSelection(index)
+    if (record) path.endChanges('Add path point')
+    return index
+  }
+
+  /**
+   * The point of the outline of a path within reach of a point.
+   * @param {SVGPathElement} elem
+   * @param {Float} x In user units of the drawing
+   * @param {Float} y
+   * @returns {{subpaths: object[], hit: object}|null}
+   */
+  #outlineAt (elem, x, y) {
+    const m = getMatrix(elem)
+    const local = transformPoint(x, y, m.inverse())
+    const subpaths = readPath(elem.getAttribute('d'))
+    const hit = nearestPoint(subpaths, local)
+    if (!hit) return null
+    const onCanvas = transformPoint(hit.x, hit.y, m)
+    const zoom = svgCanvas.getZoom()
+    const stroke = Number.parseFloat(globalThis.getComputedStyle?.(elem).strokeWidth) || 0
+    const reach = Math.max(REACH / zoom, stroke / 2 + 2 / zoom)
+    return Math.hypot(onCanvas.x - x, onCanvas.y - y) <= reach ? { subpaths, hit } : null
+  }
+
+  /**
+   * Alt+click on a selected path: node editing, with a node added where the
+   * click is (lot Chemins).
+   * @param {SVGPathElement} elem
+   * @param {Float} x In user units of the drawing
+   * @param {Float} y
+   * @returns {boolean} False when the click is not on the outline
+   */
+  addPointOnPath (elem, x, y) {
+    if (!this.#outlineAt(elem, x, y)) return false
+    svgCanvas.removePath_(elem.id)
+    this.toEditMode(elem)
+    return this.addPointAt(x, y) !== null
+  }
+
+  /**
+   * Moves the selected nodes, as the arrow keys do (lot Chemins).
+   * @param {Float} dx In user units of the drawing
+   * @param {Float} dy
+   * @returns {boolean} Whether there were nodes to move
+   */
+  moveSelectedPoints (dx, dy) {
+    if (!path?.selected_pts.length) return false
+    path.storeD()
+    // A turned path moves its nodes along the axes of the drawing.
+    const im = getMatrix(path.elem).inverse()
+    path.movePts(im.a * dx + im.c * dy, im.b * dx + im.d * dy)
+    path.update()
+    path.endChanges('Move path point(s)')
+    return true
   }
 
   /**
@@ -1096,7 +1428,7 @@ class PathActions {
     * @returns {void}
     */
   deletePathNode () {
-    if (!pathActionsMethod.canDeleteNodes) { return }
+    if (!pathActionsMethod.canDeleteNodes || !path?.selected_pts.length) { return }
     path.storeD()
 
     const selPts = path.selected_pts
