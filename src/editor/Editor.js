@@ -18,7 +18,7 @@ import './dialogs/index.js'
 
 import { isMac } from '@svgedit/svgcanvas/common/browser'
 import { CommandRegistry } from './commands.js'
-import { readsOwnKeys, NAVIGATION_KEYS } from './shortcuts.js'
+import { readsOwnKeys, NAVIGATION_KEYS, eventShortcut } from './shortcuts.js'
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import ConfigObj from './ConfigObj.js'
@@ -625,6 +625,27 @@ class Editor extends EditorStartup {
   }
 
   /**
+   * While a path is drawn with the pen, the keys of the history take back
+   * its last point (Ctrl+Z) or put it back (Ctrl+Y, Ctrl+Shift+Z), even
+   * when the history is empty and its buttons disabled; the steps before the
+   * drawing are left as they are (lot Chemins). The keys stay those of the
+   * Undo and Redo commands: no command shares them.
+   * @param {KeyboardEvent} e
+   * @returns {boolean} Whether the key acted on the drawing
+   */
+  penHistoryKey (e) {
+    const { pathActions } = this.svgCanvas
+    if (!pathActions.isDrawing()) return false
+    const key = eventShortcut(e, this.commands.mac)
+    const undo = key === 'mod+z'
+    if (!undo && key !== 'mod+y' && key !== 'mod+shift+z') return false
+    e.preventDefault()
+    if (undo) pathActions.undoDrawnPoint()
+    else pathActions.redoDrawnPoint()
+    return true
+  }
+
+  /**
    *  @lends module:SVGEditor~Actions */
   /**
    * editor shortcuts init
@@ -666,6 +687,7 @@ class Editor extends EditorStartup {
       const origin = path[0]
       const onControl = origin?.nodeType === 1 && origin !== document.body && origin !== document.documentElement
       if (onControl && NAVIGATION_KEYS.has(e.key)) return
+      if (this.penHistoryKey(e)) return
       this.commands.dispatch(e)
     })
 

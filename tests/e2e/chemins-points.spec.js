@@ -83,12 +83,15 @@ test.describe('Moving path points', () => {
     // Ctrl+click again takes it out.
     await clickAt(page, 100, 200, ['Control'])
     expect(await selectedNodes(page)).toEqual([1, 2])
-    // The selected points are filled with the colour of the guides.
-    const fills = await page.evaluate(() => [0, 1, 2, 3].map((i) =>
+    // The selected points are filled with the blue of the selection; the
+    // pointer leaves the last one clicked, which it would colour as hovered.
+    await page.mouse.move(5, 5)
+    const readFills = () => page.evaluate(() => [0, 1, 2, 3].map((i) =>
       getComputedStyle(document.getElementById(`pathpointgrip_${i}`)).fill))
+    await expect.poll(async () => { const f = await readFills(); return f[0] === f[3] }).toBe(true)
+    const fills = await readFills()
     expect(fills[1]).toBe(fills[2])
     expect(fills[0]).not.toBe(fills[1])
-    expect(fills[0]).toBe(fills[3])
 
     await dragFrom(page, [200, 200], [230, 240])
     expect(await nodes(page, 'p1')).toEqual([[100, 100], [230, 140], [230, 240], [100, 200]])
@@ -300,4 +303,138 @@ test.describe('Extending or joining paths', () => {
       expect((await paths(page)).length).toBe(2)
     })
   }
+})
+
+test.describe('Drawing with the pen', () => {
+  /** The drawing in progress, its nodes rounded; null when there is none. */
+  const drawing = (page) => page.evaluate(() => {
+    const el = window.svgEditor.svgCanvas.getDrawnPath()
+    if (!el) return null
+    const list = el.pathSegList
+    const out = []
+    for (let i = 0; i < list.numberOfItems; i++) {
+      const s = list.getItem(i)
+      out.push([s.pathSegType === 4 || s.pathSegType === 2 ? 'L' : 'C', Math.round(s.x), Math.round(s.y)])
+    }
+    return out
+  })
+  const historySize = (page) => page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.getUndoStackSize())
+
+  test('Ctrl+Z takes back the last point, Ctrl+Y puts it back, the history untouched', async ({ page }) => {
+    await load(page, OPEN)
+    const before = await historySize(page)
+    await chooseTool(page, 'tool_path')
+    await clickAt(page, 300, 300)
+    await clickAt(page, 400, 300)
+    await clickAt(page, 400, 400)
+    await undo(page)
+    expect(await drawing(page)).toEqual([['L', 300, 300], ['L', 400, 300]])
+    await page.keyboard.press('Control+y')
+    expect(await drawing(page)).toEqual([['L', 300, 300], ['L', 400, 300], ['L', 400, 400]])
+    await undo(page)
+    await undo(page)
+    // Back to its first point, then the drawing is given up.
+    expect(await drawing(page)).toEqual([['L', 300, 300]])
+    await undo(page)
+    expect(await drawing(page)).toBeNull()
+    expect(await mode(page)).toBe('path')
+    expect(await historySize(page)).toBe(before)
+    expect(await paths(page)).toEqual(['p1'])
+    // The pen draws again at once.
+    await clickAt(page, 300, 300)
+    await clickAt(page, 350, 350)
+    expect(await drawing(page)).toEqual([['L', 300, 300], ['L', 350, 350]])
+  })
+
+  test('Ctrl+Z works while drawing an empty document, and only then reaches the history', async ({ page }) => {
+    await load(page, '')
+    await page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.resetUndoStack())
+    await chooseTool(page, 'tool_path')
+    await clickAt(page, 100, 100)
+    await clickAt(page, 200, 100)
+    await undo(page)
+    expect(await drawing(page)).toEqual([['L', 100, 100]])
+    await undo(page)
+    expect(await drawing(page)).toBeNull()
+    expect(await paths(page)).toEqual([])
+  })
+
+  test('the history menu while drawing gives the drawing up, without error', async ({ page }) => {
+    await load(page, '')
+    await chooseTool(page, 'tool_rect')
+    await dragFrom(page, [50, 50], [120, 120])
+    await expect.poll(() => historySize(page)).toBeGreaterThan(0)
+    await chooseTool(page, 'tool_path')
+    await clickAt(page, 300, 300)
+    await clickAt(page, 400, 300)
+    await page.evaluate(() => window.svgEditor.topPanel.goToHistory(0))
+    expect(await drawing(page)).toBeNull()
+    expect(await page.evaluate(() => document.querySelectorAll('#svgcontent g.layer > :not(title)').length)).toBe(0)
+  })
+
+  test('the pen chosen right after drawing a shape leaves the shape alone', async ({ page }) => {
+    await load(page, '')
+    await chooseTool(page, 'tool_rect')
+    await dragFrom(page, [50, 50], [120, 120])
+    // Before the end of its fade in: the shape went to node editing, and
+    // threw, being no path.
+    await chooseTool(page, 'tool_path')
+    await page.waitForTimeout(400)
+    expect(await mode(page)).toBe('path')
+    await clickAt(page, 300, 300)
+    await clickAt(page, 400, 300)
+    expect(await drawing(page)).toEqual([['L', 300, 300], ['L', 400, 300]])
+  })
+
+  test('a slight move during a click leaves the segment straight, Shift kept', async ({ page }) => {
+    await load(page, '')
+    await chooseTool(page, 'tool_path')
+    await clickAt(page, 100, 300)
+    // Shift, the pointer a little off the horizontal, and shaking 3 px
+    // while the button is down.
+    const a = await screenPoint(page, 250, 308)
+    await page.keyboard.down('Shift')
+    await page.mouse.move(a.x, a.y, { steps: 3 })
+    const line = await page.evaluate(() => document.getElementById('path_stretch_line').getAttribute('d'))
+    expect(line).toMatch(/^M ?100 300 L ?250\.?\d* 300$/)
+    await page.mouse.down()
+    await page.mouse.move(a.x + 2, a.y + 2, { steps: 2 })
+    await page.mouse.up()
+    await page.keyboard.up('Shift')
+    // Without Shift, a shake is not a curve either.
+    const b = await screenPoint(page, 250, 400)
+    await page.mouse.move(b.x, b.y)
+    await page.mouse.down()
+    await page.mouse.move(b.x - 2, b.y + 1, { steps: 2 })
+    await page.mouse.up()
+    expect(await drawing(page)).toEqual([['L', 100, 300], ['L', 250, 300], ['L', 250, 400]])
+    // A real drag still pulls the handles of a curve.
+    await dragFrom(page, [400, 400], [450, 450])
+    expect((await drawing(page))[3][0]).toBe('C')
+  })
+})
+
+test.describe('Look of the nodes', () => {
+  test('no segment is outlined, and a click on the stroke keeps editing the nodes', async ({ page }) => {
+    await load(page, OPEN)
+    await editNodes(page, 'p1')
+    await clickAt(page, 200, 100)
+    expect(await selectedNodes(page)).toEqual([1])
+    expect(await page.evaluate(() => [...document.querySelectorAll('[id^=segline_]')]
+      .filter((l) => l.getAttribute('display') !== 'none').length)).toBe(0)
+    // The selected node is the only one filled, and drawn as a node.
+    const look = await page.evaluate(() => [0, 1].map((i) => {
+      const grip = document.getElementById(`pathpointgrip_${i}`)
+      return { fill: getComputedStyle(grip).fill, node: grip.classList.contains('se-node') }
+    }))
+    expect(look[0].node && look[1].node).toBe(true)
+    expect(look[0].fill).not.toBe(look[1].fill)
+    // On the stroke, between two nodes: still editing, nothing selected.
+    await clickAt(page, 200, 150)
+    expect(await mode(page)).toBe('pathedit')
+    expect(await selectedNodes(page)).toEqual([])
+    // Beside it, the editing ends.
+    await clickAt(page, 400, 400)
+    expect(await mode(page)).toBe('select')
+  })
 })
