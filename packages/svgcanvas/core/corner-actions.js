@@ -345,6 +345,13 @@ class CornerActions {
     drag.p0 = toLocal(client, elem)
     if (!drag.p0) return false
     this.#drag = drag
+    // The canvas hears the button released over itself only: released over a
+    // panel, the drag ends all the same.
+    globalThis.addEventListener?.('mouseup', () => {
+      if (this.#drag !== drag) return
+      svgCanvas.setStarted(false)
+      this.end()
+    }, { once: true })
     this.refresh()
     return true
   }

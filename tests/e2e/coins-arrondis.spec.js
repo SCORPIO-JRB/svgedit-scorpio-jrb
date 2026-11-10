@@ -110,13 +110,17 @@ test.describe('Rounded corners (lot Coins)', () => {
     await load(page, '<rect id="r1" x="100" y="100" width="200" height="120" rx="8" fill="#fc0"/>')
     await select(page, 'r1')
     let h = await handles(page)
+    // Released over the panels, out of the canvas: the drag ends all the same.
     expect(await drag(page, h.se, -250, -250)).toBe('R 60')
     expect(await attr(page, 'r1', 'rx')).toBe('60')
+    expect(await page.evaluate(() => window.svgEditor.svgCanvas.cornerActions.isDragging())).toBe(false)
 
+    // At their largest, the handles of the right corners meet at the same
+    // point: a move to the right makes either smaller.
     h = await handles(page)
     await page.mouse.move(h.ne.x, h.ne.y)
     await page.mouse.down()
-    await page.mouse.move(h.ne.x + 30, h.ne.y - 30)
+    await page.mouse.move(h.ne.x + 30, h.ne.y)
     expect(await attr(page, 'r1', 'rx')).not.toBe('60')
     await page.keyboard.press('Escape')
     await page.mouse.up()
@@ -210,7 +214,11 @@ test.describe('Rounded corners (lot Coins)', () => {
       await page.mouse.move(b.x, b.y, { steps: 4 })
       for (const key of keys) await page.keyboard.press(key)
       await page.mouse.up()
-      await page.waitForFunction(() => window.svgEditor.svgCanvas.getMode() === 'select' || window.svgEditor.svgCanvas.getMode() === 'rect')
+      // The new rectangle is selected once it has faded in.
+      await page.waitForFunction(() => {
+        const rects = document.querySelectorAll('#svgcontent g.layer > rect')
+        return window.svgEditor.svgCanvas.getSelectedElements()[0] === rects[rects.length - 1]
+      })
       return page.evaluate(() => {
         const rects = document.querySelectorAll('#svgcontent g.layer > rect')
         return rects[rects.length - 1]?.getAttribute('rx') ?? null
