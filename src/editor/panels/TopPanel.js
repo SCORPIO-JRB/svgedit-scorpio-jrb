@@ -3,7 +3,7 @@
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import topPanelHTML from './TopPanel.html'
-import { commonValueOf, roundForField, styledAttribute } from './panelValues.js'
+import { commonValueOf, lengthOf, roundForField, strokeWidthOf, styledAttribute } from './panelValues.js'
 import { askText } from '../components/askText.js'
 import { stepTargets } from '../history-steps.js'
 import { renameId, ungroupSelected } from '../binding.js'
@@ -171,7 +171,7 @@ class TopPanel {
           const childs = this.selectedElement.getElementsByTagName('*')
           let gWidth = null
           for (i = 0, len = childs.length; i < len; i++) {
-            const swidth = styledAttribute(this.editor.svgCanvas, childs[i], 'stroke-width')
+            const swidth = lengthOf(styledAttribute(this.editor.svgCanvas, childs[i], 'stroke-width'))
 
             if (i === 0) {
               gWidth = swidth
@@ -189,7 +189,7 @@ class TopPanel {
 
           // As drawn: a rule of the style sheets can give these (lot S2)
           const styled = (name) => styledAttribute(this.editor.svgCanvas, this.selectedElement, name)
-          $id('stroke_width').value = styled('stroke-width') || 1
+          $id('stroke_width').value = strokeWidthOf(this.editor.svgCanvas, this.selectedElement)
           $id('stroke_style').value = styled('stroke-dasharray') || 'none'
           $id('stroke_style').setAttribute('value', $id('stroke_style').value)
 
