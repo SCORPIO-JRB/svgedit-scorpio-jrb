@@ -31,7 +31,7 @@ const ROTATE_ZONE = window.ontouchstart ? 16 : 12
 // Handles of the corners (lot Coins): radius of the ring and of the area
 // that takes the pointer.
 const CORNER_RADIUS = window.ontouchstart ? 7 : 4
-const CORNER_HIT_RADIUS = window.ontouchstart ? 14 : 7
+const CORNER_HIT_RADIUS = window.ontouchstart ? 14 : 6
 // Dimension label under the frame: gap, height and side padding, in pixels.
 const LABEL_GAP = 10
 const LABEL_HEIGHT = 18

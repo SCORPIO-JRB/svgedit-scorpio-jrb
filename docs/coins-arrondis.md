@@ -12,7 +12,7 @@ SVG-Edit savait déjà donner un rayon à un rectangle, par le champ « rayon de
 
 Une poignée d'angle est un petit anneau bleu avec un point au centre, placé à l'intérieur d'un coin. Elle grossit au survol et pendant qu'on la tire. On la distingue ainsi des poignées carrées de redimensionnement et des disques des nœuds.
 
-Elle est placée au centre de l'arc du coin. Pour un coin vif ou peu arrondi, elle reste à 22 px du sommet, sur la bissectrice : on peut toujours l'attraper sans toucher la poignée de redimensionnement du coin.
+Elle est placée au centre de l'arc du coin. Pour un coin vif ou peu arrondi, elle reste à 28 px du sommet, sur la bissectrice, soit environ 20 px de chaque côté d'un angle droit. On l'attrape ainsi sans toucher la poignée de redimensionnement, et à 12 px du coin on attrape toujours l'objet pour le déplacer.
 
 Pendant qu'on la tire, l'étiquette sous la sélection donne le rayon : `R 12`, dans l'unité du document. `Échap` remet tout comme avant. Chaque glisser fait une seule étape d'annulation.
 
@@ -26,8 +26,8 @@ Pendant qu'on la tire, l'étiquette sous la sélection donne le rayon : `R 12`, 
 Les poignées ne s'affichent pas :
 
 - sur une sélection multiple ;
-- sur un rectangle de moins de 48 px de côté à l'écran ;
-- sur un angle dont un côté fait moins de 32 px à l'écran ;
+- sur un rectangle de moins de 56 px de côté à l'écran ;
+- sur un angle dont un côté fait moins de 40 px à l'écran ;
 - sur un connecteur ;
 - sur un objet verrouillé ;
 - pendant un redimensionnement ou une rotation.

@@ -29,12 +29,14 @@ import {
 
 let svgCanvas = null
 
-// Distance on the screen from a vertex to its handle, at least.
-const HANDLE_DISTANCE = 22
+// Distance on the screen from a vertex to its handle, at least: about 20
+// pixels inside each side of a right angle, so that 12 pixels inside the
+// corner the pointer still takes the element (lot M5).
+const HANDLE_DISTANCE = 28
 // A rectangle smaller on the screen shows no handle.
-const RECT_MIN_SIDE = 48
+const RECT_MIN_SIDE = 56
 // Around a corner of a polygon or a path, sides shorter on the screen hide its handle.
-const SIDE_MIN = 32
+const SIDE_MIN = 40
 // Most handles on one element.
 const MAX_HANDLES = 48
 // Travel of the pointer, in screen pixels, before a drag changes anything.
