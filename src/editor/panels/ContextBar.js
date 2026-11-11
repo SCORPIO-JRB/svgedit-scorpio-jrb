@@ -557,6 +557,8 @@ export class ContextBar {
     const top = this.editor.$svgEditor.querySelector('#tools_top')
     for (let node = el; node && node !== top && node !== document.body; node = node.parentElement) {
       if (node.classList?.contains('se-section')) break
+      // Folded settings (More options, the settings of the stroke) apply.
+      if (node.classList?.contains('se-more-body')) continue
       if (!isShown(node)) return false
     }
     return true

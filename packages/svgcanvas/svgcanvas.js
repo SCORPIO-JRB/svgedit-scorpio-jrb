@@ -44,6 +44,7 @@ import { init as portsInit } from './core/ports.js'
 import { init as symbolsInit } from './core/symbols.js'
 import { init as connectorsInit } from './core/connectors.js'
 import { init as cornerActionsInit } from './core/corner-actions.js'
+import { init as strokeAlignInit } from './core/stroke-align.js'
 import {
   init as jsonInit,
   getJsonFromSvgElements,
@@ -295,6 +296,7 @@ class SvgCanvas {
     symbolsInit(this)
     connectorsInit(this)
     cornerActionsInit(this)
+    strokeAlignInit(this)
 
     // prevent links from being followed in the canvas
     const handleLinkInCanvas = e => {

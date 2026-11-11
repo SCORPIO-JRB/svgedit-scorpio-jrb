@@ -2217,16 +2217,241 @@
   cursor: crosshair !important;
 }
 
-/* The − and + of the Fill and Stroke sections, on the line of their title. */
-.se-layout-canvas .se-inspector .se-section[data-section="fill"],
-.se-layout-canvas .se-inspector .se-section[data-section="stroke"] {
+/* Lot Propriétés, after the panel of Figma.
+—————————————————————————————*/
+
+/* The tools of the title line of a section: the eye and the blend mode of
+   Appearance, the libraries and + of Fill and Stroke. */
+.se-layout-canvas #tools_top.se-inspector > .se-section {
   position: relative;
 }
 
-.se-layout-canvas .se-inspector .se-paint-toggle {
+.se-layout-canvas .se-inspector .se-section-tools {
   position: absolute;
-  top: 10px;
+  top: 8px;
   right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.se-layout-canvas .se-inspector .se-section-tools:empty,
+.se-layout-canvas .se-inspector .se-section-tools[hidden],
+.se-layout-canvas .se-inspector .se-section-tool[hidden] {
+  display: none;
+}
+
+.se-layout-canvas .se-inspector .se-section-tool {
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-icon);
+  font: inherit;
+  cursor: pointer;
+  --se-icon-size: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-section-tool:hover,
+.se-layout-canvas .se-inspector .se-section-tool:focus-within {
+  background: var(--se-control-hover);
+  color: var(--se-text);
+}
+
+.se-layout-canvas .se-inspector .se-section-tool:focus-visible,
+.se-layout-canvas .se-inspector .se-blend:focus-within {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+}
+
+/* The blend mode: the drop over a list of the modes; coloured when the
+   selection has one. */
+.se-layout-canvas .se-inspector .se-blend select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.se-layout-canvas .se-inspector .se-blend.se-set {
+  color: var(--se-accent);
+}
+
+/* Position: the row of alignment, the caption and the row of the rotation. */
+.se-layout-canvas .se-inspector .se-align-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+.se-layout-canvas .se-inspector .se-align-row[hidden] {
+  display: none;
+}
+
+.se-layout-canvas .se-inspector .se-align-row .se-icon-button {
+  flex: 1 1 0;
+  width: auto;
+  height: 24px;
+  --se-icon-size: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-subhead {
+  flex-basis: 100%;
+  margin: 2px 0 -2px;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+  line-height: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-segmented {
+  display: flex;
+  flex: 0 1 calc(50% - var(--se-space-1));
+  min-width: 0;
+  height: var(--se-control-size);
+  overflow: hidden;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+.se-layout-canvas .se-inspector .se-segmented > se-button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-segmented > se-button + se-button {
+  border-left: 1px solid var(--se-surface);
+}
+
+/* Appearance: the opacity and the radius of the corners, side by side. */
+.se-layout-canvas .se-inspector .se-appearance-row {
+  display: flex;
+  flex-basis: 100%;
+  gap: var(--se-space-2);
+}
+
+.se-layout-canvas .se-inspector .se-appearance-row > se-spin-input {
+  flex: 0 1 calc(50% - var(--se-space-1));
+}
+
+.se-layout-canvas .se-inspector .se-appearance-row > [hidden] {
+  display: none;
+}
+
+/* Fill and Stroke: the paint, its eye and its −; nothing more without
+   paint, where + shows on the title line. */
+.se-layout-canvas .se-inspector .se-paint-row {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-paint-row > se-colorpicker {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: 2px;
+}
+
+.se-layout-canvas .se-inspector .se-paint-row.se-paint-hidden > se-colorpicker {
+  opacity: 0.5;
+}
+
+.se-layout-canvas .se-inspector .se-section[data-paint-none="true"] > .se-section-body {
+  display: none;
+}
+
+/* The stroke: its position, its weight and its settings. */
+.se-layout-canvas .se-inspector .se-stroke-row {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--se-space-2);
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-stroke-row > .se-stroke-align,
+.se-layout-canvas .se-inspector .se-stroke-row > #stroke_width {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-stroke-align select {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-weight: normal;
+  text-transform: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.se-layout-canvas .se-inspector .se-stroke-align select:disabled {
+  color: var(--se-text-secondary);
+  cursor: default;
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle.se-more-icon {
+  color: var(--se-icon);
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle.se-more-icon::after {
+  content: none;
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle.se-more-icon[aria-expanded="true"] {
+  background: var(--se-accent-bg);
+  color: var(--se-accent);
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle.se-more-icon.se-more-set::before {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--se-accent);
+}
+
+/* The settings of the stroke: the dashes, the joins and the caps on one
+   row, the arrows of the start, the middle and the end on the next. */
+.se-layout-canvas .se-inspector #se-more-stroke > #stroke_style {
+  flex: 1 1 0;
+}
+
+/* The extension shows its panel with display: block. */
+.se-layout-canvas .se-inspector #se-more-stroke > #marker_panel:not([style*="none"]) {
+  display: flex !important;
+  flex-basis: 100%;
+  gap: var(--se-space-2);
+}
+
+.se-layout-canvas .se-inspector #se-more-stroke > #marker_panel > * {
+  flex: 1 1 0;
 }
 
 /* The field of the inspector: swatch, hexadecimal and opacity typed in. */

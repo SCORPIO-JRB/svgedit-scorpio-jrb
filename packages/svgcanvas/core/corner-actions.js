@@ -76,12 +76,11 @@ const roundRadius = (radius) => {
  * @param {SVGRectElement} elem
  * @returns {{x: number, y: number, width: number, height: number}}
  */
-const rectBox = (elem) => ({
-  x: elem.x.baseVal.value,
-  y: elem.y.baseVal.value,
-  width: elem.width.baseVal.value,
-  height: elem.height.baseVal.value
-})
+const rectBox = (elem) => {
+  // The attributes, where the DOM has no SVG lengths (jsdom).
+  const length = (name) => elem[name]?.baseVal?.value ?? (Number.parseFloat(elem.getAttribute(name)) || 0)
+  return { x: length('x'), y: length('y'), width: length('width'), height: length('height') }
+}
 
 /**
  * The skeletons of the subpaths of a path, and its corners keyed
@@ -163,6 +162,124 @@ class CornerActions {
   remember (radius) {
     const r = Number(radius)
     if (Number.isFinite(r) && r >= 0) this.#radius = r
+  }
+
+  /**
+   * The radius of the corners of an element, for the Corner radius field of
+   * the inspector (lot Propriétés).
+   * @param {Element} elem
+   * @returns {{radius: number, mixed: boolean}|null} null for an element
+   *   without corner; mixed when the corners of a path differ (the largest
+   *   radius is given)
+   */
+  radiusOf (elem) {
+    switch (elem?.tagName) {
+      case 'rect': {
+        const { width, height } = rectBox(elem)
+        return { radius: rectRadius(width, height, elem.getAttribute('rx'), elem.getAttribute('ry')), mixed: false }
+      }
+      case 'polygon':
+      case 'polyline': {
+        const flat = pointsSkeleton(readPoints(elem.getAttribute('points')), elem.tagName === 'polygon')
+        return flat && skeletonCorners(flat).length ? { radius: 0, mixed: false } : null
+      }
+      case 'path': {
+        let found
+        try {
+          found = pathCorners(elem)
+        } catch (e) {
+          return null
+        }
+        if (!found.corners.length) return null
+        const radii = [...new Set(found.corners.map(({ corner }) => Math.round(corner.radius * 100) / 100))]
+        return { radius: Math.max(...radii), mixed: radii.length > 1 }
+      }
+      default:
+        return null
+    }
+  }
+
+  /**
+   * Gives one radius to every corner of the elements, as the Corner radius
+   * field of the inspector does: a rectangle keeps rx and ry, a polygon or
+   * a polyline becomes a path, a path has its corners rounded with arcs (0
+   * makes them sharp). One undo step.
+   * @param {Element[]} elems
+   * @param {number|string} radius
+   * @returns {Element[]|null} The elements, a converted shape replaced by its
+   *   path; null when nothing changed
+   */
+  setRadius (elems, radius) {
+    const r = Math.max(0, Number.parseFloat(radius))
+    if (!Number.isFinite(r)) return null
+    const batch = new BatchCommand('Round corners')
+    const own = Object.prototype.hasOwnProperty.call(svgCanvas, 'addCommandToHistory')
+    const add = svgCanvas.addCommandToHistory
+    svgCanvas.addCommandToHistory = (cmd) => batch.addSubCommand(cmd)
+    const result = []
+    let converted = false
+    try {
+      for (const original of (elems ?? []).filter(Boolean)) {
+        let elem = original
+        if (!this.radiusOf(elem) || isConnector(elem)) {
+          result.push(elem)
+          continue
+        }
+        if (elem.tagName === 'rect') {
+          const old = { rx: elem.getAttribute('rx'), ry: elem.getAttribute('ry') }
+          if (r > 0) {
+            elem.setAttribute('rx', shortFloat(r))
+            elem.setAttribute('ry', shortFloat(r))
+          } else {
+            elem.removeAttribute('rx')
+            elem.removeAttribute('ry')
+          }
+          if (elem.getAttribute('rx') !== old.rx || elem.getAttribute('ry') !== old.ry) {
+            batch.addSubCommand(new ChangeElementCommand(elem, old, 'Radius'))
+          }
+          result.push(elem)
+          continue
+        }
+        if (elem.tagName !== 'path') {
+          // Sharp already: a polygon stays a polygon.
+          if (r === 0) {
+            result.push(elem)
+            continue
+          }
+          const path = svgCanvas.convertToPath(elem)
+          if (!path) {
+            result.push(elem)
+            continue
+          }
+          converted = true
+          elem = path
+        }
+        const oldD = elem.getAttribute('d')
+        const { subpaths, skel } = pathCorners(elem)
+        const out = skel.map(({ flat }, s) => {
+          const corners = skeletonCorners(flat)
+          if (!corners.length) return subpaths[s]
+          return roundSkeleton(flat, new Map(corners.map((corner) => [corner.k, r]))).sub
+        })
+        const d = writePath(out, shortFloat)
+        if (d !== oldD) {
+          elem.setAttribute('d', d)
+          batch.addSubCommand(new ChangeElementCommand(elem, { d: oldD }, 'Round corners'))
+        }
+        result.push(elem)
+      }
+    } finally {
+      if (own) svgCanvas.addCommandToHistory = add
+      else delete svgCanvas.addCommandToHistory
+    }
+    if (r > 0 && result.some((elem) => elem.tagName === 'rect')) this.remember(r)
+    if (batch.isEmpty()) return null
+    svgCanvas.addCommandToHistory(batch)
+    if (converted) svgCanvas.selectOnly(result.filter((elem) => elem.isConnected), true)
+    for (const elem of result) svgCanvas.selectorManager.requestSelector(elem)?.resize()
+    svgCanvas.call('changed', result)
+    this.schedule()
+    return result
   }
 
   /**

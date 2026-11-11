@@ -216,8 +216,10 @@ test.describe('Simplification, canvas layout (S1)', () => {
     await page.locator('#se-actions-button').click()
     const verbs = await page.evaluate(() => [...document.querySelectorAll('#se-actions-menu se-button')]
       .filter((el) => el.getBoundingClientRect().width > 0).map((el) => el.id))
-    expect(verbs).toContain('tool_flip_h')
     expect(verbs).not.toContain('tool_reorient')
+    // The flips are beside the angle, in Position (lot Propriétés).
+    expect(verbs).not.toContain('tool_flip_h')
+    await expect(page.locator('[data-section="geometry"] #tool_flip_h')).toBeVisible()
   })
 
   test('the document menu has no document properties nor home page; Shift+D opens nothing; the Document section chooses the images and fits to the content', async ({ page }) => {
@@ -292,7 +294,8 @@ test.describe('Rare and folded settings (S1)', () => {
 
   test('joins, caps and letter spacing are under "More options"; the button marks a value that is not the usual one', async ({ page }) => {
     await select(page, ['trace-libre'])
-    const stroke = page.locator('[data-more="stroke"] .se-more-toggle')
+    // The icon of the settings at the end of the row of the stroke (lot Propriétés).
+    const stroke = page.locator('.se-more-toggle[data-more="stroke"]')
     expect(await shownControls(page, ['stroke_width', 'stroke_linejoin', 'stroke_linecap']))
       .toEqual({ stroke_width: true, stroke_linejoin: false, stroke_linecap: false })
     await expect(stroke).toHaveAttribute('aria-expanded', 'false')
@@ -300,10 +303,12 @@ test.describe('Rare and folded settings (S1)', () => {
     await stroke.click()
     await expect(stroke).toHaveAttribute('aria-expanded', 'true')
     expect(await shownControls(page, ['stroke_linejoin', 'stroke_linecap'])).toEqual({ stroke_linejoin: true, stroke_linecap: true })
-    // The markers of the extension stay before the fold.
+    // The fold stays last; the dashes and the markers of the extension are in it.
     expect(await page.evaluate(() => {
       const body = document.querySelector('[data-section="stroke"] > .se-section-body')
-      return body.lastElementChild.classList.contains('se-more')
+      return body.lastElementChild.classList.contains('se-more') &&
+        Boolean(document.querySelector('#se-more-stroke > #stroke_style')) &&
+        Boolean(document.querySelector('#se-more-stroke > #marker_panel'))
     })).toBe(true)
     await stroke.click()
 

@@ -43,7 +43,10 @@ class BottomPanel {
       const shapes = shapesOf(this.editor.svgCanvas.getSelectedElements())
       this.editor.svgCanvas.changeSelectedAttributeEach('stroke-width', (elem) => {
         const current = Number(strokeWidthOf(this.editor.svgCanvas, elem))
-        return Number.isFinite(current) ? relative(current) : undefined
+        if (!Number.isFinite(current)) return undefined
+        // A weight: the stroke inside or outside is drawn twice as wide.
+        const doubled = (this.editor.svgCanvas.getStrokeAlign?.(elem) ?? 'center') !== 'center'
+        return doubled ? relative(current) * 2 : relative(current)
       }, shapes)
       return
     }

@@ -89,7 +89,14 @@ export const STEP_TEXTS = {
   // Lot Coins
   'round corners': 'round_corners',
   // Lot Plume
-  'bend segment': 'bend_segment'
+  'bend segment': 'bend_segment',
+  // Lot Propriétés
+  'stroke position': 'stroke_position',
+  'blend mode': 'blend_mode',
+  'hide fill': 'hide_fill',
+  'show fill': 'show_fill',
+  'hide stroke': 'hide_stroke',
+  'show stroke': 'show_stroke'
 }
 
 /** Names that give the number of objects. */

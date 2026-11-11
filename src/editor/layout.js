@@ -170,6 +170,8 @@ export class EditorLayout {
         break
       case 'bottom':
         this.inspector.attachBottom(fragment)
+        // The eye and − at the end of the fill and the stroke.
+        this.paintPicker?.mountRows()
         break
       case 'layers':
         this.attachLayers(fragment)

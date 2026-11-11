@@ -700,7 +700,13 @@ class TopPanel {
    * @type {module}
    */
   changeRectRadius (e) {
-    this.editor.svgCanvas.setRectRadius(e.target.value)
+    const { svgCanvas } = this.editor
+    // Every corner of a rectangle, a polygon or a path (lot Propriétés).
+    if (svgCanvas.cornerActions?.setRadius) {
+      svgCanvas.cornerActions.setRadius(svgCanvas.getSelectedElements().filter(Boolean), e.target.value)
+      return
+    }
+    svgCanvas.setRectRadius(e.target.value)
   }
 
   /**

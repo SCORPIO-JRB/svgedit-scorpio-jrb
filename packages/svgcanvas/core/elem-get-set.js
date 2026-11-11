@@ -16,7 +16,8 @@ import {
 import { getParents } from '../common/util.js'
 import { isSafeHref } from './sanitize.js'
 import { warn } from '../common/logger.js'
-import { InsertElementCommand } from './history.js'
+import { ChangeElementCommand, InsertElementCommand } from './history.js'
+import { getStrokeAlign } from './stroke-align.js'
 import { getTextSource, getLineHeight, getTextWidth } from './text-lines.js'
 import { readStyleRules, findStyleSource, getStyledValue } from './style-rules.js'
 
@@ -77,6 +78,8 @@ export const init = (canvas) => {
   svgCanvas.setPaint = setPaintMethod // Set a color/gradient to a fill/stroke.
   svgCanvas.previewPaint = previewPaintMethod // Show a paint on the selection, outside the history.
   svgCanvas.cancelPaintPreview = cancelPaintPreviewMethod // Give back the paint a preview replaced.
+  svgCanvas.setPaintVisible = setPaintVisibleMethod // Hide or show the fill or the stroke (the eye of the inspector).
+  svgCanvas.isPaintHidden = isPaintHidden
 }
 
 /**
@@ -608,6 +611,13 @@ const setPaintMethod = (type, paint) => {
 
     // now set the current paint object
     svgCanvas.setCurProperties(`${type}_paint`, p)
+    // A paint hidden by the eye of the inspector shows again with the new one.
+    const hidden = hiddenPaintAttr(type)
+    for (const elem of paintTargets(type).colored) {
+      if (!elem.hasAttribute(hidden)) continue
+      batch.addSubCommand(new ChangeElementCommand(elem, { [hidden]: elem.getAttribute(hidden) }))
+      elem.removeAttribute(hidden)
+    }
     switch (p.type) {
       case 'solidColor':
         svgCanvas.setColor(type, p.solidColor !== 'none' ? `#${p.solidColor}` : 'none')
@@ -643,6 +653,59 @@ const paintTargets = (type) => {
     }
   }
   return { selected, colored }
+}
+
+/**
+* The attribute where a hidden fill or stroke waits (lot Propriétés).
+* @param {"fill"|"stroke"} type
+* @returns {string}
+*/
+export const hiddenPaintAttr = (type) => `data-se-${type}-hidden`
+
+/**
+* @param {Element} elem
+* @param {"fill"|"stroke"} type
+* @returns {boolean} Whether the eye of the inspector hid this paint
+*/
+export const isPaintHidden = (elem, type) => Boolean(elem?.hasAttribute?.(hiddenPaintAttr(type)))
+
+/**
+* Hides or shows the fill or the stroke of the selected shapes, as the eye of
+* the inspector does (lot Propriétés): a hidden paint is `none`, and the paint
+* it had waits in `data-se-fill-hidden` or `data-se-stroke-hidden`, in the
+* file too. One undo step. A shape without this paint is left as it is.
+* @function module:elem-get-set.SvgCanvas#setPaintVisible
+* @param {"fill"|"stroke"} type
+* @param {boolean} visible
+* @returns {BatchCommand|null}
+*/
+const setPaintVisibleMethod = (type, visible) => {
+  cancelPaintPreviewMethod()
+  const attr = hiddenPaintAttr(type)
+  const rules = readStyleRules(svgCanvas.getSvgContent())
+  const paintOf = (elem) => getStyledValue(elem, type, rules)?.value ?? elem.getAttribute(type)
+  const { colored } = paintTargets(type)
+  const targets = colored.filter((elem) => visible
+    ? elem.hasAttribute(attr)
+    : !elem.hasAttribute(attr) && (paintOf(elem) ?? (type === 'fill' ? 'black' : 'none')).trim() !== 'none')
+  if (!targets.length) return null
+  const batch = svgCanvas.groupHistory(`${visible ? 'Show' : 'Hide'} ${type}`, (step) => {
+    for (const elem of targets) {
+      const old = { [attr]: elem.getAttribute(attr), [type]: elem.getAttribute(type), style: elem.getAttribute('style') }
+      if (visible) {
+        const value = elem.getAttribute(attr)
+        elem.removeAttribute(attr)
+        svgCanvas.changeSelectedAttributeNoUndo(type, value || (type === 'fill' ? 'black' : 'none'), [elem])
+      } else {
+        elem.setAttribute(attr, paintOf(elem) ?? 'black')
+        svgCanvas.changeSelectedAttributeNoUndo(type, 'none', [elem])
+      }
+      const changed = Object.keys(old).filter((name) => elem.getAttribute(name) !== old[name])
+      step.addSubCommand(new ChangeElementCommand(elem, Object.fromEntries(changed.map((name) => [name, old[name]]))))
+    }
+  })
+  svgCanvas.call('changed', targets)
+  return batch.isEmpty() ? null : batch
 }
 
 /** The paint a preview replaced, to give it back. */
@@ -762,7 +825,15 @@ const setStrokeWidthMethod = (val) => {
     }
   }
   if (elems.length > 0) {
-    svgCanvas.changeSelectedAttribute('stroke-width', val, elems)
+    // A stroke inside or outside its shape is drawn twice as wide (lot
+    // Propriétés): the value is its weight.
+    if (elems.some((elem) => getStrokeAlign(elem) !== 'center')) {
+      const number = Number(val)
+      svgCanvas.changeSelectedAttributeEach('stroke-width', (elem) =>
+        getStrokeAlign(elem) !== 'center' && Number.isFinite(number) ? String(Math.round(number * 2000) / 1000) : val, elems)
+    } else {
+      svgCanvas.changeSelectedAttribute('stroke-width', val, elems)
+    }
     svgCanvas.call('changed', selectedElements)
   }
 }

@@ -72,6 +72,12 @@ export const lengthOf = (value) => {
  */
 export const strokeWidthOf = (svgCanvas, elem) => {
   const own = styledAttribute(svgCanvas, elem, 'stroke-width')
+  // A stroke inside or outside its shape is drawn twice as wide: the field
+  // gives its weight (lot Propriétés).
+  if (own !== null && (svgCanvas?.getStrokeAlign?.(elem) ?? 'center') !== 'center') {
+    const width = Number.parseFloat(lengthOf(own))
+    if (Number.isFinite(width)) return String(roundForField(width / 2))
+  }
   if (own !== null) return lengthOf(own)
   const drawn = elem.ownerDocument?.defaultView?.getComputedStyle?.(elem)?.strokeWidth
   return drawn ? lengthOf(drawn) : '1'
