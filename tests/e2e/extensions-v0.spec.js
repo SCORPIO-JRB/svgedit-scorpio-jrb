@@ -205,6 +205,10 @@ test.describe('What each button does (V0)', () => {
     expect(await visible(page, 'marker_panel')).toBe(false)
     await page.evaluate(() => window.svgEditor.svgCanvas.selectOnly([document.getElementById('l1')], true))
     await settle(page)
+    // In the canvas layout, the arrows are in the settings of the stroke,
+    // folded behind their icon (lot Propriétés).
+    const settings = page.locator('.se-more-toggle[data-more="stroke"]')
+    if (await settings.count()) await settings.click()
     expect(await visible(page, 'marker_panel')).toBe(true)
   })
 
