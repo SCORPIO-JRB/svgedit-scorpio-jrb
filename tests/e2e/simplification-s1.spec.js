@@ -267,15 +267,24 @@ test.describe('Rare and folded settings (S1)', () => {
       'texte-espace': only('tool_word_spacing'),
       'texte-longueur': only('tool_text_length', 'tool_length_adjust')
     }
+    // They are in the settings of the text (lot Texte), open.
+    const openSettings = async () => {
+      if (!await page.evaluate(() => document.getElementById('se-settings-text').opened)) {
+        await page.locator('.se-more-toggle[data-more="text"]').click()
+      }
+    }
     for (const [id, expected] of Object.entries(cases)) {
       await select(page, [id])
+      await openSettings()
       expect(await shownControls(page, RARE), id).toEqual(expected)
     }
     // Several texts: the settings one of them has.
     await select(page, ['texte-simple', 'texte-surligne'])
+    await openSettings()
     expect(await shownControls(page, RARE)).toEqual(only('tool_text_decoration_overline'))
     // The value removed, the setting stays for this selection, to give it back.
     await select(page, ['texte-barre'])
+    await openSettings()
     await page.locator('#tool_text_decoration_linethrough').click()
     expect(await page.evaluate(() => document.getElementById('texte-barre').getAttribute('text-decoration') ?? '')).not.toContain('line-through')
     expect(await shownControls(page, RARE)).toEqual(only('tool_text_decoration_linethrough'))
@@ -292,37 +301,43 @@ test.describe('Rare and folded settings (S1)', () => {
     await expect(page.locator('#blur')).toBeVisible()
   })
 
-  test('joins, caps and letter spacing are under "More options"; the button marks a value that is not the usual one', async ({ page }) => {
+  test('joins and caps are in the settings of the stroke, word spacing in those of the text; the icon marks a value that is not the usual one', async ({ page }) => {
     await select(page, ['trace-libre'])
-    // The icon of the settings at the end of the row of the stroke (lot Propriétés).
+    // The icon of the settings at the end of the row of the stroke (lot
+    // Propriétés) opens the window "Stroke settings" (lot Texte).
     const stroke = page.locator('.se-more-toggle[data-more="stroke"]')
-    expect(await shownControls(page, ['stroke_width', 'stroke_linejoin', 'stroke_linecap']))
-      .toEqual({ stroke_width: true, stroke_linejoin: false, stroke_linecap: false })
+    const joins = page.locator('#se-settings-stroke .se-choices[data-for="stroke_linejoin"]')
+    const caps = page.locator('#se-settings-stroke .se-choices[data-for="stroke_linecap"]')
+    expect(await shownControls(page, ['stroke_width'])).toEqual({ stroke_width: true })
+    await expect(joins).toBeHidden()
     await expect(stroke).toHaveAttribute('aria-expanded', 'false')
     expect(await stroke.evaluate((el) => el.classList.contains('se-more-set'))).toBe(false)
     await stroke.click()
     await expect(stroke).toHaveAttribute('aria-expanded', 'true')
-    expect(await shownControls(page, ['stroke_linejoin', 'stroke_linecap'])).toEqual({ stroke_linejoin: true, stroke_linecap: true })
-    // The fold stays last; the dashes and the markers of the extension are in it.
+    await expect(joins).toBeVisible()
+    await expect(caps).toBeVisible()
+    // The window stays last; the dashes and the markers of the extension are in it.
     expect(await page.evaluate(() => {
       const body = document.querySelector('[data-section="stroke"] > .se-section-body')
       return body.lastElementChild.classList.contains('se-more') &&
-        Boolean(document.querySelector('#se-more-stroke > #stroke_style')) &&
-        Boolean(document.querySelector('#se-more-stroke > #marker_panel'))
+        Boolean(document.querySelector('#se-more-stroke #stroke_style')) &&
+        Boolean(document.querySelector('#se-more-stroke #marker_panel'))
     })).toBe(true)
     await stroke.click()
+    await expect(stroke).toHaveAttribute('aria-expanded', 'false')
 
     await page.evaluate(() => document.getElementById('trace-libre').setAttribute('stroke-linejoin', 'round'))
     await select(page, ['carre'])
     await select(page, ['trace-libre'])
     expect(await stroke.evaluate((el) => el.classList.contains('se-more-set'))).toBe(true)
 
+    // The letter spacing is on the panel, as in Figma; word spacing in the settings.
     await select(page, ['texte-espace'])
-    const text = page.locator('[data-more="text"] .se-more-toggle')
-    expect(await shownControls(page, ['tool_letter_spacing'])).toEqual({ tool_letter_spacing: false })
+    const text = page.locator('.se-more-toggle[data-more="text"]')
+    expect(await shownControls(page, ['tool_letter_spacing', 'tool_word_spacing'])).toEqual({ tool_letter_spacing: true, tool_word_spacing: false })
     expect(await text.evaluate((el) => el.classList.contains('se-more-set'))).toBe(true)
     await text.click()
-    expect(await shownControls(page, ['tool_letter_spacing'])).toEqual({ tool_letter_spacing: true })
+    expect(await shownControls(page, ['tool_word_spacing'])).toEqual({ tool_word_spacing: true })
     await select(page, ['texte-simple'])
     expect(await text.evaluate((el) => el.classList.contains('se-more-set'))).toBe(false)
   })

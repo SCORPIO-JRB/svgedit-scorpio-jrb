@@ -12,6 +12,8 @@ Branche `panneau-proprietes`, depuis `plume-illustrator`. Référence : le panne
 | Remplissage | − sur la ligne du titre ; la couleur | Sur la ligne du titre : les bibliothèques (4 points) et +, quand il n'y a pas de remplissage. Dessous : la couleur, son opacité, l'œil, − |
 | Contour | − sur la ligne du titre ; la couleur ; Épaisseur et tirets ; 3 boutons de flèches ; « Plus d'options » | Comme le remplissage, puis **Position** (Centre, Intérieur, Extérieur), **Épaisseur** et l'icône des réglages : tirets, jonctions, extrémités, flèches |
 
+Depuis la branche `panneau-texte`, l'icône des réglages ouvre la fenêtre « Paramètres du contour » et la section Texte devient Typographie : voir `docs/panneau-texte.md`.
+
 Les miroirs quittent le menu « … » : ils sont à côté de l'angle, avec leurs raccourcis `Maj`+`H` et `Maj`+`V`. Le verrouillage reste dans l'onglet Calques, le menu contextuel et `Ctrl`+`Maj`+`L`.
 
 ## 2. Position

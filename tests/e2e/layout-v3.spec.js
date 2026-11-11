@@ -340,7 +340,8 @@ test.describe('Inspector (V3)', () => {
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('Rectangle')
     await expect(page.locator('#se-tabpanel-properties .se-inspector-id')).toHaveText('#r1')
     await select(page, ['t1'])
-    expect(await sections(page)).toEqual(['geometry', 'size', 'appearance', 'fill', 'stroke', 'text', 'identity'])
+    // Typography after Appearance, as in Figma (lot Texte).
+    expect(await sections(page)).toEqual(['geometry', 'size', 'appearance', 'text', 'fill', 'stroke', 'identity'])
     await select(page, ['r1', 't1'])
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('2 objects')
     // The polystar panel shows with its tool.

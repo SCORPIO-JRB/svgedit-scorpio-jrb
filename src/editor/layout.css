@@ -2393,21 +2393,6 @@
   min-width: 0;
 }
 
-.se-layout-canvas .se-inspector .se-stroke-align select {
-  flex: 1;
-  min-width: 0;
-  height: 26px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--se-text);
-  font: inherit;
-  font-weight: normal;
-  text-transform: none;
-  outline: none;
-  cursor: pointer;
-}
-
 .se-layout-canvas .se-inspector .se-stroke-align select:disabled {
   color: var(--se-text-secondary);
   cursor: default;
@@ -2437,21 +2422,293 @@
   background: var(--se-accent);
 }
 
-/* The settings of the stroke: the dashes, the joins and the caps on one
-   row, the arrows of the start, the middle and the end on the next. */
-.se-layout-canvas .se-inspector #se-more-stroke > #stroke_style {
+/* Typography (lot Texte), as in Figma: the font; its style and its size;
+   the line height and the letter spacing; the alignments and the icon of
+   the settings. */
+.se-layout-canvas .se-inspector .text_panel {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+
+.se-layout-canvas .se-inspector .se-type-row {
+  display: flex;
+  gap: var(--se-space-2);
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-type-row > * {
   flex: 1 1 0;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-font-style select,
+.se-layout-canvas .se-inspector .se-stroke-align select {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-weight: normal;
+  text-transform: none;
+  outline: none;
+  cursor: pointer;
+}
+
+/* The size and the button of its menu, in one grey box. */
+.se-layout-canvas .se-inspector .se-font-size {
+  position: relative;
+  display: flex;
+}
+
+.se-layout-canvas .se-inspector .se-font-size > #font_size {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-font-size > #font_size::part(field) {
+  padding-right: 28px;
+}
+
+.se-layout-canvas .se-inspector .se-font-sizes-button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: calc(var(--se-control-size) - 4px);
+  --se-icon-size: 16px;
+}
+
+#se-font-sizes {
+  min-width: 72px;
+  max-height: 320px;
+}
+
+.se-layout-canvas .se-inspector .se-captioned.se-type-spacing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  row-gap: 2px;
+  column-gap: var(--se-space-2);
+}
+
+.se-layout-canvas .se-inspector .se-captioned.se-type-align {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  row-gap: 2px;
+  column-gap: var(--se-space-2);
+  align-items: center;
+}
+
+.se-layout-canvas .se-inspector .se-type-align > .se-caption {
+  grid-column: 1 / -1;
+}
+
+.se-layout-canvas .se-inspector .se-choices.se-disabled > .se-icon-button {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.se-layout-canvas .se-inspector .text_panel > #tool_font_family {
+  gap: 0;
+}
+
+/* The list says what it is: its label, "Font:", goes. */
+.se-layout-canvas .se-inspector .text_panel > #tool_font_family::part(label) {
+  display: none;
+}
+
+/* The Resizing of a text, above its width and its height. */
+.se-layout-canvas .se-inspector .se-text-resizing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 2px;
+}
+
+.se-layout-canvas .se-inspector .se-text-resizing[hidden] {
+  display: none;
+}
+
+/* Bold, italic, the anchor list: out of sight, for their shortcuts and the
+   contextual bar. */
+.se-layout-canvas .se-inspector .se-offstage {
+  display: none !important;
+}
+
+/* The decorations, in the settings of the text. */
+.se-layout-canvas .se-inspector .se-toggles {
+  display: flex;
+  gap: 2px;
+}
+
+.se-layout-canvas .se-inspector .se-toggles > se-button {
+  flex: 0 0 auto;
+}
+
+/* A row whose fields have their caption above them, as in Figma: the
+   position and the weight of the stroke, then the icon of its settings. */
+.se-layout-canvas .se-inspector .se-stroke-row.se-captioned {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  row-gap: 2px;
+  column-gap: var(--se-space-2);
+  align-items: center;
+}
+
+.se-layout-canvas .se-inspector .se-captioned > .se-caption {
+  grid-row: 1;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+  line-height: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-captioned > :not(.se-caption) {
+  grid-row: 2;
+}
+
+/* What a window of settings opens over takes no place in the section. */
+.se-layout-canvas .se-inspector .se-settings-holder {
+  display: contents;
+}
+
+/* A window of settings (lot Texte), as "Stroke settings" in Figma: at the
+   left of the panel, its title and its close button, then one row for
+   each setting, its name at the left. */
+.se-layout-canvas se-popover.se-settings {
+  width: 264px;
+  padding: 0;
+  overflow: visible;
+}
+
+.se-layout-canvas .se-settings .se-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 6px var(--se-space-3);
+  border-bottom: 1px solid var(--se-border);
+}
+
+.se-layout-canvas .se-settings .se-settings-head h4 {
+  margin: 0;
+  color: var(--se-text);
+  font-size: var(--se-font-size-control);
+  font-weight: 600;
+}
+
+.se-layout-canvas .se-settings .se-settings-close {
+  width: 28px;
+  height: 28px;
+  --se-icon-size: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-settings .se-settings-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--se-space-2);
+  box-sizing: border-box;
+  padding: var(--se-space-3);
+}
+
+.se-layout-canvas .se-settings .se-settings-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--se-space-2);
+  min-height: var(--se-control-size);
+}
+
+.se-layout-canvas .se-settings .se-settings-row[hidden] {
+  display: none;
+}
+
+.se-layout-canvas .se-settings .se-settings-label {
+  color: var(--se-text-secondary);
+}
+
+.se-layout-canvas .se-settings .se-settings-control {
+  display: flex;
+  align-items: center;
+  gap: var(--se-space-2);
+  min-width: 0;
+}
+
+.se-layout-canvas .se-settings .se-settings-control > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-settings #stroke_style {
+  flex: 1 1 0;
+}
+
+/* The name of the row says what a list is. */
+.se-layout-canvas .se-inspector .se-settings :is(se-select, se-list) {
+  gap: 0;
+}
+
+.se-layout-canvas .se-inspector .se-settings :is(se-select, se-list)::part(label) {
+  display: none;
+}
+
+/* A row whose settings are all rare ones the selection has no value for
+   (lot S1: word spacing, length) shows no name alone. */
+.se-layout-canvas .se-settings .se-settings-row:not(:has(.se-settings-control > :not(.se-inspector-off, .se-proxied))) {
+  display: none;
+}
+
+/* The arrows show for what the extension shows them (lines and paths). */
+.se-layout-canvas .se-settings .se-settings-row[data-row="arrows"]:not(:has(#marker_panel:not([style*="none"]))) {
+  display: none;
 }
 
 /* The extension shows its panel with display: block. */
-.se-layout-canvas .se-inspector #se-more-stroke > #marker_panel:not([style*="none"]) {
+.se-layout-canvas .se-settings #marker_panel:not([style*="none"]) {
   display: flex !important;
-  flex-basis: 100%;
   gap: var(--se-space-2);
 }
 
-.se-layout-canvas .se-inspector #se-more-stroke > #marker_panel > * {
+.se-layout-canvas .se-settings #marker_panel > * {
   flex: 1 1 0;
+  min-width: 0;
+}
+
+/* A list replaced by a row of buttons stays in the page, out of sight. */
+.se-layout-canvas .se-inspector .se-proxied {
+  display: none !important;
+}
+
+/* A row of buttons, one of which is chosen: the joins, the caps. */
+.se-layout-canvas .se-inspector .se-choices {
+  display: flex;
+  gap: 2px;
+  box-sizing: border-box;
+  height: var(--se-control-size);
+  padding: 2px;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+.se-layout-canvas .se-inspector .se-choices > .se-icon-button {
+  flex: 1 1 0;
+  width: auto;
+  height: auto;
+  border-radius: calc(var(--se-radius-field) - 1px);
+  --se-icon-size: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-choices > [aria-checked="true"] {
+  background: var(--se-surface-tab-active);
+  box-shadow: 0 0 0 1px var(--se-border);
+  color: var(--se-text);
+}
+
+/* The choice shows by its background, not by the check of menus. */
+.se-layout-canvas .se-inspector .se-choices > [aria-checked="true"]::before {
+  content: none;
 }
 
 /* The field of the inspector: swatch, hexadecimal and opacity typed in. */

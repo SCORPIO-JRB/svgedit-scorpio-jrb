@@ -146,8 +146,12 @@ test.describe('Properties after Figma (lot Propriétés)', () => {
     const settings = page.locator('.se-more-toggle[data-more="stroke"]')
     await expect(page.locator('#stroke_style')).toBeHidden()
     await settings.click()
-    for (const id of ['stroke_style', 'stroke_linejoin', 'stroke_linecap', 'start_marker_list_opts', 'end_marker_list_opts']) {
+    for (const id of ['stroke_style', 'stroke_miter_angle', 'start_marker_list_opts', 'end_marker_list_opts']) {
       await expect(page.locator(`#${id}`)).toBeVisible()
+    }
+    // The joins and the caps: rows of buttons, as in Figma (lot Texte).
+    for (const id of ['stroke_linejoin', 'stroke_linecap']) {
+      await expect(page.locator(`.se-choices[data-for="${id}"]`)).toBeVisible()
     }
   })
 

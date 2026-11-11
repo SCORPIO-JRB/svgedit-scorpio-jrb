@@ -348,7 +348,7 @@ class TopPanel {
         }
         // W and H of a path, a group or a text alone.
         if (SIZED_ALONE.has(kind)) {
-          this.showSelectionSize(this.editor.svgCanvas.getSelectionBox?.([elem]), elname === 'text')
+          this.showSelectionSize(this.editor.svgCanvas.getSelectionBox?.([elem]), false, elname === 'text')
         }
 
         // Elements in this array cannot be converted to a path
@@ -836,10 +836,12 @@ class TopPanel {
    * Shows W and H of the box of a multi-selection, or of a path, a group or
    * a text alone, and the proportion lock.
    * @param {module:utilities.BBoxObject|null} box - From getSelectionBox
-   * @param {boolean} ratioForced - The proportions are always kept (a text)
+   * @param {boolean} ratioForced - The proportions are always kept
+   * @param {boolean} [textBox] - A text alone: W and H are those of its box
+   *   (lot Texte, as in Figma), which they change without scaling it
    * @returns {void}
    */
-  showSelectionSize (box, ratioForced) {
+  showSelectionSize (box, ratioForced, textBox = false) {
     if (!box) { return }
     this.shownSize = { w: String(this.toField(box.width)), h: String(this.toField(box.height)) }
     $id('selected_w').value = this.shownSize.w
@@ -847,9 +849,10 @@ class TopPanel {
     $id('selected_w').preciseValue = this.inUnit(box.width)
     $id('selected_h').preciseValue = this.inUnit(box.height)
     this.ratioForced = ratioForced
+    this.textBox = textBox
     const lock = $id('tool_ratio_lock')
-    lock.pressed = ratioForced || Boolean(this.keepRatio)
-    lock.disabled = ratioForced
+    lock.pressed = !textBox && (ratioForced || Boolean(this.keepRatio))
+    lock.disabled = ratioForced || textBox
     // The Scale tool's panel has its own W and H.
     if (!this.editor.svgCanvas.isScaleTool?.()) { this.displayTool('wh_panel') }
   }
@@ -1114,7 +1117,8 @@ class TopPanel {
 
   /**
    * Scales the selection from the top left corner of its box by its W or H
-   * field, keeping the proportions when the lock is on or for a text.
+   * field, keeping the proportions when the lock is on. A text alone gets
+   * a box of this width or height instead (lot Texte).
    * @param {Event} e
    * @returns {void}
    */
@@ -1122,6 +1126,12 @@ class TopPanel {
     const axis = e.target.id === 'selected_w' ? 'w' : 'h'
     if (e.target.value === this.shownSize?.[axis]) { return }
     const value = this.fromField(e.target.value)
+    if (this.textBox && !this.multiselected) {
+      // The width of a text breaks its lines; its height fixes its box.
+      this.editor.svgCanvas.setTextBox(axis === 'w' ? value : null, axis === 'h' ? value : null)
+      this.updateContextPanel()
+      return
+    }
     const keepRatio = this.ratioForced || Boolean(this.keepRatio)
     const resized = axis === 'w'
       ? this.editor.svgCanvas.resizeSelectionTo(value, null, { keepRatio })

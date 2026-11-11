@@ -352,17 +352,13 @@
   ],
   "textSection": {
     "shown": [
-      "tool_bold",
-      "tool_italic",
-      "tool_text_decoration_underline",
       "tool_font_family",
       "font_size",
-      "tool_text_anchor",
       "tool_line_height",
-      "tool_text_auto_width"
+      "tool_letter_spacing"
     ],
     "more": [
-      "tool_letter_spacing"
+      "tool_text_decoration_underline"
     ]
   }
 }

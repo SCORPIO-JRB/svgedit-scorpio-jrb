@@ -159,6 +159,11 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `svg-edit-home.svg` | `public` | Site web de SVG-Edit — *sans référence* |
 | `text.svg` | `title` | Outil texte ; renommer le calque |
 | `text_auto_width.svg` | dessin propre | Largeur automatique d'un texte : il ne passe plus à la ligne de lui-même |
+| `text_auto_height.svg` | dessin propre | Hauteur automatique d'un texte : largeur fixe, la hauteur suit les lignes |
+| `text_fixed_size.svg` | dessin propre | Taille fixe d'un texte : une boîte de largeur et de hauteur fixes |
+| `text_valign_bottom.svg` | dessin propre | Aligner les lignes d'un texte en bas de sa boîte |
+| `text_valign_middle.svg` | dessin propre | Centrer les lignes d'un texte dans sa boîte |
+| `text_valign_top.svg` | dessin propre | Aligner les lignes d'un texte en haut de sa boîte |
 | `text_decoration_linethrough.svg` | `format_strikethrough` | Barré |
 | `text_decoration_overline.svg` | `format_overline` | Trait au-dessus (overline) |
 | `text_decoration_underline.svg` | `format_underlined` | Souligné |
@@ -188,7 +193,7 @@ Les fichiers marqués *sans référence* ne sont cités nulle part dans `src/`, 
 | `width.svg` | `arrow_range` | Largeur — *sans référence* |
 | `wireframe.svg` | dessin propre | Mode fil de fer (contours seuls) |
 | `word_spacing.svg` | `space_bar` | Espacement des mots (champ) |
-| `xmark.svg` | `close` | Marqueur : croix — *sans référence* |
+| `xmark.svg` | `close` | Marqueur : croix ; fermer une fenêtre de réglages du panneau |
 | `zoom.svg` | `zoom_in` | Outil zoom ; niveau de zoom |
 
 ## Licence

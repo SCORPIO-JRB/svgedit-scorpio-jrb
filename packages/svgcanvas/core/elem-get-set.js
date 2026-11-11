@@ -8,7 +8,7 @@ import Paint from './paint.js'
 import { NS } from './namespaces.js'
 import {
   getVisibleElements, getStrokedBBoxDefaultVisible, findDefs,
-  walkTree, getHref, setHref, getElement
+  walkTree, getHref, setHref, getElement, getBBox
 } from './utilities.js'
 import {
   convertToNum
@@ -18,7 +18,7 @@ import { isSafeHref } from './sanitize.js'
 import { warn } from '../common/logger.js'
 import { ChangeElementCommand, InsertElementCommand } from './history.js'
 import { getStrokeAlign } from './stroke-align.js'
-import { getTextSource, getLineHeight, getTextWidth } from './text-lines.js'
+import { getTextSource, getLineHeight, getTextWidth, getTextHeight, getTextVerticalAlign } from './text-lines.js'
 import { readStyleRules, findStyleSource, getStyledValue } from './style-rules.js'
 
 let svgCanvas = null
@@ -42,6 +42,12 @@ export const init = (canvas) => {
   svgCanvas.setLineHeight = setLineHeightMethod // Sets the line height of the selected texts
   svgCanvas.getTextWidth = getTextWidthMethod // The fixed width of the selected text, or 0
   svgCanvas.setTextWidth = setTextWidthMethod // Sets or removes the fixed width of the selected texts
+  svgCanvas.getTextHeight = getTextHeightMethod // The fixed height of a text, or 0
+  svgCanvas.getTextVerticalAlign = getTextVerticalAlignMethod // Where the lines of a text go in its box
+  svgCanvas.setTextVerticalAlign = setTextVerticalAlignMethod // Places the lines of the selected texts in their boxes
+  svgCanvas.getTextResizing = getTextResizingMethod // How a text is sized: auto-width, auto-height, fixed
+  svgCanvas.setTextResizing = setTextResizingMethod // Sizes the selected texts so
+  svgCanvas.setTextBox = setTextBoxMethod // The width or the height of the box of the selected text
   svgCanvas.setLetterSpacing = setLetterSpacingMethod // Set the new letter spacing.
   svgCanvas.setWordSpacing = setWordSpacingMethod // Set the new word spacing.
   svgCanvas.setTextLength = setTextLengthMethod // Set the new text length.
@@ -1101,6 +1107,125 @@ const setTextWidthMethod = (value) => {
     svgCanvas.changeSelectedAttribute('se:width', width, changedTextElements)
   }
   notifyTextChange(changedTextElements)
+}
+
+const roundBox = (n) => String(Math.round(n * 100) / 100)
+
+/**
+ * @function module:svgcanvas.SvgCanvas#getTextHeight
+ * @param {Element} [elem] - The selected text when absent
+ * @returns {number} The fixed height of the text, or 0
+ */
+const getTextHeightMethod = (elem) => {
+  const text = elem ?? getSelectedTextElements()[0]
+  return text ? getTextHeight(text) : 0
+}
+
+/**
+ * @function module:svgcanvas.SvgCanvas#getTextVerticalAlign
+ * @param {Element} [elem] - The selected text when absent
+ * @returns {"top"|"middle"|"bottom"}
+ */
+const getTextVerticalAlignMethod = (elem) => {
+  const text = elem ?? getSelectedTextElements()[0]
+  return text ? getTextVerticalAlign(text) : 'top'
+}
+
+/**
+ * How a text is sized, as the Resizing of Figma: as wide as its lines
+ * ("auto-width"), of a fixed width and as high as its lines
+ * ("auto-height"), or of a fixed width and height ("fixed").
+ * @function module:svgcanvas.SvgCanvas#getTextResizing
+ * @param {Element} [elem] - The selected text when absent
+ * @returns {"auto-width"|"auto-height"|"fixed"}
+ */
+const getTextResizingMethod = (elem) => {
+  const text = elem ?? getSelectedTextElements()[0]
+  if (text && getTextHeight(text)) return 'fixed'
+  return text && getTextWidth(text) ? 'auto-height' : 'auto-width'
+}
+
+/**
+ * Writes the attributes of the box of a text that differ, each a step of
+ * the history (a group gathers them).
+ * @param {Element} elem
+ * @param {Object<string, string>} values
+ * @returns {void}
+ */
+const writeBox = (elem, values) => {
+  for (const [attr, value] of Object.entries(values)) {
+    if ((elem.getAttribute(attr) || '') !== value) svgCanvas.changeSelectedAttribute(attr, value, [elem])
+  }
+}
+
+/**
+ * Sizes the selected texts as the Resizing of Figma, in one undo step: a
+ * fixed width and height are those of their boxes now. The vertical
+ * alignment goes with the fixed height.
+ * @function module:svgcanvas.SvgCanvas#setTextResizing
+ * @param {"auto-width"|"auto-height"|"fixed"} mode
+ * @returns {void}
+ */
+const setTextResizingMethod = (mode) => {
+  const textElements = getSelectedTextElements().filter((elem) => getTextResizingMethod(elem) !== mode)
+  if (!textElements.length) return
+  svgCanvas.groupHistory('Text resizing', () => {
+    textElements.forEach((elem) => {
+      const box = getBBox(elem)
+      const width = roundBox(getTextWidth(elem) || box?.width || 0)
+      if (mode === 'auto-width') {
+        writeBox(elem, { 'se:valign': '', 'se:height': '', 'se:width': '' })
+      } else if (mode === 'auto-height') {
+        writeBox(elem, { 'se:valign': '', 'se:height': '', 'se:width': width })
+      } else {
+        writeBox(elem, { 'se:width': width, 'se:height': roundBox(getTextHeight(elem) || box?.height || 0) })
+      }
+    })
+  })
+  notifyTextChange(textElements)
+}
+
+/**
+ * Gives the selected texts a width (their lines break in it) or a height
+ * (their boxes become of fixed size), as the W and H fields of Figma.
+ * @function module:svgcanvas.SvgCanvas#setTextBox
+ * @param {number|null} width
+ * @param {number|null} height
+ * @returns {void}
+ */
+const setTextBoxMethod = (width, height) => {
+  const textElements = getSelectedTextElements()
+  const w = Number.parseFloat(width)
+  const h = Number.parseFloat(height)
+  if (!textElements.length || (!(w > 0) && !(h > 0))) return
+  svgCanvas.groupHistory('Text box', () => {
+    textElements.forEach((elem) => {
+      const values = {}
+      if (w > 0) values['se:width'] = roundBox(w)
+      if (h > 0) {
+        if (!values['se:width']) values['se:width'] = roundBox(getTextWidth(elem) || getBBox(elem)?.width || 0)
+        values['se:height'] = roundBox(h)
+      }
+      writeBox(elem, values)
+    })
+  })
+  notifyTextChange(textElements)
+}
+
+/**
+ * Places the lines of the selected texts of fixed height in their boxes.
+ * @function module:svgcanvas.SvgCanvas#setTextVerticalAlign
+ * @param {"top"|"middle"|"bottom"} value
+ * @returns {void}
+ */
+const setTextVerticalAlignMethod = (value) => {
+  const written = value === 'middle' || value === 'bottom' ? value : ''
+  const textElements = getSelectedTextElements()
+    .filter((elem) => getTextHeight(elem) && (elem.getAttribute('se:valign') || '') !== written)
+  if (textElements.length > 0) {
+    svgCanvas.changeSelectedAttribute('se:valign', written, textElements)
+  }
+  notifyTextChange(textElements)
 }
 
 /**

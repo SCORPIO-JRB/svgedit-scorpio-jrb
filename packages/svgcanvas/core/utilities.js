@@ -7,7 +7,7 @@
  */
 
 import { NS } from './namespaces.js'
-import { getTextWidth } from './text-lines.js'
+import { getTextWidth, getTextHeight, lineMetrics } from './text-lines.js'
 import { setUnitAttr, getTypeMap, shortFloat } from './units.js'
 import {
   hasMatrixTransform,
@@ -635,18 +635,31 @@ export const withBBoxCache = (cache, fn) => {
 
 /**
  * The box of a text of fixed width: as wide as that width, from its anchor
- * (`x` is its left side, its middle or its right side).
+ * (`x` is its left side, its middle or its right side). A text of fixed
+ * height (lot Texte) is that high, from the top of its first line placed at
+ * the top of the box (its `y` is that line's baseline).
  * @param {Element} text
  * @param {module:utilities.BBoxObject} box - Of its glyphs
  * @returns {module:utilities.BBoxObject}
  */
 const fixedWidthBox = (text, box) => {
   const width = getTextWidth(text)
+  const height = getTextHeight(text)
+  if (!width && !height) return box
+  const result = { x: box.x, y: box.y, width: box.width, height: box.height }
   const x = Number.parseFloat(text.getAttribute('x'))
-  if (!width || !Number.isFinite(x)) return box
-  const anchor = window.getComputedStyle(text).textAnchor
-  const factor = anchor === 'middle' ? 0.5 : anchor === 'end' ? 1 : 0
-  return { x: x - factor * width, y: box.y, width, height: box.height }
+  if (width && Number.isFinite(x)) {
+    const anchor = window.getComputedStyle(text).textAnchor
+    const factor = anchor === 'middle' ? 0.5 : anchor === 'end' ? 1 : 0
+    result.x = x - factor * width
+    result.width = width
+  }
+  const y = Number.parseFloat(text.getAttribute('y'))
+  if (height && Number.isFinite(y)) {
+    result.y = y - lineMetrics(text).ascent
+    result.height = height
+  }
+  return result
 }
 
 /**

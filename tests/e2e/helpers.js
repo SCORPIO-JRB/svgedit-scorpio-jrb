@@ -185,6 +185,18 @@ export async function clickControl (page, id) {
     await control.click()
     return
   }
+  // Bold and italic (lot Texte): out of the inspector, in the contextual bar.
+  if (await control.evaluate((el) => Boolean(el.closest('.se-offstage')))) {
+    await page.locator(`#se-context-bar [data-entry="verb:${id}"]`).click()
+    return
+  }
+  // A setting of a window of settings (stroke, text): its icon opens it.
+  const settings = await control.evaluate((el) => el.closest('se-popover.se-settings')?.dataset.more ?? null)
+  if (settings) {
+    await page.locator(`.se-more-toggle[data-more="${settings}"]`).click()
+    await control.click()
+    return
+  }
   // The view buttons and the history: entries of the zoom menu, which makes
   // them when it opens.
   if (await control.evaluate((el) => Boolean(el.closest('#editor_panel, #history_panel')))) {

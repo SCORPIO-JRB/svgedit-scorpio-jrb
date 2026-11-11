@@ -3,8 +3,9 @@
  * section 4.5): one inspector, with sections at fixed places.
  *
  * Order: actions on the selection, Position and Dimensions (lot Propriétés,
- * as in Figma), Symbol and Connector (lot V7), Appearance, Fill, Stroke,
- * Text, Effects, Identity, Extensions, Frame, Layer, Document, Frames. The
+ * as in Figma), Symbol and Connector (lot V7), Appearance, Typography (lot
+ * Texte, as in Figma), Fill, Stroke, Effects, Identity, Extensions, Frame,
+ * Layer, Document, Frames. The
  * Layer section (lot V7) gives the current layer, without selection: its
  * name, opacity, blend mode, visibility and lock. A section
  * where nothing applies is hidden and the others keep their order. Without
@@ -25,9 +26,10 @@
  * TopPanel finds them.
  *
  * Since lot S1 of the simplification audit, the settings rarely made in a
- * synoptic show only when the selection has a value for them (RARE_SETTINGS),
- * and joins, caps and letter spacing fold under "More options"
- * (MORE_SETTINGS).
+ * synoptic show only when the selection has a value for them
+ * (RARE_SETTINGS). The settings of the stroke and of the text open in a
+ * window from an icon (lot Texte), which marks a value that is not the
+ * usual one (MORE_SETTINGS).
  *
  * Lot Propriétés, after the panel of Figma: Position aligns the selection,
  * gives X and Y, and the rotation with a turn of 90° and the two flips;
@@ -37,16 +39,25 @@
  * and + on their title line, the eye and − at the end of the paint; the
  * stroke has its position (centre, inside, outside), its weight, and its
  * settings (dashes, joins, caps, arrows) behind an icon.
+ *
+ * Lot Texte, after the panel of Figma for a text: Dimensions gives its
+ * Resizing (auto width, auto height, fixed size); Typography its font, its
+ * style (weight and italic) and size, its line height and letter spacing,
+ * its alignments (horizontal, and vertical in a box of fixed size), and its
+ * settings in a window; the settings of the stroke open in the window
+ * "Stroke settings", the Basic tab of Figma without its width profile.
  * @module Inspector
  */
 import SvgCanvas from '@svgedit/svgcanvas'
 import { escapeHtml } from './TopBar.js'
 import { RETIRED_CONTROLS, SHOWN_SHORTCUTS } from '../simplification.js'
-import { scrubInput } from '../components/scrub.js'
+import { scrubInput, SCRUBBING_CLASS } from '../components/scrub.js'
+import { shapesOf, styledAttribute, commonValueOf } from './panelValues.js'
+import { firstFamily, numericWeight, DEFAULT_TEXT_STYLES } from './TextStyles.js'
 
 const { isValidUnit } = SvgCanvas
 
-export const SECTIONS = ['actions', 'geometry', 'size', 'symbol', 'connector', 'appearance', 'fill', 'stroke', 'text', 'effects', 'identity', 'extensions', 'frame', 'layer', 'document', 'frames']
+export const SECTIONS = ['actions', 'geometry', 'size', 'symbol', 'connector', 'appearance', 'text', 'fill', 'stroke', 'effects', 'identity', 'extensions', 'frame', 'layer', 'document', 'frames']
 
 /**
  * Order of the groups of Position (alignment, X and Y, the points of a line
@@ -55,6 +66,7 @@ export const SECTIONS = ['actions', 'geometry', 'size', 'symbol', 'connector', '
  */
 const GEOMETRY_ORDER = {
   'se-align-row': 5,
+  'se-text-resizing': 15,
   xy_panel: 10,
   wh_panel: 20,
   rect_panel: 30,
@@ -135,6 +147,44 @@ const orderOf = (el) => {
 /** Most objects whose corners the Corner radius field reads. */
 const MAX_RADIUS_READS = 200
 
+/** Names of the dashes of the stroke, by their values (lot Texte). */
+const DASH_NAMES = {
+  none: 'dash_solid',
+  '2,2': 'dash_dotted',
+  '5,5': 'dash_dashed',
+  '5,2,2,2': 'dash_dash_dot',
+  '5,2,2,2,2,2': 'dash_dash_dot_dot'
+}
+
+/** The miter limit of SVG when an element gives none. */
+const DEFAULT_MITER_LIMIT = 4
+
+/**
+ * The miter angle of Figma for a `stroke-miterlimit`: a miter join whose
+ * angle is under it is beveled.
+ * @param {string|number|null} limit
+ * @returns {number} In degrees, with two decimals
+ */
+export const miterAngleOf = (limit) => {
+  let value = Number.parseFloat(limit)
+  if (!Number.isFinite(value) || value < 1) value = DEFAULT_MITER_LIMIT
+  return Math.round(2 * Math.asin(1 / value) * 180 / Math.PI * 100) / 100
+}
+
+/**
+ * The `stroke-miterlimit` of a miter angle. The angle shown has two
+ * decimals: a limit that close to a whole number is that number (28.96°
+ * gives 4, the default of SVG).
+ * @param {number} angle In degrees
+ * @returns {number} With four decimals, 1 at least
+ */
+export const miterLimitOf = (angle) => {
+  const degrees = Math.min(180, Math.max(1, Number(angle) || 0))
+  const limit = 1 / Math.sin(degrees * Math.PI / 360)
+  const whole = Math.round(limit)
+  return Math.max(1, Math.abs(limit - whole) < 0.002 ? whole : Math.round(limit * 10000) / 10000)
+}
+
 /** The commands of the row of alignment of Position, with their icon. */
 const ALIGN_ROW = ['align_left', 'align_center', 'align_right', 'align_top', 'align_middle', 'align_bottom']
 
@@ -169,7 +219,41 @@ export const RARE_SETTINGS = {
  */
 export const MORE_SETTINGS = {
   stroke: { stroke_linejoin: ['stroke-linejoin', ['miter']], stroke_linecap: ['stroke-linecap', ['butt']] },
-  text: { tool_letter_spacing: ['letter-spacing', ['0', 'normal']] }
+  text: {
+    tool_text_decoration_underline: ['text-decoration', ['none']],
+    tool_word_spacing: ['word-spacing', ['0', 'normal']],
+    tool_text_length: ['textLength', ['0']]
+  }
+}
+
+/** Weights of the Style list of Typography, as in Figma (lot Texte). */
+export const FONT_WEIGHTS = [100, 200, 300, 400, 500, 600, 700, 800, 900]
+
+/** Sizes of the menu of the font size, as in Figma. */
+export const FONT_SIZES = [8, 10, 11, 12, 13, 14, 15, 16, 20, 24, 32, 36, 40, 48, 64, 96, 128]
+
+/**
+ * The value of the Style list for a text: its weight, then " italic".
+ * @param {string|number|null} weight
+ * @param {string|null} style
+ * @returns {string}
+ */
+export const fontStyleValue = (weight, style) => {
+  const value = numericWeight(weight)
+  const near = FONT_WEIGHTS.reduce((best, w) => Math.abs(w - value) < Math.abs(best - value) ? w : best, 400)
+  return `${near}${style === 'italic' || style === 'oblique' ? ' italic' : ''}`
+}
+
+/**
+ * The attributes of a value of the Style list: 400 and 700 are written
+ * "normal" and "bold", as SVG-Edit always did.
+ * @param {string} value
+ * @returns {{weight: string, italic: boolean}}
+ */
+export const fontStyleAttributes = (value) => {
+  const [weight, italic] = String(value).split(' ')
+  const number = Number(weight) || 400
+  return { weight: number === 400 ? 'normal' : number === 700 ? 'bold' : String(number), italic: italic === 'italic' }
 }
 
 const decorationOf = (el) => `${el.getAttribute?.('text-decoration') ?? ''} ${el.style?.textDecoration ?? ''}`
@@ -236,6 +320,7 @@ export class Inspector {
     this.initActions()
     this.buildLayerSection()
     this.buildAlignRow()
+    this.buildResizing()
     this.buildAppearance()
     this.buildDocumentSection()
     // The panels that extensions append to #tools_top go to their section,
@@ -305,7 +390,7 @@ export class Inspector {
    */
   put (el, name) {
     if (el.id === 'marker_panel') {
-      const settings = this.root.querySelector('#se-more-stroke')
+      const settings = this.root.querySelector('#se-more-stroke [data-row="arrows"] > .se-settings-control')
       if (settings) {
         settings.append(el)
         return
@@ -363,8 +448,7 @@ export class Inspector {
       radius.setAttribute('src', 'corner_radius.svg')
       this.$appearanceRow.append(radius)
     }
-    const letters = top.querySelector('.text_panel')
-    if (letters) this.fold(letters, 'text')
+    this.buildTypography(top)
     for (const el of [...top.children]) {
       const section = sectionOfTopGroup(el)
       if (!section) continue
@@ -394,9 +478,11 @@ export class Inspector {
   }
 
   /**
-   * The second line of the stroke, as in Figma: its position, its weight,
-   * and the icon of its settings, which folds the dashes, the joins, the
-   * caps and the arrows (lot Propriétés).
+   * The second line of the stroke, as in Figma: its position and its weight
+   * under their captions, then the icon of its settings (lot Propriétés).
+   * The icon opens the window "Stroke settings", the Basic tab of Figma
+   * without its width profile: the style of the dashes, the join and its
+   * miter angle, the caps, the arrows (lot Texte).
    * @returns {void}
    */
   buildStrokeRow () {
@@ -406,8 +492,10 @@ export class Inspector {
     const width = body.querySelector('#stroke_width')
     if (!width) return
     const row = document.createElement('div')
-    row.className = 'se-stroke-row'
-    row.innerHTML = `<label class="se-field se-stroke-align" title="${t('layout.stroke_align')}"><select id="stroke_align"
+    row.className = 'se-stroke-row se-captioned'
+    row.innerHTML = `<span class="se-caption">${t('layout.stroke_position')}</span>
+      <span class="se-caption">${t('layout.stroke_weight')}</span>
+      <label class="se-field se-stroke-align" title="${t('layout.stroke_align')}"><select id="stroke_align"
       aria-label="${t('layout.stroke_align')}"><option value="center">${t('layout.stroke_center')}</option>
       <option value="inside">${t('layout.stroke_inside')}</option><option value="outside">${t('layout.stroke_outside')}</option>
       <option value="" hidden>${t('properties.mixed')}</option></select></label>`
@@ -419,10 +507,426 @@ export class Inspector {
       this.refreshStroke(editor.svgCanvas.getSelectedElements().filter(Boolean))
     })
     const style = body.querySelector('#stroke_style')
-    this.fold(body, 'stroke', row)
-    // The dashes join the joins and the caps in the settings.
-    const settings = this.root.querySelector('#se-more-stroke')
-    if (style && settings) settings.prepend(style)
+    if (style) {
+      // The dashes by their names, as in Figma ("Solid"), in this layout.
+      for (const option of style.$select?.options ?? []) {
+        const key = DASH_NAMES[option.value]
+        if (key) option.textContent = editor.i18next.t(`layout.${key}`)
+      }
+    }
+    const join = body.querySelector('#stroke_linejoin')
+    const cap = body.querySelector('#stroke_linecap')
+    this.$miterAngle = this.buildMiterAngle()
+    this.settingsWindow('stroke', row, [
+      ['style', 'layout.stroke_style', [style]],
+      ['join', 'layout.stroke_join', join ? [this.choices(join), join] : []],
+      ['miter', 'layout.miter_angle', [this.$miterAngle]],
+      ['cap', 'layout.stroke_cap', cap ? [this.choices(cap), cap] : []],
+      // The arrows of the extension markers come when it starts (put).
+      ['arrows', 'layout.stroke_arrows', []]
+    ])
+  }
+
+  /**
+   * Typography, as in Figma (lot Texte): the font on its own row; its style
+   * (weight and italic) beside its size, which has a menu of sizes; the
+   * line height and the letter spacing under their captions; the
+   * alignment, horizontal and vertical, then the icon of its settings
+   * (decoration, word spacing, length). Bold and italic leave the panel for
+   * the Style list; their buttons stay out of sight, for their shortcuts and
+   * the contextual bar. The width of a text goes to Dimensions (Resizing).
+   * @param {Element} top #tools_top, before it enters the page
+   * @returns {void}
+   */
+  buildTypography (top) {
+    const panel = top.querySelector('.text_panel')
+    if (!panel) return
+    const { editor } = this
+    const { svgCanvas, i18next } = editor
+    const t = (key) => escapeHtml(i18next.t(key))
+    const imgPath = escapeHtml(editor.configObj.curConfig.imgPath)
+    const $ = (id) => panel.querySelector(`#${id}`)
+    const family = $('tool_font_family')
+    const size = $('font_size')
+    const anchor = $('tool_text_anchor')
+    const letters = $('tool_letter_spacing')
+    // The fonts of the text styles first, by their names.
+    if (family?.$select) {
+      const fonts = [...new Set(DEFAULT_TEXT_STYLES.map((style) => style.fontFamily))].reverse()
+      for (const font of fonts) {
+        const option = document.createElement('option')
+        option.value = font
+        option.textContent = font.split(',')[0].replace(/["']/g, '').trim()
+        family.$select.prepend(option)
+      }
+    }
+    // Letter spacing may be negative, as in Figma.
+    letters?.setAttribute('min', '-100')
+
+    const style = document.createElement('label')
+    style.className = 'se-field se-font-style'
+    style.title = i18next.t('layout.font_style')
+    const options = FONT_WEIGHTS.flatMap((weight) => [false, true].map((italic) => {
+      const name = weight === 400 && italic ? t('layout.italic') : `${t(`layout.weight_${weight}`)}${italic ? ` ${t('layout.italic_suffix')}` : ''}`
+      return `<option value="${weight}${italic ? ' italic' : ''}">${name}</option>`
+    })).join('')
+    style.innerHTML = `<select id="tool_font_style" aria-label="${t('layout.font_style')}">${options}
+      <option value="" hidden>${t('properties.mixed')}</option></select>`
+    this.$fontStyle = style.querySelector('select')
+    this.$fontStyle.addEventListener('change', (e) => this.changeFontStyle(e.target.value))
+
+    const sizeBox = document.createElement('div')
+    sizeBox.className = 'se-font-size'
+    if (size) sizeBox.append(size)
+    const sizes = document.createElement('se-popover')
+    sizes.id = 'se-font-sizes'
+    sizes.setAttribute('menu', '')
+    sizes.setAttribute('placement', 'bottom-end')
+    sizes.setAttribute('aria-label', i18next.t('layout.font_sizes'))
+    sizes.innerHTML = FONT_SIZES.map((n) => `<div role="menuitemradio" aria-checked="false" data-size="${n}">${n}</div>`).join('')
+    const sizesButton = document.createElement('button')
+    sizesButton.type = 'button'
+    sizesButton.className = 'se-icon-button se-font-sizes-button'
+    sizesButton.setAttribute('aria-haspopup', 'menu')
+    sizesButton.setAttribute('aria-expanded', 'false')
+    sizesButton.setAttribute('aria-label', i18next.t('layout.font_sizes'))
+    sizesButton.innerHTML = `<se-icon src="${imgPath}/chevron_down.svg"></se-icon>`
+    sizesButton.addEventListener('click', () => {
+      if (sizes.opened) {
+        sizes.close()
+        return
+      }
+      for (const item of sizes.children) item.setAttribute('aria-checked', String(item.dataset.size === String(size?.value)))
+      sizes.open(sizesButton)
+    })
+    sizes.addEventListener('click', (e) => {
+      const value = e.target.closest('[data-size]')?.dataset.size
+      if (!value || !size) return
+      size.value = value
+      size.dispatchEvent(new CustomEvent('change', { detail: { value } }))
+    })
+    sizeBox.append(sizesButton, sizes)
+
+    const styleRow = document.createElement('div')
+    styleRow.className = 'se-type-row'
+    styleRow.append(style, sizeBox)
+
+    const spacing = document.createElement('div')
+    spacing.className = 'se-captioned se-type-spacing'
+    spacing.innerHTML = `<span class="se-caption">${t('layout.line_height')}</span><span class="se-caption">${t('layout.letter_spacing')}</span>`
+    spacing.append(...[$('tool_line_height'), letters].filter(Boolean))
+
+    const align = document.createElement('div')
+    align.className = 'se-captioned se-type-align'
+    align.innerHTML = `<span class="se-caption">${t('layout.text_align')}</span>`
+    if (anchor) align.append(this.choices(anchor, () => this.refreshText(svgCanvas.getSelectedElements().filter(Boolean))))
+    align.append(this.buildVerticalAlign())
+
+    const offstage = document.createElement('div')
+    offstage.className = 'se-offstage'
+    offstage.append(...[$('tool_bold'), $('tool_italic'), $('tool_text_auto_width'), anchor].filter(Boolean))
+    const decoration = document.createElement('div')
+    decoration.className = 'se-toggles'
+    // The mark of the icon follows a decoration given or taken away.
+    decoration.addEventListener('click', () => setTimeout(() => this.refreshRare(svgCanvas.getSelectedElements().filter(Boolean))))
+    decoration.append(...['underline', 'linethrough', 'overline'].map((name) => $(`tool_text_decoration_${name}`)).filter(Boolean))
+    const rows = [
+      ['decoration', 'layout.text_decoration', [decoration]],
+      ['words', 'layout.word_spacing', [$('tool_word_spacing')]],
+      ['length', 'layout.text_length', [$('tool_text_length')]],
+      ['adjust', 'layout.length_adjust', [$('tool_length_adjust')]]
+    ]
+    panel.replaceChildren(...[family, styleRow, spacing, align, offstage].filter(Boolean))
+    this.settingsWindow('text', align, rows, panel)
+    // The text styles, as the libraries of Fill and Stroke.
+    const tools = this.root.querySelector('[data-section="text"] > .se-section-tools')
+    tools.innerHTML = `<button type="button" class="se-section-tool" id="se-text-styles" aria-haspopup="dialog"
+      aria-expanded="false" aria-label="${t('textstyles.title')}"><se-icon src="${imgPath}/styles.svg"></se-icon></button>`
+    const stylesButton = tools.querySelector('#se-text-styles')
+    stylesButton.seTooltip = { label: i18next.t('textstyles.title') }
+    stylesButton.addEventListener('click', () => editor.textStyles?.open(stylesButton, { beside: this.tab }))
+  }
+
+  /**
+   * The vertical alignment of a text in its box, as in Figma: it shows in
+   * a text of fixed size, whose box is higher than its lines.
+   * @returns {HTMLElement}
+   */
+  buildVerticalAlign () {
+    const { editor } = this
+    const imgPath = escapeHtml(editor.configObj.curConfig.imgPath)
+    const group = document.createElement('div')
+    group.className = 'se-choices'
+    group.id = 'tool_text_valign'
+    group.setAttribute('role', 'radiogroup')
+    group.setAttribute('aria-label', editor.i18next.t('layout.text_valign'))
+    for (const value of ['top', 'middle', 'bottom']) {
+      const button = document.createElement('button')
+      const label = editor.i18next.t(`layout.text_valign_${value}`)
+      button.type = 'button'
+      button.className = 'se-icon-button'
+      button.dataset.value = value
+      button.setAttribute('role', 'radio')
+      button.setAttribute('aria-checked', String(value === 'top'))
+      button.setAttribute('aria-label', label)
+      button.seTooltip = { label }
+      button.innerHTML = `<se-icon src="${imgPath}/text_valign_${value}.svg"></se-icon>`
+      group.append(button)
+    }
+    group.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-value]')
+      if (!button || button.disabled) return
+      editor.svgCanvas.setTextVerticalAlign?.(button.dataset.value)
+      this.refreshText(editor.svgCanvas.getSelectedElements().filter(Boolean))
+    })
+    return group
+  }
+
+  /**
+   * Writes the weight and the italic of the Style list on the selected
+   * texts, in one undo step.
+   * @param {string} value "700", "400 italic"…
+   * @returns {void}
+   */
+  changeFontStyle (value) {
+    if (!value) return
+    const { svgCanvas } = this.editor
+    const texts = svgCanvas.getSelectedElements().filter((el) => el?.tagName === 'text')
+    if (!texts.length) return
+    const { weight, italic } = fontStyleAttributes(value)
+    const attrs = { 'font-weight': weight }
+    const isItalic = (el) => ['italic', 'oblique'].includes(styledAttribute(svgCanvas, el, 'font-style'))
+    if (italic || texts.some(isItalic)) attrs['font-style'] = italic ? 'italic' : 'normal'
+    svgCanvas.changeSelectedAttributes(attrs, texts)
+    this.refreshText(texts)
+  }
+
+  /**
+   * What the selected texts share, in Typography: their font, shown by its
+   * name even when the list has none such; their style; their alignments;
+   * and whether they have a box of fixed size.
+   * @param {Element[]} selected
+   * @returns {void}
+   */
+  refreshText (selected) {
+    const { svgCanvas } = this.editor
+    const texts = selected.filter((el) => el?.tagName === 'text')
+    if (this.$resizing) {
+      const shown = texts.length > 0 && texts.length === selected.length && svgCanvas.getMode?.() !== 'textedit'
+      if (this.$resizing.hidden === shown) this.$resizing.hidden = !shown
+      if (shown) {
+        const mode = commonValueOf(texts, (el) => svgCanvas.getTextResizing?.(el) ?? 'auto-width')
+        for (const button of this.$resizing.querySelectorAll('[data-value]')) {
+          button.setAttribute('aria-checked', String(button.dataset.value === mode))
+        }
+      }
+    }
+    if (!texts.length) return
+    const styled = (name) => (el) => styledAttribute(svgCanvas, el, name)
+    const family = document.getElementById('tool_font_family')
+    const font = commonValueOf(texts, styled('font-family'))
+    if (family?.$select && font) {
+      const options = [...family.$select.options]
+      let option = options.find((item) => item.value && firstFamily(item.value) === firstFamily(font))
+      if (!option) {
+        option = document.createElement('option')
+        option.value = font
+        option.className = 'se-font-other'
+        option.textContent = font.split(',')[0].replace(/["']/g, '').trim()
+        family.$select.querySelector('.se-font-other')?.remove()
+        family.$select.prepend(option)
+      }
+      family.$select.value = option.value
+    } else if (family && font === undefined) {
+      family.mixed = true
+    }
+    if (this.$fontStyle && document.activeElement !== this.$fontStyle) {
+      const value = commonValueOf(texts, (el) => fontStyleValue(styled('font-weight')(el), styled('font-style')(el)))
+      this.$fontStyle.value = value ?? ''
+    }
+    const anchors = this.root.querySelector('.se-choices[data-for="tool_text_anchor"]')
+    if (anchors) {
+      const anchor = commonValueOf(texts, (el) => styled('text-anchor')(el) || 'start')
+      anchors.dataset.mixed = String(anchor === undefined)
+      const list = document.getElementById('tool_text_anchor')
+      if (anchor !== undefined && list.getAttribute('value') !== anchor) list.setAttribute('value', anchor)
+      else anchors.syncChoices?.()
+    }
+    const valign = this.root.querySelector('#tool_text_valign')
+    if (valign) {
+      const fixed = texts.every((el) => svgCanvas.getTextHeight?.(el))
+      const value = commonValueOf(texts, (el) => svgCanvas.getTextVerticalAlign?.(el) ?? 'top')
+      for (const button of valign.children) {
+        button.disabled = !fixed
+        button.setAttribute('aria-checked', String(button.dataset.value === value))
+      }
+      valign.classList.toggle('se-disabled', !fixed)
+    }
+  }
+
+  /**
+   * The miter angle of Figma: under it, a miter join is cut (beveled). SVG
+   * writes it as `stroke-miterlimit`, the length of the miter in stroke
+   * widths; 4, its default, is an angle of 28.96°.
+   * @returns {HTMLElement}
+   */
+  buildMiterAngle () {
+    const { svgCanvas } = this.editor
+    const field = document.createElement('se-spin-input')
+    field.id = 'stroke_miter_angle'
+    field.setAttribute('min', '1')
+    field.setAttribute('max', '180')
+    field.setAttribute('step', '1')
+    field.setAttribute('title', 'layout.miter_angle')
+    field.setAttribute('src', 'angle.svg')
+    field.addEventListener('change', (e) => {
+      if (e.detail?.relative) {
+        // "Mixed": each angle changes by the same amount.
+        const { relative } = e.detail
+        svgCanvas.changeSelectedAttributeEach('stroke-miterlimit', (elem) =>
+          miterLimitOf(relative(miterAngleOf(styledAttribute(svgCanvas, elem, 'stroke-miterlimit')))), this.strokeShapes())
+        return
+      }
+      const angle = Number.parseFloat(e.target.value)
+      if (Number.isFinite(angle)) svgCanvas.setStrokeAttr('stroke-miterlimit', miterLimitOf(angle))
+    })
+    return field
+  }
+
+  /**
+   * The shapes whose stroke the settings change: the selection, the shapes
+   * of its groups included.
+   * @returns {Element[]}
+   */
+  strokeShapes () {
+    return shapesOf(this.editor.svgCanvas.getSelectedElements().filter(Boolean))
+  }
+
+  /**
+   * A row of buttons for the choices of a list (se-list), as the joins of
+   * Figma. A click chooses as the list does; the list stays, out of sight,
+   * for its handlers and the contextual bar.
+   * @param {HTMLElement} list
+   * @param {() => void} [changed] After a choice
+   * @returns {HTMLElement}
+   */
+  choices (list, changed = () => this.refreshStroke(this.editor.svgCanvas.getSelectedElements().filter(Boolean))) {
+    const { i18next } = this.editor
+    const imgPath = escapeHtml(this.editor.configObj.curConfig.imgPath)
+    const group = document.createElement('div')
+    group.className = 'se-choices'
+    group.dataset.for = list.id
+    group.setAttribute('role', 'radiogroup')
+    const items = [...list.querySelectorAll('se-list-item')]
+    for (const item of items) {
+      const button = document.createElement('button')
+      const label = i18next.t(item.getAttribute('title'))
+      button.type = 'button'
+      button.className = 'se-icon-button'
+      button.dataset.value = item.getAttribute('value')
+      button.setAttribute('role', 'radio')
+      button.setAttribute('aria-label', label)
+      button.seTooltip = { label }
+      button.innerHTML = `<se-icon src="${imgPath}/${escapeHtml(item.getAttribute('src'))}"></se-icon>`
+      group.append(button)
+    }
+    // "Mixed": none is chosen.
+    const sync = () => {
+      const value = group.dataset.mixed === 'true' ? null : list.getAttribute('value') || items[0]?.getAttribute('value')
+      for (const button of group.children) button.setAttribute('aria-checked', String(button.dataset.value === value))
+    }
+    group.syncChoices = sync
+    group.addEventListener('click', (e) => {
+      const value = e.target.closest('[data-value]')?.dataset.value
+      if (!value) return
+      group.dataset.mixed = 'false'
+      list.setAttribute('value', value)
+      list.dispatchEvent(new CustomEvent('change', { detail: { value } }))
+      sync()
+      changed()
+    })
+    new MutationObserver(sync).observe(list, { attributes: true, attributeFilter: ['value'] })
+    list.classList.add('se-proxied')
+    sync()
+    return group
+  }
+
+  /**
+   * A window of settings, as "Stroke settings" in Figma: the icon at the end
+   * of a row opens it at the left of the panel, with its title, a button to
+   * close it and a row for each setting, its name at the left. Its body
+   * keeps the id and the class of the folds of "More options", so that the
+   * contextual bar counts its controls as shown.
+   * @param {"stroke"|"text"} name
+   * @param {Element} host The row that ends with the icon
+   * @param {Array<[string, string, Array<Element|null>]>} rows
+   *   [name, key of the label, controls]
+   * @param {Element} [container] Where the window goes: its section
+   * @returns {HTMLElement} The window
+   */
+  settingsWindow (name, host, rows, container = this.body(name)) {
+    const { editor } = this
+    const t = (key) => escapeHtml(editor.i18next.t(key))
+    const imgPath = escapeHtml(editor.configObj.curConfig.imgPath)
+    const label = editor.i18next.t(`layout.${name}_settings`)
+    const toggle = document.createElement('button')
+    toggle.type = 'button'
+    toggle.className = 'se-more-toggle se-section-tool se-more-icon'
+    toggle.dataset.more = name
+    toggle.setAttribute('aria-haspopup', 'dialog')
+    toggle.setAttribute('aria-expanded', 'false')
+    toggle.setAttribute('aria-controls', `se-settings-${name}`)
+    toggle.setAttribute('aria-label', label)
+    toggle.seTooltip = { label }
+    toggle.innerHTML = `<se-icon src="${imgPath}/tune.svg"></se-icon>`
+    host.append(toggle)
+    const popover = document.createElement('se-popover')
+    popover.id = `se-settings-${name}`
+    popover.className = 'se-settings'
+    popover.dataset.more = name
+    popover.setAttribute('placement', 'left-start')
+    popover.setAttribute('role', 'dialog')
+    popover.setAttribute('aria-labelledby', `se-settings-${name}-title`)
+    popover.innerHTML = `<div class="se-settings-head"><h4 id="se-settings-${name}-title">${escapeHtml(label)}</h4>
+      <button type="button" class="se-icon-button se-settings-close" aria-label="${t('common.close')}"
+        ><se-icon src="${imgPath}/xmark.svg"></se-icon></button></div>
+      <div class="se-more-body se-settings-body" id="se-more-${name}"></div>`
+    const body = popover.querySelector('.se-settings-body')
+    for (const [row, key, controls] of rows) {
+      const line = document.createElement('div')
+      line.className = 'se-settings-row'
+      line.dataset.row = row
+      line.innerHTML = `<span class="se-settings-label">${t(key)}</span><div class="se-settings-control"></div>`
+      line.lastElementChild.append(...controls.filter(Boolean))
+      body.append(line)
+    }
+    toggle.addEventListener('click', () => {
+      if (popover.opened) {
+        popover.close()
+        return
+      }
+      popover.open(toggle, { beside: this.tab })
+    })
+    popover.querySelector('.se-settings-close').addEventListener('click', () => popover.close({ restoreFocus: true }))
+    // Escape closes the window first, as in Figma, wherever the focus is:
+    // the selection stays. A value dragged keeps its own Escape.
+    const escape = (e) => {
+      if (e.key !== 'Escape' || !popover.opened || document.documentElement.classList.contains(SCRUBBING_CLASS)) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      popover.close({ restoreFocus: popover.contains(document.activeElement) })
+    }
+    popover.addEventListener('se-popover-open', () => window.addEventListener('keydown', escape, true))
+    popover.addEventListener('se-popover-close', () => {
+      window.removeEventListener('keydown', escape, true)
+      toggle.setAttribute('aria-expanded', 'false')
+    })
+    const holder = document.createElement('div')
+    holder.className = 'se-more se-settings-holder'
+    holder.dataset.more = name
+    holder.append(popover)
+    container.append(holder)
+    return popover
   }
 
   /**
@@ -453,6 +957,36 @@ export class Inspector {
     })
     this.$alignRow = row
     this.put(row, 'geometry')
+  }
+
+  /**
+   * The Resizing of a text, as in Figma, above its width and height: as wide
+   * as its lines, of a fixed width (its lines break in it, its height
+   * follows them), or of a fixed size (lot Texte).
+   * @returns {void}
+   */
+  buildResizing () {
+    const { editor } = this
+    const t = (key) => escapeHtml(editor.i18next.t(key))
+    const imgPath = escapeHtml(editor.configObj.curConfig.imgPath)
+    const row = document.createElement('div')
+    row.className = 'se-text-resizing se-captioned'
+    row.hidden = true
+    const modes = [['auto-width', 'text_auto_width'], ['auto-height', 'text_auto_height'], ['fixed', 'text_fixed_size']]
+    row.innerHTML = `<span class="se-caption">${t('layout.text_resizing')}</span>
+      <div class="se-choices" id="se-text-resizing" role="radiogroup" aria-label="${t('layout.text_resizing')}">${modes.map(([mode, key]) =>
+        `<button type="button" class="se-icon-button" role="radio" aria-checked="false" data-value="${mode}"
+          aria-label="${t(`layout.${key}`)}"><se-icon src="${imgPath}/${key === 'text_fixed_size' ? 'text_fixed_size' : key}.svg"></se-icon></button>`).join('')}</div>`
+    for (const button of row.querySelectorAll('[data-value]')) button.seTooltip = { label: button.getAttribute('aria-label') }
+    row.addEventListener('click', (e) => {
+      const mode = e.target.closest('[data-value]')?.dataset.value
+      if (!mode) return
+      editor.svgCanvas.setTextResizing?.(mode)
+      editor.topPanel?.updateContextPanel?.()
+      this.refreshText(editor.svgCanvas.getSelectedElements().filter(Boolean))
+    })
+    this.$resizing = row
+    this.put(row, 'size')
   }
 
   /**
@@ -605,6 +1139,38 @@ export class Inspector {
     select.disabled = align === null || clipped
     select.closest('label').title = i18next.t(clipped ? 'layout.stroke_align_off' : 'layout.stroke_align')
     if (document.activeElement !== select) select.value = align === 'mixed' ? '' : (align ?? 'center')
+    this.refreshStrokeSettings(selected)
+  }
+
+  /**
+   * The join and the caps the stroked shapes share (none chosen when they
+   * differ), and their miter angle, which shows for a miter join only.
+   * @param {Element[]} selected
+   * @returns {void}
+   */
+  refreshStrokeSettings (selected) {
+    const settings = this.root.querySelector('#se-more-stroke')
+    if (!settings) return
+    const { svgCanvas } = this.editor
+    const shapes = shapesOf(selected)
+    const styled = (name, fallback) => (el) => styledAttribute(svgCanvas, el, name) || fallback
+    for (const [id, name, fallback] of [['stroke_linejoin', 'stroke-linejoin', 'miter'], ['stroke_linecap', 'stroke-linecap', 'butt']]) {
+      const group = settings.querySelector(`.se-choices[data-for="${id}"]`)
+      const list = settings.querySelector(`#${id}`)
+      if (!group || !list || !shapes.length) continue
+      const value = commonValueOf(shapes, styled(name, fallback))
+      group.dataset.mixed = String(value === undefined)
+      if (value !== undefined && list.getAttribute('value') !== value) list.setAttribute('value', value)
+      else group.syncChoices?.()
+    }
+    const joins = new Set(shapes.map(styled('stroke-linejoin', 'miter')))
+    const row = settings.querySelector('[data-row="miter"]')
+    if (row) row.hidden = shapes.length > 0 && !joins.has('miter')
+    const field = this.$miterAngle
+    if (!field || !shapes.length) return
+    const angle = commonValueOf(shapes, (el) => miterAngleOf(styledAttribute(svgCanvas, el, 'stroke-miterlimit')))
+    if (angle === undefined) field.mixed = true
+    else if (field.mixed || String(field.value) !== String(angle)) field.value = angle
   }
 
   /**
@@ -627,45 +1193,6 @@ export class Inspector {
     note.className = 'se-align-page'
     note.textContent = this.editor.i18next.t('tools.align_to_page')
     align.querySelector('#tool_align_popup')?.append(note)
-  }
-
-  /**
-   * Folds the settings of MORE_SETTINGS under a "More options" button, at the
-   * end of their container (lot S1). They keep their ids and handlers. The
-   * settings of the stroke open from an icon at the end of its row (lot
-   * Propriétés).
-   * @param {Element|null} container
-   * @param {"stroke"|"text"} name
-   * @param {Element} [host] Where the button goes, as an icon
-   * @returns {void}
-   */
-  fold (container, name, host) {
-    if (!container) return
-    const controls = Object.keys(MORE_SETTINGS[name]).map((id) => container.querySelector(`#${id}`)).filter(Boolean)
-    if (!controls.length) return
-    const more = document.createElement('div')
-    more.className = 'se-more'
-    more.dataset.more = name
-    const label = escapeHtml(this.editor.i18next.t(host ? 'layout.stroke_settings' : 'common.more_opts'))
-    const imgPath = escapeHtml(this.editor.configObj.curConfig.imgPath)
-    more.innerHTML = `<button type="button" class="se-more-toggle" aria-expanded="false" aria-controls="se-more-${name}"
-      >${label}</button><div class="se-more-body" id="se-more-${name}" hidden></div>`
-    const toggle = more.querySelector('.se-more-toggle')
-    const body = more.querySelector('.se-more-body')
-    if (host) {
-      toggle.classList.add('se-section-tool', 'se-more-icon')
-      toggle.dataset.more = name
-      toggle.setAttribute('aria-label', toggle.textContent)
-      toggle.title = toggle.textContent
-      toggle.innerHTML = `<se-icon src="${imgPath}/tune.svg"></se-icon>`
-      host.append(toggle)
-    }
-    body.append(...controls)
-    toggle.addEventListener('click', () => {
-      body.hidden = !body.hidden
-      toggle.setAttribute('aria-expanded', String(!body.hidden))
-    })
-    container.append(more)
   }
 
   /**
@@ -932,7 +1459,12 @@ export class Inspector {
     if (this.$alignRow) this.$alignRow.hidden = !selected.length || editor.svgCanvas?.getMode?.() === 'pathedit'
     this.refreshAppearance(selected)
     this.refreshStroke(selected)
+    this.refreshText(selected)
     const none = this.refreshSections()
+    // A window of settings whose icon is no longer there closes.
+    for (const popover of this.root.querySelectorAll('se-popover.se-settings')) {
+      if (popover.opened && !popover.anchor?.getClientRects().length) popover.close()
+    }
     if (none) {
       this.refreshLayer()
       this.refreshDocument()

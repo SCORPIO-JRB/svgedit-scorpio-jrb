@@ -22,7 +22,9 @@ test.describe('Text tools', () => {
     await expect(page.locator('#svg_2')).toBeVisible()
 
     await firstText.click()
-    await page.locator('#tool_bold').click()
-    await page.locator('#tool_italic').click()
+    await clickControl(page, 'tool_bold')
+    await clickControl(page, 'tool_italic')
+    await expect(firstText).toHaveAttribute('font-weight', 'bold')
+    await expect(firstText).toHaveAttribute('font-style', 'italic')
   })
 })
