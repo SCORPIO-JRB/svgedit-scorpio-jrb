@@ -57,3 +57,7 @@ Chaque réglage est une étape d'annulation : « Ajouter un fond à la page », 
 
 - **Tests unitaires** : `tests/unit/fond-page.test.js`, 8 tests (création, couleur et opacité, retrait, aperçu, taille de la page, contenu, fichier, champ).
 - **Tests E2E** : `tests/e2e/fond-page.spec.js`, 5 tests (sections sans sélection, +, couleur tapée, −, clic sur la page, L, Ajuster au contenu, fenêtre couleur, modèle Synoptique).
+- **Tests mis à jour**, qui décrivaient Remplissage et Contour sans sélection :
+  - `layout-v3` : sans sélection, les sections sont Calque, Document et Cadres d'export ;
+  - `couleurs-v4` : après une annulation, l'objet est resélectionné pour rouvrir la fenêtre couleur.
+- **Suite E2E complète** (Playwright, Chromium) : 663 sur 665 au premier passage. Les 2 échecs sont les deux tests ci-dessus, qui passent depuis leur mise à jour.
