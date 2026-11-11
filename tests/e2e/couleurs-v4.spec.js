@@ -273,7 +273,8 @@ test.describe('Colour window (V4 couleurs)', () => {
     expect(await attr(page, 'r1', 'fill')).toBe('none')
     await expect(toggle).toHaveAttribute('aria-label', 'Add a fill')
     await toggle.click()
-    expect(await attr(page, 'r1', 'fill')).toBe('#ff0000')
+    // The fill given back is the default one: light grey.
+    expect(await attr(page, 'r1', 'fill')).toBe('#dcdcdf')
     await undo(page)
     expect(await attr(page, 'r1', 'fill')).toBe('none')
   })
