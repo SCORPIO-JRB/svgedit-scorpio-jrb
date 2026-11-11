@@ -103,3 +103,64 @@ test.describe('Paint of an imported shape', () => {
     })
   }
 })
+
+// 11 November: a group of the synoptic library kept the paint of the
+// previous selection, black or red, in the inspector and the contextual bar:
+// its title, which has no paint, made it "mixed", and nothing was shown.
+const LIBRARY = `<svg xmlns="${NS}" width="640" height="480"><style>` +
+  ':root { --surface: rgba(255, 255, 255, .05); --repos: #766d85; --alarme: #ef4444 }' +
+  '.zone-clic { fill: transparent; stroke: none } .corps { fill: var(--surface); stroke: var(--repos); stroke-width: 1.5 }' +
+  '.repere { display: none } .repere-fond { fill: var(--alarme) } .libelle { fill: #eeecf1 }</style>' +
+  '<g class="layer"><title>L</title>' +
+  '<rect id="before" x="300" y="10" width="40" height="40" fill="#ff0000"/>' +
+  '<g id="bottle"><title>Bouteille de découplage</title><rect class="zone-clic" x="96" y="96" width="48" height="308"/>' +
+  '<rect class="corps" x="100" y="100" width="40" height="300" rx="20"/>' +
+  '<g class="repere"><circle class="repere-fond" cx="140" cy="100" r="9"/></g></g>' +
+  '<g id="boiler"><title>Chaudière</title><rect class="corps" x="200" y="100" width="80" height="100"/>' +
+  '<text class="libelle" x="210" y="150">Chaudière</text></g>' +
+  '</g></svg>'
+
+test.describe('Paint of a group', () => {
+  const paints = (page) => page.evaluate(() => {
+    const read = (id) => {
+      const field = document.getElementById(id)
+      return field ? `${field.$value.textContent} ${field.$alpha.textContent}`.replace(/\s+/g, ' ').trim() : null
+    }
+    return {
+      fill: read('fill_color'),
+      stroke: read('stroke_color'),
+      bar: [read('se-ctx-fill'), read('se-ctx-stroke')]
+    }
+  })
+  const select = (page, id) => page.evaluate((id) => {
+    const canvas = window.svgEditor.svgCanvas
+    canvas.clearSelection()
+    canvas.selectOnly([document.getElementById(id)])
+  }, id)
+
+  for (const layout of ['canvas', 'classic']) {
+    test(`shows the paint of the shapes it draws, or Mixed (${layout} layout)`, async ({ page }) => {
+      await visitAndApproveStorage(page, { query: layout === 'classic' ? '?layout=classic' : '' })
+      await page.evaluate((svg) => {
+        window.svgEditor.svgCanvas.setSvgString(svg)
+        window.svgEditor.updateCanvas()
+      }, LIBRARY)
+      // A red shape first: its paint must not stay on the group.
+      await select(page, 'before')
+      await expect.poll(async () => (await paints(page)).fill).toBe('FF0000 100 %')
+      await select(page, 'bottle')
+      const bar = layout === 'canvas' ? ['FFFFFF 5 %', '766D85 100 %'] : [null, null]
+      await expect.poll(() => paints(page)).toEqual({ fill: 'FFFFFF 5 %', stroke: '766D85 100 %', bar })
+      // A body and a label of other colours: Mixed, as for several objects.
+      await select(page, 'boiler')
+      const mixed = layout === 'canvas' ? ['Mixed', 'Mixed'] : [null, null]
+      await expect.poll(async () => {
+        const shown = await paints(page)
+        return [shown.fill, shown.bar]
+      }).toEqual(['Mixed', mixed])
+      if (layout === 'canvas') {
+        await expect(page.locator('.se-ctx-paint[data-paint="fill"] .se-ctx-paint-name')).toHaveText('Mixed')
+      }
+    })
+  }
+})

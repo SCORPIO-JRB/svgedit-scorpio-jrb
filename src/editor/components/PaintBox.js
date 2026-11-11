@@ -32,6 +32,39 @@ const drawnPaint = (elem, type) => {
   const style = elem.ownerDocument?.defaultView?.getComputedStyle?.(elem)
   return { color: style?.[type] || undefined, opacity: style?.[`${type}Opacity`] || undefined }
 }
+
+/** Elements a group holds whose paint is that of their content. */
+const GROUPS = new Set(['g', 'a', 'switch'])
+/** Elements a group holds that are not drawn where they are. */
+const UNDRAWN = new Set(['title', 'desc', 'metadata', 'defs', 'style', 'script', 'symbol', 'clipPath', 'mask',
+  'marker', 'pattern', 'linearGradient', 'radialGradient', 'filter'])
+/** Elements without fill or stroke of their own. */
+const UNPAINTED = new Set(['use', 'image', 'foreignObject'])
+
+const styleOf = (elem) => elem.ownerDocument?.defaultView?.getComputedStyle?.(elem)
+
+/**
+ * The shapes a group draws, its subgroups included: not its title, nor what
+ * is hidden (an alarm marker waiting for its state), nor uses and images.
+ * @param {Element} group
+ * @returns {Element[]}
+ */
+const drawnShapes = (group) => {
+  const shapes = []
+  const walk = (parent) => {
+    for (const child of parent.children) {
+      const tag = child.localName
+      if (UNDRAWN.has(tag) || child.getAttribute('display') === 'none' || styleOf(child)?.display === 'none') continue
+      if (GROUPS.has(tag)) walk(child)
+      else if (!UNPAINTED.has(tag) && styleOf(child)?.visibility !== 'hidden') shapes.push(child)
+    }
+  }
+  walk(group)
+  return shapes
+}
+
+/** A paint that draws nothing. */
+const invisible = (painted) => painted.color === 'none' || painted.opacity === 0
 /**
  *
  */
@@ -144,56 +177,69 @@ class PaintBox {
   }
 
   /**
-   * Paint of an element, as the box shows it.
+   * Paint of an element, as the box shows it. A group shows the paint its
+   * shapes share: those it draws, its title and hidden markers left out,
+   * and a shape that draws nothing (a transparent zone for the click) too,
+   * unless all are so.
    * @param {Element} elem
    * @param {object} [svgcanvas] - Reads a paint that a rule gives
    * @returns {{color: string, opacity: number}|null|undefined} Undefined for
-   *   an element without paint, null for a group whose children differ
+   *   an element without paint, null for a group whose shapes differ
    */
   paintOf (elem, svgcanvas) {
     const { type } = this
-    // As drawn: a rule of the style sheets, or the style attribute, can give
-    // the paint (lot S2)
-    const styled = (el, name) => svgcanvas?.getStyledValue?.(el, name)?.value ?? el.getAttribute(name)
-    switch (elem.tagName) {
-      case 'use':
-      case 'image':
-      case 'foreignObject':
-        // These elements don't have fill or stroke.
-        return undefined
-      case 'g':
-      case 'a': {
-        const childs = elem.getElementsByTagName('*')
-        let gPaint = null
-        for (let i = 0, len = childs.length; i < len; i++) {
-          const p = styled(childs[i], type)
-          if (i === 0) {
-            gPaint = p
-          } else if (gPaint !== p) {
-            return null
-          }
-        }
-        return gPaint === null ? null : shownPaint(gPaint, 100)
-      }
-      default: {
-        // Its own value (a rule, its style attribute, its attribute), or the
-        // one it is drawn with: inherited from a group, currentColor.
-        let drawn
-        let color = styled(elem, type)
-        if (color === null || /^(?:inherit|currentcolor)$/i.test(color.trim())) {
-          drawn = drawnPaint(elem, type)
-          color = drawn.color ?? (type === 'fill' ? 'black' : 'none')
-        }
-        let opacity = Number.parseFloat(styled(elem, type + '-opacity'))
-        if (Number.isNaN(opacity)) {
-          opacity = Number.parseFloat((drawn ?? drawnPaint(elem, type)).opacity)
-        }
-        if (Number.isNaN(opacity)) {
-          opacity = 1.0
-        }
-        return shownPaint(color, opacity * 100)
+    if (UNPAINTED.has(elem.tagName)) return undefined
+    if (!GROUPS.has(elem.tagName)) return PaintBox.shapePaint(elem, type, svgcanvas)
+    const shapes = drawnShapes(elem)
+    if (!shapes.length) return undefined
+    const same = (a, b) => a.color === b.color && a.opacity === b.opacity
+    let common = null
+    const unseen = []
+    for (const shape of shapes) {
+      // A line has no inside: its fill is not drawn.
+      if (type === 'fill' && shape.tagName === 'line') continue
+      const painted = PaintBox.shapePaint(shape, type, svgcanvas)
+      const other = () => shape.tagName === 'line' || invisible(PaintBox.shapePaint(shape, type === 'fill' ? 'stroke' : 'fill', svgcanvas))
+      if (invisible(painted) && other()) {
+        unseen.push(painted)
+      } else if (!common) {
+        common = painted
+      } else if (!same(common, painted)) {
+        return null
       }
     }
+    if (common) return common
+    if (!unseen.length) return shownPaint('none', 100)
+    return unseen.every((painted) => same(painted, unseen[0])) ? unseen[0] : null
+  }
+
+  /**
+   * Paint of a shape: its own value (a rule, its style attribute, its
+   * attribute), or the one it is drawn with: inherited from a group,
+   * currentColor.
+   * @param {Element} elem
+   * @param {"fill"|"stroke"} type
+   * @param {object} [svgcanvas] - Reads a paint that a rule gives
+   * @returns {{color: string, opacity: number}}
+   */
+  static shapePaint (elem, type, svgcanvas) {
+    // As drawn: a rule of the style sheets, or the style attribute, can give
+    // the paint (lot S2)
+    const styled = (name) => svgcanvas?.getStyledValue?.(elem, name)?.value ?? elem.getAttribute(name)
+    let drawn
+    let color = styled(type)
+    if (color === null || /^(?:inherit|currentcolor)$/i.test(color.trim())) {
+      drawn = drawnPaint(elem, type)
+      color = drawn.color ?? (type === 'fill' ? 'black' : 'none')
+    }
+    let opacity = Number.parseFloat(styled(type + '-opacity'))
+    if (Number.isNaN(opacity)) {
+      opacity = Number.parseFloat((drawn ?? drawnPaint(elem, type)).opacity)
+    }
+    if (Number.isNaN(opacity)) {
+      opacity = 1.0
+    }
+    return shownPaint(color, opacity * 100)
   }
 
   /**
@@ -205,12 +251,14 @@ class PaintBox {
     if (!selectedElement) { return null }
     const painted = this.paintOf(selectedElement, svgcanvas)
     if (painted === undefined) {
-      // Don't change the current value
+      // Don't change the current value; the stripes of a multi-selection go.
+      if (this.mixed && this.paint) this.setPaint(this.paint)
       return null
     }
     if (painted === null) {
-      // No common color, don't update anything
+      // The shapes of the group differ: stripes, as for a multi-selection.
       this._paintColor = null
+      this.setMixed()
       return null
     }
     this._paintColor = painted.color
