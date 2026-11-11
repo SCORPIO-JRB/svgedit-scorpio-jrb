@@ -45,6 +45,7 @@ import { init as symbolsInit } from './core/symbols.js'
 import { init as connectorsInit } from './core/connectors.js'
 import { init as cornerActionsInit } from './core/corner-actions.js'
 import { init as strokeAlignInit } from './core/stroke-align.js'
+import { init as pageBackgroundInit } from './core/page-background.js'
 import {
   init as jsonInit,
   getJsonFromSvgElements,
@@ -297,6 +298,7 @@ class SvgCanvas {
     connectorsInit(this)
     cornerActionsInit(this)
     strokeAlignInit(this)
+    pageBackgroundInit(this)
 
     // prevent links from being followed in the canvas
     const handleLinkInCanvas = e => {

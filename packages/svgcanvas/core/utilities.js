@@ -1366,10 +1366,16 @@ export const getStrokedBBox = (elems, addSVGElementsFromJson, pathActions) => {
  * @returns {Element[]} All "visible" elements.
  */
 export const getVisibleElements = parentElement => {
+  // The background of the page is not content (lot Fond): its layer, when
+  // it holds nothing else, is not the one looked at, and it is left out.
+  const background = (elem) => elem.hasAttribute?.('data-se-background')
   if (!parentElement) {
     const svgContent = svgCanvas.getSvgContent()
     for (let i = 0; i < svgContent.children.length; i++) {
-      if (svgContent.children[i].getBBox) {
+      const child = svgContent.children[i]
+      if (child.querySelector?.(':scope > [data-se-background]') &&
+        [...child.children].every((elem) => background(elem) || elem.tagName === 'title')) continue
+      if (child.getBBox) {
         const bbox = svgContent.children[i].getBBox()
         if (
           bbox.width !== 0 &&
@@ -1389,7 +1395,7 @@ export const getVisibleElements = parentElement => {
     const children = parentElement.children
     // eslint-disable-next-line array-callback-return
     Array.from(children, elem => {
-      if (elem.getBBox) {
+      if (elem.getBBox && !background(elem)) {
         contentElems.push(elem)
       }
     })

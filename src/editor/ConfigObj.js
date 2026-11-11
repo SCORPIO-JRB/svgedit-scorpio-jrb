@@ -148,6 +148,7 @@ export default class ConfigObj {
       * @property {module:SVGEditor.XYDimensions} [dimensions=[640, 480]] The default width/height of a new document. Use an array in `setConfig` (e.g., `[800, 600]`) and comma separated numbers in the URL.
       * @property {boolean} [gridSnapping=false] Snap to the grid: the edges and middles of what is moved, resized or drawn come to its lines within 6 pixels of the screen. Set in Editor Options. Apart from `showGrid` since V2.
       * @property {string} [gridColor=""] A colour, e.g. '#000', for the lines of the grid; empty, those of the theme (since V2). Set in Editor Options.
+      * @property {string} [pageBackground="#ffffff"] The colour + gives the background of the page, in the Document section (lot Fond).
       * @property {Object<string, boolean>} [fidelity={}] The corrections of section 7 of the plan v2 (lot V6) that the editor makes to a file, each on unless set to false: `rawValues`, `styleProperties`, `attributes`, `gradientUnits`, `layerOrder`, `emptyValues`, `nestedSvg`, `stableSave`.
       * @property {string} [baseUnit="px"] Set in Editor Options.
       * @property {Float} [snappingStep=10] The step of the grid: where its lines are and where the drawing snaps. Set in Editor Options.
@@ -214,6 +215,7 @@ export default class ConfigObj {
       // Change the following to preferences (already in the Editor Options dialog)?
       gridSnapping: false,
       gridColor: '',
+      pageBackground: '#ffffff',
       baseUnit: 'px',
       snappingStep: 10,
       gridSubdivisions: 10,
