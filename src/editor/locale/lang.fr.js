@@ -206,6 +206,7 @@ export default {
     open_group: 'Ouvrir le groupe',
     select_children: 'Sélectionner les enfants',
     hide: 'Masquer',
+    show: 'Afficher',
     select_same: 'Sélectionner les mêmes',
     replace: 'Remplacer',
     unlink: 'Dissocier',
@@ -769,7 +770,7 @@ export default {
     from_rules: 'Valeurs des règles {{selectors}}'
   },
   structure: {
-    hide: 'Masquer la sélection',
+    hide: 'Afficher/Masquer la sélection',
     lock: 'Verrouiller la sélection',
     show_all: 'Tout afficher',
     unlock_all: 'Tout déverrouiller',

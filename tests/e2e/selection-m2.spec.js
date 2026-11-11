@@ -207,18 +207,18 @@ test.describe('Rules by element type (M2)', () => {
     expect(Math.abs(preview.height - result.height)).toBeLessThan(1)
   })
 
-  test('a single text resized by its grip gets a new font size', async ({ page }) => {
+  test('a single text resized by its corner grip gets a box of fixed size, its font stays', async ({ page }) => {
+    // As in Figma (lot Texte et masquage): the Scale tool scales a text.
     await select(page, ['t1'])
     const box = await page.locator('#t1').boundingBox()
     await dragGrip(page, 'se', box.width, box.height)
     expect(await attr(page, 't1', 'transform')).toBeNull()
-    // Mouse positions arrive in whole pixels, so a text about 20 px tall cannot
-    // be doubled exactly: the error depends on the metrics of the installed
-    // font (39.46 on the GitHub runner, 39.89 to 40.16 locally). The rule under
-    // test is a font size scaled by the gesture instead of a matrix.
-    expect(Math.abs(Number(await attr(page, 't1', 'font-size')) - 40)).toBeLessThan(2)
+    expect(await attr(page, 't1', 'font-size')).toBe('20')
+    expect(Number(await attr(page, 't1', 'se:width'))).toBeGreaterThan(box.width * 1.8)
+    expect(Number(await attr(page, 't1', 'se:height'))).toBeGreaterThan(box.height * 1.8)
     await page.keyboard.press('Control+z')
     expect(await num(page, 't1', ['x', 'y', 'font-size'])).toEqual({ x: 100, y: 300, 'font-size': 20 })
+    expect(await attr(page, 't1', 'se:height')).toBeNull()
   })
 
   test('a rotated rectangle is scaled along its own axes, without shear', async ({ page }) => {

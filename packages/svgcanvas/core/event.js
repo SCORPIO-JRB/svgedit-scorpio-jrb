@@ -37,15 +37,12 @@ import {
   isGroupGesture,
   isGroupResizing,
   isGroupRotating,
-  isScalableText,
-  commitSingleTextResize,
-  singleTextPreview,
   drawingBoxOf,
   parentDelta,
   parentToDrawing
 } from './multi-transform.js'
 import { isFidelityOn } from './fidelity.js'
-import { startTextWidthResize, resizeTextWidth, restoreContent } from './text-lines.js'
+import { startTextBoxResize, resizeTextBox, restoreContent } from './text-lines.js'
 
 // The tools whose points snap while drawing (lot V2). The grid keeps its own
 // snapping there, as before.
@@ -74,11 +71,9 @@ let pendingCloneCmd = null
 let selectionBeforeClone = null
 // Elements that stay selected during a Shift+drag rubber band.
 let rubberBandBase = new Set()
-// A single text resized by a grip: it gets a new font size, not a matrix.
-let singleTextResize = null
-// The width of a single text changed by a side grip: its lines break again
-// (texts of several lines).
-let textWidthResize = null
+// The box of a single text changed by a grip (Figma): its lines break again,
+// its font stays. The Scale tool scales a text.
+let textBoxResize = null
 // Rotation of a single element started from a zone outside a corner: the
 // difference between its angle and the pointer's, so that it does not jump.
 // Null for the handle above the frame, whose behaviour is unchanged.
@@ -593,9 +588,9 @@ const cancelGesture = () => {
       if (selectedElements[0]) {
         restoreTransform(selectedElements[0], svgCanvas.getStartTransform())
       }
-      if (textWidthResize) {
+      if (textBoxResize) {
         // The width, the place and the lines the text had
-        const { text, before, content } = textWidthResize
+        const { text, before, content } = textBoxResize
         for (const [name, value] of Object.entries(before)) {
           if (value === null) {
             text.removeAttribute(name)
@@ -639,8 +634,7 @@ const cancelGesture = () => {
   moveSelectionThresholdReached = false
   pendingCloneCmd = null
   selectionBeforeClone = null
-  singleTextResize = null
-  textWidthResize = null
+  textBoxResize = null
   svgCanvas.setStarted(false)
   svgCanvas.setCurrentMode('select')
 
@@ -915,12 +909,14 @@ const mouseMoveEvent = (evt) => {
       if (!svgCanvas.getCurrentResizeMode().includes('e') && !svgCanvas.getCurrentResizeMode().includes('w')) {
         dx = 0
       }
-      if (textWidthResize?.text === selected) {
-        // A side grip of a text sets its width: the lines break again as
+      if (textBoxResize?.text === selected) {
+        // A grip of a text sets its box (Figma): the lines break again as
         // the pointer moves, the font stays.
-        const width = resizeTextWidth(textWidthResize, dx, svgCanvas.getCurrentResizeMode(), evt.altKey)
+        const { width, height } = resizeTextBox(textBoxResize, dx, dy, svgCanvas.getCurrentResizeMode(),
+          { symmetric: evt.altKey, proportional: evt.shiftKey })
         svgCanvas.selectorManager.requestSelector(selected).resize()
-        svgCanvas.selectorManager.showSize?.(width * textWidthResize.scale, getBBox(selected).height)
+        const shownHeight = /[ns]/.test(svgCanvas.getCurrentResizeMode()) ? height : getBBox(selected).height
+        svgCanvas.selectorManager.showSize?.(width * textBoxResize.scale, shownHeight * textBoxResize.scale)
         svgCanvas.call('transition', selectedElements)
         break
       }
@@ -986,16 +982,6 @@ const mouseMoveEvent = (evt) => {
         translateBack.setTranslate(ox + (c.x - ox) * sx, oy + (c.y - oy) * sy)
         labelSx = s
         labelSy = s
-      }
-      if (singleTextResize === selected && !(angle && sx * sy < 0)) {
-        // A text is never distorted: the preview shows the uniform scale and
-        // the position it will get (see commitSingleTextResize).
-        const preview = singleTextPreview(box, sx, sy, left + tx, top + ty)
-        translateOrigin.setTranslate(-preview.origin.x, -preview.origin.y)
-        scale.setScale(preview.sx, preview.sy)
-        translateBack.setTranslate(preview.target.x, preview.target.y)
-        labelSx = preview.sx
-        labelSy = preview.sy
       }
       if (hasMatrix) {
         const diff = angle ? 1 : 0
@@ -1400,8 +1386,9 @@ const mouseUpEvent = (evt) => {
           // Only recalculate dimensions after actual dragging/resizing to avoid
           // unwanted transform flattening on simple clicks
 
-          // Create a single batch command for all moved elements
-          const batchCmd = new BatchCommand('position')
+          // Create a single batch command for all moved elements; a grip
+          // resizes them ("size": the history says Resize, not Move).
+          const batchCmd = new BatchCommand(mouseUpMode === 'resize' ? 'size' : 'position')
           const changedElements = []
 
           selectedElements.forEach((elem) => {
@@ -1422,26 +1409,19 @@ const mouseUpEvent = (evt) => {
             if (mouseUpMode === 'resize' && elem === circleResize?.elem) {
               restoreCircleScale(elem, circleResize)
             }
-            if (mouseUpMode === 'resize' && elem === textWidthResize?.text) {
-              // The grip set the width: the transforms of the gesture go, the
-              // width, the place and the lines are one step.
+            if (mouseUpMode === 'resize' && elem === textBoxResize?.text) {
+              // The grip set the box: the transforms of the gesture go, the
+              // box, the place and the lines are one step.
               if (oldTransform) {
                 elem.setAttribute('transform', oldTransform)
               } else {
                 elem.removeAttribute('transform')
               }
-              const { before, content } = textWidthResize
-              batchCmd.addSubCommand(new ChangeElementCommand(elem, before, 'se:width', content))
+              const { before, content } = textBoxResize
+              const name = elem.getAttribute('se:height') !== before['se:height'] ? 'se:height' : 'se:width'
+              batchCmd.addSubCommand(new ChangeElementCommand(elem, before, name, content))
               changedElements.push(elem)
               return
-            }
-            if (mouseUpMode === 'resize' && elem === singleTextResize) {
-              const textCmd = commitSingleTextResize(elem, oldTransform)
-              if (textCmd) {
-                batchCmd.addSubCommand(textCmd)
-                changedElements.push(elem)
-                return
-              }
             }
 
             // recalculateDimensions uses startTransform when building its undo command.
@@ -1721,8 +1701,7 @@ const mouseUpEvent = (evt) => {
   svgCanvas.hasDragStartTransform = false
   svgCanvas.dragStartTransforms = null
   endDragOffset()
-  singleTextResize = null
-  textWidthResize = null
+  textBoxResize = null
   flushPendingClone()
 
   /**
@@ -2012,8 +1991,7 @@ const mouseDownEvent = (evt) => {
     }
     mouseTarget = selectedElements[0]
   }
-  singleTextResize = null
-  textWidthResize = null
+  textBoxResize = null
 
   // Nothing is drawn into a locked layer or group (lot V7): the editor says
   // why.
@@ -2118,13 +2096,8 @@ const mouseDownEvent = (evt) => {
       svgCanvas.setStarted(true)
       svgCanvas.setStartX(x)
       svgCanvas.setStartY(y)
-      singleTextResize = isScalableText(mouseTarget) ? mouseTarget : null
-      {
-        const side = svgCanvas.getCurrentResizeMode()
-        textWidthResize = mouseTarget?.tagName === 'text' && (side === 'e' || side === 'w')
-          ? startTextWidthResize(mouseTarget)
-          : null
-      }
+      // Every grip of a text sets its box; the Scale tool scales it.
+      textBoxResize = mouseTarget?.tagName === 'text' ? startTextBoxResize(mouseTarget) : null
 
       // Getting the BBox from the selection box, since we know we
       // want to orient around it

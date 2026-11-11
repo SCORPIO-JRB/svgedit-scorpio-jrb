@@ -446,57 +446,6 @@ export const scaleText = (text, m, info, startTransform) => {
   return batch
 }
 
-/**
- * Ends the resize of a single text by one of its grips: the scale drawn
- * during the gesture becomes a new font size.
- * @param {Element} text
- * @param {string} startTransform - Transform before the gesture
- * @returns {module:history.BatchCommand|null} Null when the rule does not
- *   apply; the gesture's transforms are then left for recalculateDimensions.
- */
-export const commitSingleTextResize = (text, startTransform) => {
-  const tlist = getTransformList(text)
-  const N = tlist?.numberOfItems || 0
-  if (N < 3) { return null }
-  const total = toPlain(transformListToTransform(tlist).matrix)
-  const own = N > 3 ? toPlain(transformListToTransform(tlist, 0, N - 4).matrix) : identity()
-  const m = multiply(total, invert(own))
-  const angle = getRotationAngle(text) || 0
-  if (axisScales(m, angle).det < 0 && angle) { return null }
-  // Back to the transform before the gesture, then the rule.
-  text.getAttribute('transform')
-  if (startTransform) {
-    text.setAttribute('transform', startTransform)
-  } else {
-    text.removeAttribute('transform')
-  }
-  const info = describeText(text)
-  const cut = withDrawnChange(text, textPreviewMatrix(m, info))
-  const cmd = scaleText(text, m, info, startTransform)
-  return cmd && cut ? followCutReferences(text, cut, cmd) : cmd
-}
-
-/**
- * Scale for the preview of a single text resized by a grip: uniform, by the
- * smaller factor, about its center moved as the frame's scale moves it.
- * @param {module:utilities.BBoxObject} box - The text's box
- * @param {number} sx - Factors of the frame
- * @param {number} sy
- * @param {number} ox - Fixed point of the frame
- * @param {number} oy
- * @returns {{origin: {x: number, y: number}, sx: number, sy: number, target: {x: number, y: number}}}
- */
-export const singleTextPreview = (box, sx, sy, ox, oy) => {
-  const c = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-  const s = Math.min(Math.abs(sx), Math.abs(sy))
-  return {
-    origin: c,
-    sx: s * (Math.sign(sx) || 1),
-    sy: s * (Math.sign(sy) || 1),
-    target: { x: ox + sx * (c.x - ox), y: oy + sy * (c.y - oy) }
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Applying a matrix to elements.
 

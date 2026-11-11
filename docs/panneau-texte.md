@@ -40,7 +40,7 @@ Branche `panneau-texte`, depuis `scrub-valeurs`. Références : le panneau de Fi
 
 - **Choisir un mode** prend la boîte du texte telle qu'elle est, en une étape d'annulation. La largeur automatique retire aussi la hauteur et l'alignement vertical.
 - **L et H d'un texte seul** changent sa boîte, plus sa taille de police. H passe le texte en taille fixe. Le verrou des proportions est grisé. Plusieurs objets se mettent toujours à l'échelle.
-- **Poignées.** Celles des côtés donnent la largeur (lot Texte multiligne). Celles des coins agrandissent en proportion, la boîte fixe comprise.
+- **Poignées.** Celles des côtés donnent la largeur (lot Texte multiligne). Celles du haut et du bas donnent la hauteur, celles des coins les deux : le texte passe en taille fixe et garde sa police (lot Texte et masquage, `docs/texte-masquer.md`). L'outil Échelle agrandit un texte en proportion.
 
 ### Le SVG écrit
 
@@ -88,7 +88,6 @@ Une fenêtre à gauche du panneau, comme « Stroke settings » de Figma : titre,
 
 - **Changer la taille de police d'un texte de taille fixe** garde sa ligne de base. Le haut de la boîte bouge donc un peu, comme pour tout texte de l'éditeur. Dans Figma, la boîte ne bouge pas.
 - **Un fichier écrit à la main** avec `se:valign` mais sans `<tspan>` n'est mis en page qu'à la première modification du texte. Un fichier enregistré par l'éditeur a toujours ses `<tspan>`.
-- **Poignées haut et bas.** Elles agrandissent toujours en proportion (lot M4). Dans Figma, elles donnent la hauteur.
 
 ## 7. Vérifications
 

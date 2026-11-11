@@ -2,8 +2,9 @@
  * Lock and visibility of objects in the editor (lot V7; plan v2, section 2.6):
  * the commands that the shortcuts, the command palette and the menus share.
  *
- * - Ctrl+Shift+H hides the selection, Ctrl+Shift+L locks it; both take it
- *   out of the selection, since a hidden or locked object cannot be selected.
+ * - Ctrl+Shift+H hides the selection, or shows it again when it is all
+ *   hidden: it stays selected, as in Figma. Ctrl+Shift+L locks it and takes
+ *   it out of the selection, since a locked object cannot be selected.
  * - "Show all" and "Unlock all" bring back every hidden or locked object,
  *   in one undo step each.
  * - A tool that would draw into a locked layer says why it does nothing.
@@ -11,6 +12,14 @@
  * The canvas does the work (core/structure.js); this module names it.
  * @module structure
  */
+
+/**
+ * Whether every object of a selection is hidden: the eye and Ctrl+Shift+H
+ * then show it again.
+ * @param {Element[]} elems
+ * @returns {boolean}
+ */
+export const isAllHidden = (elems) => elems.length > 0 && elems.every((elem) => elem.getAttribute('display') === 'none')
 
 /**
  * @param {import('./Editor.js').default} editor
@@ -35,7 +44,10 @@ export const initStructure = (editor) => {
       label: 'structure.hide',
       shortcuts: 'mod+shift+h',
       when: () => selection().length > 0,
-      run: () => svgCanvas.setElementsVisible(selection(), false)
+      run: () => {
+        const elems = selection()
+        svgCanvas.setElementsVisible(elems, isAllHidden(elems))
+      }
     },
     {
       id: 'lock_selection',

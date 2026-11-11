@@ -114,6 +114,9 @@ export const getTextSource = (elem) => {
   return lines.map((line, i) => (i === 0 ? '' : isWrapped(line) ? ' ' : '\n') + line.textContent).join('')
 }
 
+/** How much wider than its width a line may measure (the rounding of a width). */
+const WRAP_TOLERANCE = 0.01
+
 /**
  * Breaks a line at its spaces so that each part is at most `width` wide; a
  * word wider than that stays whole. Joining the parts with one space gives
@@ -129,7 +132,8 @@ export const wrapLine = (line, width, measure) => {
   let current = words[0]
   for (const word of words.slice(1)) {
     const candidate = `${current} ${word}`
-    if (current !== '' && measure(candidate) > width) {
+    // A width rounded in the file is not a reason to break a line.
+    if (current !== '' && measure(candidate) > width + WRAP_TOLERANCE) {
       parts.push(current)
       current = word
     } else {
@@ -416,18 +420,23 @@ export const sameContent = (content, elem) => {
 }
 
 /**
- * Starts the change of the width of a text by a side grip: the text keeps
- * its font, its lines break again (a text as wide as its lines gets a fixed
- * width).
+ * Starts the change of the box of a text by a grip, as in Figma: the text
+ * keeps its font, its lines break again in the box.
+ * - A side grip gives the width: a text as wide as its lines gets a fixed
+ *   width (auto height); a text of fixed size keeps its height.
+ * - The top and bottom grips give the height, the corners both: the text
+ *   becomes of fixed size.
  * @param {Element} text
- * @returns {object} What {@link resizeTextWidth} and the end of the gesture read
+ * @returns {object} What {@link resizeTextBox} and the end of the gesture read
  */
-export const startTextWidthResize = (text) => {
+export const startTextBoxResize = (text) => {
   const box = text.getBBox()
   const width = getTextWidth(text) || box.width
   const anchor = window.getComputedStyle(text).textAnchor
   const factor = anchor === 'middle' ? 0.5 : anchor === 'end' ? 1 : 0
   const x = firstNumber(text.getAttribute('x')) || 0
+  const y = firstNumber(text.getAttribute('y')) || 0
+  const { ascent } = lineMetrics(text)
   // Units of the drawing in a unit of the text (its groups, its transform)
   const ctm = text.getScreenCTM?.()
   const content = text.ownerSVGElement?.getScreenCTM?.()
@@ -435,33 +444,61 @@ export const startTextWidthResize = (text) => {
   return {
     text,
     width,
+    height: getTextHeight(text) || box.height,
     left: x - factor * width,
+    top: y - ascent,
+    ascent,
     factor,
     scale: scale || 1,
     min: fontSizeOf(text),
-    before: { 'se:width': text.getAttribute('se:width'), x: text.getAttribute('x') },
+    before: {
+      'se:width': text.getAttribute('se:width'),
+      'se:height': text.getAttribute('se:height'),
+      x: text.getAttribute('x'),
+      y: text.getAttribute('y')
+    },
     content: cloneContent(text)
   }
 }
 
 /**
- * Sets the width of a text during the gesture: the dragged side follows the
- * pointer, the other stays (both move with `symmetric`).
- * @param {object} state - From {@link startTextWidthResize}
+ * Sets the box of a text during the gesture: the dragged sides follow the
+ * pointer, the others stay.
+ * @param {object} state - From {@link startTextBoxResize}
  * @param {number} dx - Move of the pointer, in the drawing, along the text
- * @param {"e"|"w"} side
- * @param {boolean} [symmetric]
- * @returns {number} The width
+ * @param {number} dy - Move of the pointer, across the text
+ * @param {string} side - The grip: "e", "w", "n", "s", "ne", "nw", "se" or "sw"
+ * @param {object} [options]
+ * @param {boolean} [options.symmetric] - The opposite sides move too (Alt)
+ * @param {boolean} [options.proportional] - A corner keeps the proportions of the box (Shift)
+ * @returns {{width: number, height: number}} The box
  */
-export const resizeTextWidth = (state, dx, side, symmetric = false) => {
-  const d = (side === 'w' ? -dx : dx) / state.scale
-  const width = Math.max(state.min, state.width + (symmetric ? 2 * d : d))
+export const resizeTextBox = (state, dx, dy, side, { symmetric = false, proportional = false } = {}) => {
+  const horizontal = /[ew]/.test(side)
+  const vertical = /[ns]/.test(side)
+  const k = symmetric ? 2 : 1
+  let width = state.width
+  let height = state.height
+  if (horizontal) width = Math.max(state.min, state.width + k * (side.includes('w') ? -dx : dx) / state.scale)
+  if (vertical) height = Math.max(1, state.height + k * (side.includes('n') ? -dy : dy) / state.scale)
+  if (proportional && horizontal && vertical && state.height > 0) {
+    const ratio = Math.max(width / state.width, height / state.height)
+    width = Math.max(state.min, state.width * ratio)
+    height = width * state.height / state.width
+  }
   const left = symmetric
     ? state.left + (state.width - width) / 2
-    : side === 'w' ? state.left + state.width - width : state.left
+    : side.includes('w') ? state.left + state.width - width : state.left
+  const top = symmetric
+    ? state.top + (state.height - height) / 2
+    : side.includes('n') ? state.top + state.height - height : state.top
   const { text } = state
-  text.setAttributeNS(NS.SE, 'se:width', round(width))
+  // A fixed height needs a fixed width: the box of a text as wide as its
+  // lines is as wide as they are.
+  if (horizontal || vertical) text.setAttributeNS(NS.SE, 'se:width', round(width))
+  if (vertical) text.setAttributeNS(NS.SE, 'se:height', round(height))
   text.setAttribute('x', round(left + state.factor * width))
+  if (vertical) text.setAttribute('y', round(top + state.ascent))
   setTextSource(text, getTextSource(text))
-  return width
+  return { width, height }
 }
