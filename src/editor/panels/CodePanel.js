@@ -143,7 +143,7 @@ export class CodePanel {
         <div class="se-code-editor">
           <pre class="se-code-highlight" aria-hidden="true"></pre>
           <textarea id="se-code-text" class="se-code-text" spellcheck="false" autocomplete="off"
-            autocapitalize="off" wrap="soft" aria-label="${t('layout.code_label')}" aria-describedby="se-code-status"></textarea>
+            autocapitalize="off" writingsuggestions="false" wrap="soft" aria-label="${t('layout.code_label')}" aria-describedby="se-code-status"></textarea>
         </div>
         <p id="se-code-status" class="se-code-status" role="status"></p>
         <p class="se-code-help">${t('layout.code_help')}</p>

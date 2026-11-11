@@ -1253,8 +1253,11 @@
   resize: vertical;
 }
 
+/* The text of the field is transparent: a selection is drawn over the
+   coloured layer, which must show through it. An opaque background hid the
+   selected text. */
 .se-code-text::selection {
-  background: var(--se-accent-bg);
+  background: var(--se-code-selection);
   color: transparent;
 }
 

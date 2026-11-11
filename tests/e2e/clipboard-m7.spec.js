@@ -283,11 +283,58 @@ test.describe('Copy and paste properties (M7)', () => {
     await expect(item('paste_properties').locator('..')).toHaveClass(/disabled/)
     await expect(item('copy_properties')).toContainText('Copy Properties')
     await item('copy_properties').click()
+    // The menu closes: it stayed open over the drawing, and the choice
+    // seemed to do nothing.
+    await expect(page.locator('#cmenu_canvas')).toBeHidden()
     await page.locator('#c1').click({ button: 'right' })
     await expect(item('paste_properties').locator('..')).not.toHaveClass(/disabled/)
     await item('paste_properties').click()
+    await expect(page.locator('#cmenu_canvas')).toBeHidden()
     expect(await attrs(page, 'c1', ['fill', 'stroke', 'stroke-dasharray'])).toEqual({
       fill: '#c00', stroke: '#000', 'stroke-dasharray': null
     })
   })
 })
+
+for (const layout of ['canvas', 'classic']) {
+  test.describe(`A choice in the context menu (${layout} layout)`, () => {
+    test.beforeEach(async ({ page }) => {
+      await visitAndApproveStorage(page, { query: layout === 'classic' ? '?layout=classic' : '' })
+    })
+
+    // Each command closes the menu, which stayed over the drawing until a
+    // click on it; the choices of the target (lot V4) and "Select same..."
+    // (M6) closed it already.
+    test('closes the menu, whatever the command', async ({ page }) => {
+      const menu = page.locator('#cmenu_canvas')
+      // Paste and Paste in place go through the same handler; they read the
+      // system clipboard later, and are left out not to paste into the next
+      // drawing.
+      const actions = [
+        'cut', 'copy', 'copy_properties', 'paste_properties',
+        'delete', 'move_front', 'move_up', 'move_down', 'move_back', 'select_same_fill'
+      ]
+      for (const action of actions) {
+        await loadDrawing(page)
+        await page.evaluate(() => {
+          const canvas = window.svgEditor.svgCanvas
+          canvas.addToSelection([document.getElementById('c1')], true)
+          canvas.copySelectedProperties()
+          canvas.clearSelection()
+        })
+        await page.locator('#r1').click({ button: 'right' })
+        await expect(menu).toBeVisible()
+        const item = page.locator(`#cmenu_canvas a[href="#${action}"]`)
+        await expect(item.locator('..'), action).not.toHaveClass(/disabled/)
+        await item.click()
+        await expect(menu, action).toBeHidden()
+      }
+      // The command is done: the properties of c1 are on r1.
+      await loadDrawing(page)
+      await page.locator('#r1').click({ button: 'right' })
+      await page.locator('#cmenu_canvas a[href="#paste_properties"]').click()
+      await expect(menu).toBeHidden()
+      expect(await page.evaluate(() => document.getElementById('r1').getAttribute('stroke-dasharray'))).toBe('5,5')
+    })
+  })
+}
