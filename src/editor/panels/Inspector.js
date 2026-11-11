@@ -467,8 +467,8 @@ export class Inspector {
       const id = button.dataset.command
       const label = i18next.t(`tools.${id}`)
       const hint = commands.hint(id)
+      // The tooltip of the editor, without the native one.
       button.seTooltip = { label, shortcut: hint || undefined }
-      button.title = hint ? `${label} (${hint})` : label
     }
   }
 
