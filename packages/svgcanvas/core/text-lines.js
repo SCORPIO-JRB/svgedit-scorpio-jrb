@@ -15,6 +15,12 @@
  * - `xml:space="preserve"` is written when the content has spaces that SVG
  *   would otherwise merge (at the ends of a line, or several in a row): the
  *   spaces typed are drawn.
+ * - `se:height` is a fixed height (lot Texte, "Fixed size" in Figma): the
+ *   box of the text is that high, whatever its lines. `se:valign` ("middle"
+ *   or "bottom"; top when absent) places the lines in it. The `<text>`'s
+ *   `y` stays the first baseline of lines at the top of the box, so that the
+ *   box keeps its place when lines come and go; the `<tspan>`s are moved
+ *   down by what the alignment asks, a text of one line too.
  *
  * The content as it is typed (the source) has its lines separated by "\n".
  * @module text-lines
@@ -29,8 +35,14 @@ export const DEFAULT_LINE_HEIGHT = 1.2
  */
 export const LAYOUT_ATTRS = new Set([
   'font-size', 'font-family', 'font-weight', 'font-style', 'letter-spacing', 'word-spacing',
-  'x', 'y', 'se:width', 'se:line-height'
+  'x', 'y', 'se:width', 'se:line-height', 'se:height', 'se:valign'
 ])
+
+/** The attributes of the box of a text: a text of one line is laid out too. */
+const BOX_ATTRS = new Set(['se:width', 'se:height', 'se:valign'])
+
+/** Where the lines of a text of fixed height go in its box. */
+const VALIGN_FACTORS = { top: 0, middle: 0.5, bottom: 1 }
 
 const isText = (elem) => elem?.localName === 'text' && elem.namespaceURI === NS.SVG
 
@@ -65,6 +77,26 @@ const isWrapped = (tspan) => tspan.getAttributeNS(NS.SE, 'wrapped') === 'true'
 export const getTextWidth = (text) => {
   const width = Number.parseFloat(text?.getAttributeNS?.(NS.SE, 'width'))
   return Number.isFinite(width) && width > 0 ? width : 0
+}
+
+/**
+ * The fixed height of a text, or 0.
+ * @param {Element} text
+ * @returns {number}
+ */
+export const getTextHeight = (text) => {
+  const height = Number.parseFloat(text?.getAttributeNS?.(NS.SE, 'height'))
+  return Number.isFinite(height) && height > 0 ? height : 0
+}
+
+/**
+ * Where the lines of a text of fixed height go in its box.
+ * @param {Element} text
+ * @returns {"top"|"middle"|"bottom"}
+ */
+export const getTextVerticalAlign = (text) => {
+  const value = text?.getAttributeNS?.(NS.SE, 'valign')
+  return value === 'middle' || value === 'bottom' ? value : 'top'
 }
 
 /**
@@ -151,6 +183,59 @@ const fontSizeOf = (text) => {
 
 const firstNumber = (value) => Number.parseFloat(String(value ?? '').trim().split(/[\s,]+/)[0])
 
+const metricsCache = new Map()
+
+/**
+ * The height of a line of a text above its baseline and under it, as the
+ * browser draws its box (the font's ascent and descent), read once for each
+ * font.
+ * @param {Element} text
+ * @returns {{ascent: number, descent: number}}
+ */
+export const lineMetrics = (text) => {
+  const fontSize = fontSizeOf(text)
+  const fallback = { ascent: fontSize * 0.9, descent: fontSize * 0.25 }
+  if (!text?.isConnected || typeof text.getBBox !== 'function') return fallback
+  const style = window.getComputedStyle(text)
+  const key = `${style.fontStyle} ${style.fontWeight} ${fontSize} ${style.fontFamily}`
+  if (metricsCache.has(key)) return metricsCache.get(key)
+  const probe = text.cloneNode(false)
+  probe.removeAttribute('id')
+  probe.removeAttribute('transform')
+  probe.setAttribute('x', '0')
+  probe.setAttribute('y', '0')
+  probe.setAttribute('visibility', 'hidden')
+  probe.textContent = 'Hg'
+  text.parentNode.append(probe)
+  let metrics = fallback
+  try {
+    const box = probe.getBBox()
+    if (box.height > 0) metrics = { ascent: -box.y, descent: box.height + box.y }
+  } catch {
+    // No layout: the fallback
+  } finally {
+    probe.remove()
+  }
+  if (metrics !== fallback) metricsCache.set(key, metrics)
+  return metrics
+}
+
+/**
+ * How far the lines of a text of fixed height are moved down in its box, for
+ * a number of lines.
+ * @param {Element} text
+ * @param {number} count
+ * @param {number} step - From a line to the next
+ * @returns {number}
+ */
+const alignOffset = (text, count, step) => {
+  const height = getTextHeight(text)
+  const factor = height ? VALIGN_FACTORS[getTextVerticalAlign(text)] : 0
+  if (!factor) return 0
+  const { ascent, descent } = lineMetrics(text)
+  return (height - (ascent + descent + (count - 1) * step)) * factor
+}
+
 /**
  * The spacing of the lines of a text, in font sizes: `se:line-height`, else
  * read from its first two lines, else 1.2.
@@ -217,7 +302,11 @@ export const setTextSource = (text, source = getTextSource(text)) => {
     x: text.getAttribute('x') ?? existing?.[0].getAttribute('x') ?? '0',
     y: text.getAttribute('y') ?? existing?.[0].getAttribute('y') ?? '0'
   }
-  if (rows.length === 1) {
+  const lineHeight = getLineHeight(text)
+  const step = lineHeight * fontSizeOf(text)
+  // A line moved down in its box of fixed height is a <tspan> too.
+  const offset = alignOffset(text, rows.length, step)
+  if (rows.length === 1 && !offset) {
     if (existing && !text.hasAttribute('x')) text.setAttribute('x', firstNumber(origin.x))
     if (existing && !text.hasAttribute('y')) text.setAttribute('y', firstNumber(origin.y))
     if (existing || text.textContent !== rows[0].text) text.textContent = rows[0].text
@@ -228,11 +317,9 @@ export const setTextSource = (text, source = getTextSource(text)) => {
   const y = firstNumber(origin.y) || 0
   if (!text.hasAttribute('x')) text.setAttribute('x', round(x))
   if (!text.hasAttribute('y')) text.setAttribute('y', round(y))
-  const lineHeight = getLineHeight(text)
-  if (!text.hasAttributeNS(NS.SE, 'line-height')) {
+  if (rows.length > 1 && !text.hasAttributeNS(NS.SE, 'line-height')) {
     text.setAttributeNS(NS.SE, 'se:line-height', String(lineHeight))
   }
-  const step = lineHeight * fontSizeOf(text)
   const tspans = existing ?? []
   // Whatever else the text held goes: characters, spans, spaces between lines.
   for (const node of [...text.childNodes]) {
@@ -245,7 +332,7 @@ export const setTextSource = (text, source = getTextSource(text)) => {
       text.append(tspan)
     }
     tspan.setAttribute('x', round(x))
-    tspan.setAttribute('y', round(y + i * step))
+    tspan.setAttribute('y', round(y + offset + i * step))
     tspan.removeAttribute('dy')
     if (row.wrapped) {
       tspan.setAttributeNS(NS.SE, 'se:wrapped', 'true')
@@ -258,13 +345,14 @@ export const setTextSource = (text, source = getTextSource(text)) => {
 }
 
 /**
- * Lays a text out again after a change of its font, place, width or line
- * height. A text of characters alone without fixed width is left as it is.
+ * Lays a text out again after a change of its font, place, box or line
+ * height. A text of characters alone without fixed width or height is left
+ * as it is.
  * @param {Element} text
  * @returns {boolean} Whether it was laid out
  */
 export const layoutText = (text) => {
-  if (!isText(text) || (!lineElements(text) && !getTextWidth(text))) return false
+  if (!isText(text) || (!lineElements(text) && !getTextWidth(text) && !getTextHeight(text))) return false
   setTextSource(text, getTextSource(text))
   return true
 }
@@ -276,7 +364,8 @@ export const layoutText = (text) => {
  * @returns {boolean}
  */
 export const changesLayout = (elem, attr) =>
-  isText(elem) && LAYOUT_ATTRS.has(attr) && Boolean(lineElements(elem) || getTextWidth(elem))
+  isText(elem) && LAYOUT_ATTRS.has(attr) &&
+  (BOX_ATTRS.has(attr) || Boolean(lineElements(elem) || getTextWidth(elem) || getTextHeight(elem)))
 
 // Attributes of a text that its layout writes: a step putting back its
 // content puts them back too.

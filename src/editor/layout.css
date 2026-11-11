@@ -2220,16 +2220,498 @@
   cursor: crosshair !important;
 }
 
-/* The − and + of the Fill and Stroke sections, on the line of their title. */
-.se-layout-canvas .se-inspector .se-section[data-section="fill"],
-.se-layout-canvas .se-inspector .se-section[data-section="stroke"] {
+/* Lot Propriétés, after the panel of Figma.
+—————————————————————————————*/
+
+/* The tools of the title line of a section: the eye and the blend mode of
+   Appearance, the libraries and + of Fill and Stroke. */
+.se-layout-canvas #tools_top.se-inspector > .se-section {
   position: relative;
 }
 
-.se-layout-canvas .se-inspector .se-paint-toggle {
+.se-layout-canvas .se-inspector .se-section-tools {
   position: absolute;
-  top: 10px;
+  top: 8px;
   right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.se-layout-canvas .se-inspector .se-section-tools:empty,
+.se-layout-canvas .se-inspector .se-section-tools[hidden],
+.se-layout-canvas .se-inspector .se-section-tool[hidden] {
+  display: none;
+}
+
+.se-layout-canvas .se-inspector .se-section-tool {
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--se-radius-field);
+  background: transparent;
+  color: var(--se-icon);
+  font: inherit;
+  cursor: pointer;
+  --se-icon-size: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-section-tool:hover,
+.se-layout-canvas .se-inspector .se-section-tool:focus-within {
+  background: var(--se-control-hover);
+  color: var(--se-text);
+}
+
+.se-layout-canvas .se-inspector .se-section-tool:focus-visible,
+.se-layout-canvas .se-inspector .se-blend:focus-within {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: -2px;
+}
+
+/* The blend mode: the drop over a list of the modes; coloured when the
+   selection has one. */
+.se-layout-canvas .se-inspector .se-blend select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.se-layout-canvas .se-inspector .se-blend.se-set {
+  color: var(--se-accent);
+}
+
+/* Position: the row of alignment, the caption and the row of the rotation. */
+.se-layout-canvas .se-inspector .se-align-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+.se-layout-canvas .se-inspector .se-align-row[hidden] {
+  display: none;
+}
+
+.se-layout-canvas .se-inspector .se-align-row .se-icon-button {
+  flex: 1 1 0;
+  width: auto;
+  height: 24px;
+  --se-icon-size: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-subhead {
+  flex-basis: 100%;
+  margin: 2px 0 -2px;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+  line-height: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-segmented {
+  display: flex;
+  flex: 0 1 calc(50% - var(--se-space-1));
+  min-width: 0;
+  height: var(--se-control-size);
+  overflow: hidden;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+.se-layout-canvas .se-inspector .se-segmented > se-button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-segmented > se-button + se-button {
+  border-left: 1px solid var(--se-surface);
+}
+
+/* Appearance: the opacity and the radius of the corners, side by side. */
+.se-layout-canvas .se-inspector .se-appearance-row {
+  display: flex;
+  flex-basis: 100%;
+  gap: var(--se-space-2);
+}
+
+.se-layout-canvas .se-inspector .se-appearance-row > se-spin-input {
+  flex: 0 1 calc(50% - var(--se-space-1));
+}
+
+.se-layout-canvas .se-inspector .se-appearance-row > [hidden] {
+  display: none;
+}
+
+/* Fill and Stroke: the paint, its eye and its −; nothing more without
+   paint, where + shows on the title line. */
+.se-layout-canvas .se-inspector .se-paint-row {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-paint-row > se-colorpicker {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: 2px;
+}
+
+.se-layout-canvas .se-inspector .se-paint-row.se-paint-hidden > se-colorpicker {
+  opacity: 0.5;
+}
+
+.se-layout-canvas .se-inspector .se-section[data-paint-none="true"] > .se-section-body {
+  display: none;
+}
+
+/* The stroke: its position, its weight and its settings. */
+.se-layout-canvas .se-inspector .se-stroke-row {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--se-space-2);
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-stroke-row > .se-stroke-align,
+.se-layout-canvas .se-inspector .se-stroke-row > #stroke_width {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-stroke-align select:disabled {
+  color: var(--se-text-secondary);
+  cursor: default;
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle.se-more-icon {
+  color: var(--se-icon);
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle.se-more-icon::after {
+  content: none;
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle.se-more-icon[aria-expanded="true"] {
+  background: var(--se-accent-bg);
+  color: var(--se-accent);
+}
+
+.se-layout-canvas .se-inspector .se-more-toggle.se-more-icon.se-more-set::before {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--se-accent);
+}
+
+/* Typography (lot Texte), as in Figma: the font; its style and its size;
+   the line height and the letter spacing; the alignments and the icon of
+   the settings. */
+.se-layout-canvas .se-inspector .text_panel {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+
+.se-layout-canvas .se-inspector .se-type-row {
+  display: flex;
+  gap: var(--se-space-2);
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-type-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-font-style select,
+.se-layout-canvas .se-inspector .se-stroke-align select {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--se-text);
+  font: inherit;
+  font-weight: normal;
+  text-transform: none;
+  outline: none;
+  cursor: pointer;
+}
+
+/* The size and the button of its menu, in one grey box. */
+.se-layout-canvas .se-inspector .se-font-size {
+  position: relative;
+  display: flex;
+}
+
+.se-layout-canvas .se-inspector .se-font-size > #font_size {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-font-size > #font_size::part(field) {
+  padding-right: 28px;
+}
+
+.se-layout-canvas .se-inspector .se-font-sizes-button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: calc(var(--se-control-size) - 4px);
+  --se-icon-size: 16px;
+}
+
+#se-font-sizes {
+  min-width: 72px;
+  max-height: 320px;
+}
+
+.se-layout-canvas .se-inspector .se-captioned.se-type-spacing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  row-gap: 2px;
+  column-gap: var(--se-space-2);
+}
+
+.se-layout-canvas .se-inspector .se-captioned.se-type-align {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  row-gap: 2px;
+  column-gap: var(--se-space-2);
+  align-items: center;
+}
+
+.se-layout-canvas .se-inspector .se-type-align > .se-caption {
+  grid-column: 1 / -1;
+}
+
+.se-layout-canvas .se-inspector .se-choices.se-disabled > .se-icon-button {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.se-layout-canvas .se-inspector .text_panel > #tool_font_family {
+  gap: 0;
+}
+
+/* The list says what it is: its label, "Font:", goes. */
+.se-layout-canvas .se-inspector .text_panel > #tool_font_family::part(label) {
+  display: none;
+}
+
+/* The Resizing of a text, above its width and its height. */
+.se-layout-canvas .se-inspector .se-text-resizing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 2px;
+}
+
+.se-layout-canvas .se-inspector .se-text-resizing[hidden] {
+  display: none;
+}
+
+/* Bold, italic, the anchor list: out of sight, for their shortcuts and the
+   contextual bar. */
+.se-layout-canvas .se-inspector .se-offstage {
+  display: none !important;
+}
+
+/* The decorations, in the settings of the text. */
+.se-layout-canvas .se-inspector .se-toggles {
+  display: flex;
+  gap: 2px;
+}
+
+.se-layout-canvas .se-inspector .se-toggles > se-button {
+  flex: 0 0 auto;
+}
+
+/* A row whose fields have their caption above them, as in Figma: the
+   position and the weight of the stroke, then the icon of its settings. */
+.se-layout-canvas .se-inspector .se-stroke-row.se-captioned {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  row-gap: 2px;
+  column-gap: var(--se-space-2);
+  align-items: center;
+}
+
+.se-layout-canvas .se-inspector .se-captioned > .se-caption {
+  grid-row: 1;
+  color: var(--se-text-secondary);
+  font-size: var(--se-font-size-label);
+  line-height: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-captioned > :not(.se-caption) {
+  grid-row: 2;
+}
+
+/* What a window of settings opens over takes no place in the section. */
+.se-layout-canvas .se-inspector .se-settings-holder {
+  display: contents;
+}
+
+/* A window of settings (lot Texte), as "Stroke settings" in Figma: at the
+   left of the panel, its title and its close button, then one row for
+   each setting, its name at the left. */
+.se-layout-canvas se-popover.se-settings {
+  width: 264px;
+  padding: 0;
+  overflow: visible;
+}
+
+.se-layout-canvas .se-settings .se-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 6px var(--se-space-3);
+  border-bottom: 1px solid var(--se-border);
+}
+
+.se-layout-canvas .se-settings .se-settings-head h4 {
+  margin: 0;
+  color: var(--se-text);
+  font-size: var(--se-font-size-control);
+  font-weight: 600;
+}
+
+.se-layout-canvas .se-settings .se-settings-close {
+  width: 28px;
+  height: 28px;
+  --se-icon-size: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-settings .se-settings-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--se-space-2);
+  box-sizing: border-box;
+  padding: var(--se-space-3);
+}
+
+.se-layout-canvas .se-settings .se-settings-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--se-space-2);
+  min-height: var(--se-control-size);
+}
+
+.se-layout-canvas .se-settings .se-settings-row[hidden] {
+  display: none;
+}
+
+.se-layout-canvas .se-settings .se-settings-label {
+  color: var(--se-text-secondary);
+}
+
+.se-layout-canvas .se-settings .se-settings-control {
+  display: flex;
+  align-items: center;
+  gap: var(--se-space-2);
+  min-width: 0;
+}
+
+.se-layout-canvas .se-settings .se-settings-control > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.se-layout-canvas .se-inspector .se-settings #stroke_style {
+  flex: 1 1 0;
+}
+
+/* The name of the row says what a list is. */
+.se-layout-canvas .se-inspector .se-settings :is(se-select, se-list) {
+  gap: 0;
+}
+
+.se-layout-canvas .se-inspector .se-settings :is(se-select, se-list)::part(label) {
+  display: none;
+}
+
+/* A row whose settings are all rare ones the selection has no value for
+   (lot S1: word spacing, length) shows no name alone. */
+.se-layout-canvas .se-settings .se-settings-row:not(:has(.se-settings-control > :not(.se-inspector-off, .se-proxied))) {
+  display: none;
+}
+
+/* The arrows show for what the extension shows them (lines and paths). */
+.se-layout-canvas .se-settings .se-settings-row[data-row="arrows"]:not(:has(#marker_panel:not([style*="none"]))) {
+  display: none;
+}
+
+/* The extension shows its panel with display: block. */
+.se-layout-canvas .se-settings #marker_panel:not([style*="none"]) {
+  display: flex !important;
+  gap: var(--se-space-2);
+}
+
+.se-layout-canvas .se-settings #marker_panel > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* A list replaced by a row of buttons stays in the page, out of sight. */
+.se-layout-canvas .se-inspector .se-proxied {
+  display: none !important;
+}
+
+/* A row of buttons, one of which is chosen: the joins, the caps. */
+.se-layout-canvas .se-inspector .se-choices {
+  display: flex;
+  gap: 2px;
+  box-sizing: border-box;
+  height: var(--se-control-size);
+  padding: 2px;
+  border-radius: var(--se-radius-field);
+  background: var(--se-control);
+}
+
+.se-layout-canvas .se-inspector .se-choices > .se-icon-button {
+  flex: 1 1 0;
+  width: auto;
+  height: auto;
+  border-radius: calc(var(--se-radius-field) - 1px);
+  --se-icon-size: 16px;
+}
+
+.se-layout-canvas .se-inspector .se-choices > [aria-checked="true"] {
+  background: var(--se-surface-tab-active);
+  box-shadow: 0 0 0 1px var(--se-border);
+  color: var(--se-text);
+}
+
+/* The choice shows by its background, not by the check of menus. */
+.se-layout-canvas .se-inspector .se-choices > [aria-checked="true"]::before {
+  content: none;
 }
 
 /* The field of the inspector: swatch, hexadecimal and opacity typed in. */
@@ -2826,4 +3308,24 @@
 
 .se-layout-canvas .se-inspector .se-rule-note::before {
   content: "← ";
+}
+
+/* Lot Valeurs glissées, after the fields of Figma.
+—————————————————————————————*/
+
+/* The letter of a plain field (W, H, X, Y, Opacity) drags its value. */
+.se-layout-canvas .se-field-letter.se-scrub-handle {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  margin: 0 calc(-1 * var(--se-space-1));
+  padding: 0 var(--se-space-1);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.se-layout-canvas .se-field-letter.se-scrub-handle:hover {
+  color: var(--se-text);
 }

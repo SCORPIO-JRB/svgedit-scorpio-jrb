@@ -33,7 +33,10 @@ export const RETIRED_CONTROLS = [
   'tool_position',
   // Document menu: the Document section of the Properties tab holds what the
   // dialog did, the choice of the images included; the home page of SVG-Edit.
-  'tool_docprops', 'tool_editor_homepage'
+  'tool_docprops', 'tool_editor_homepage',
+  // Geometry of node editing: the pen adds, deletes and bends (Alt), and Delete
+  // and the arrows act on the nodes selected; these fields read as broken.
+  'path_node_panel'
 ]
 
 /**

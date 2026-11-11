@@ -28,6 +28,10 @@ const GRIP_SIZE = window.ontouchstart ? 20 : 8
 const GRIP_HIT_SIZE = window.ontouchstart ? 32 : 16
 // Depth of the rotation zone outside each corner, beyond the resize hit area.
 const ROTATE_ZONE = window.ontouchstart ? 16 : 12
+// Handles of the corners (lot Coins): radius of the ring and of the area
+// that takes the pointer.
+const CORNER_RADIUS = window.ontouchstart ? 7 : 4
+const CORNER_HIT_RADIUS = window.ontouchstart ? 14 : 6
 // Dimension label under the frame: gap, height and side padding, in pixels.
 const LABEL_GAP = 10
 const LABEL_HEIGHT = 18
@@ -334,6 +338,7 @@ export class Selector {
       Selector.updateGripCursors(getRotationAngle(elem))
       this.updateGripPositions()
     }
+    svgCanvas.cornerActions?.schedule()
   }
 
   /**
@@ -367,6 +372,7 @@ export class Selector {
     // them positions them (showGrips does it when they move to a selector).
     if (this.hasGrips) {
       this.updateGripPositions()
+      svgCanvas.cornerActions?.schedule()
     }
     selectModule.getSelectorManager().scheduleFrameUpdate()
   }
@@ -656,12 +662,13 @@ export class SelectorManager {
   /**
   * Shows a text in the dimension label, centred under the selection.
   * @param {string} text
+  * @param {module:utilities.BBoxObject|null} [anchor] - Box to go under, in
+  *   screen coordinates; the selection's by default
   * @returns {void}
   */
-  showDimension (text) {
+  showDimension (text, anchor = this.labelAnchor()) {
     const label = this.dimensionLabel
     if (!label) { return }
-    const anchor = this.labelAnchor()
     if (!anchor) {
       this.hideDimension()
       return
@@ -726,6 +733,103 @@ export class SelectorManager {
   */
   showAngle (angle) {
     this.showDimension(formatAngle(angle))
+  }
+
+  /**
+  * Dimension label of the radius of a corner (lot Coins).
+  * @param {number} radius - In the drawing's coordinates
+  * @param {module:utilities.BBoxObject} [anchor] - Box to go under
+  * @returns {void}
+  */
+  showRadius (radius, anchor) {
+    const r = this.#inDocumentUnit(radius)
+    const text = `R ${formatLength(r.value, r.unit)}`
+    if (anchor) {
+      this.showDimension(text, anchor)
+    } else {
+      this.showDimension(text)
+    }
+  }
+
+  /**
+  * Draws the handles of the corners (lot Coins): a ring with a dot inside
+  * each corner that a drag rounds. Null or an empty list hides them.
+  * @param {{key: string, x: number, y: number, active?: boolean}[]|null} handles -
+  *   In the coordinates of the selection layer
+  * @returns {void}
+  */
+  showCornerGrips (handles) {
+    if (!handles?.length) {
+      this.hideCornerGrips()
+      return
+    }
+    const dataStorage = svgCanvas.getDataStorage()
+    if (!this.cornerGripsGroup) {
+      this.cornerGripsGroup = svgCanvas.createSVGElement({
+        element: 'g',
+        attr: { id: 'selectorCornerGrips' }
+      })
+      this.cornerGrips = []
+    }
+    // Above the frames and their grips, below the label.
+    if (this.cornerGripsGroup.parentNode !== this.selectionGroup || this.cornerGripsGroup.nextSibling) {
+      this.selectionGroup.append(this.cornerGripsGroup)
+    }
+    handles.forEach(({ key, x, y, active }, i) => {
+      let grip = this.cornerGrips[i]
+      if (!grip) {
+        grip = svgCanvas.createSVGElement({
+          element: 'g',
+          attr: { class: 'se-corner' }
+        })
+        const ring = svgCanvas.createSVGElement({
+          element: 'circle',
+          attr: {
+            class: 'se-corner-ring',
+            r: CORNER_RADIUS,
+            fill: '#fff',
+            stroke: SELECTION_COLOR,
+            'stroke-width': 1.25,
+            'pointer-events': 'none'
+          }
+        })
+        const dot = svgCanvas.createSVGElement({
+          element: 'circle',
+          attr: { class: 'se-corner-dot', r: 1.5, fill: SELECTION_COLOR, 'pointer-events': 'none' }
+        })
+        const hit = svgCanvas.createSVGElement({
+          element: 'circle',
+          attr: {
+            class: 'se-corner-hit',
+            r: CORNER_HIT_RADIUS,
+            fill: 'none',
+            'pointer-events': 'all',
+            style: 'cursor:pointer'
+          }
+        })
+        grip.append(ring, dot, hit)
+        ;[grip, ring, dot, hit].forEach((element) => dataStorage.put(element, 'type', 'corner'))
+        this.cornerGrips[i] = grip
+        this.cornerGripsGroup.append(grip)
+      }
+      grip.setAttribute('transform', `translate(${x},${y})`)
+      grip.setAttribute('data-corner', key)
+      grip.classList.toggle('se-corner-active', Boolean(active))
+      ;[grip, ...grip.children].forEach((element) => dataStorage.put(element, 'dir', key))
+      grip.removeAttribute('display')
+    })
+    this.cornerGrips.slice(handles.length).forEach((grip) => grip.setAttribute('display', 'none'))
+    this.cornerGripsGroup.removeAttribute('display')
+  }
+
+  /**
+  * Hides the handles of the corners.
+  * @returns {void}
+  */
+  hideCornerGrips () {
+    if (this.cornerGripsGroup && !this.cornerGripsGroup.hasAttribute('display')) {
+      this.cornerGripsGroup.setAttribute('display', 'none')
+    }
   }
 
   /**
@@ -967,6 +1071,7 @@ export class SelectorManager {
     this.selectors.forEach((selector) => {
       if (selector) { selector.hasGrips = false }
     })
+    svgCanvas.cornerActions?.schedule()
     this.multiGrips = true
     if (this.selectorGripsGroup.parentNode !== this.selectionGroup) {
       this.selectionGroup.append(this.selectorGripsGroup)
@@ -1072,6 +1177,8 @@ export class SelectorManager {
       attr: { id: 'selectorSelectionGroup' }
     })
     this.selectionGroup.append(this.multiFrame, this.selectorGripsGroup)
+    this.cornerGripsGroup = null
+    this.cornerGrips = []
     this.selectorParentGroup.append(this.hoverOutline, this.selectionGroup, this.dimensionLabel)
     svgCanvas.getSvgRoot().append(this.selectorParentGroup)
     this.multiGrips = false

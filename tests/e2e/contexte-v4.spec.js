@@ -285,7 +285,7 @@ test.describe('Contextual bar (V4): one test for each row of the table', () => {
     expect(await svgOf(page)).toBe(before)
   })
 
-  test('path: Edit nodes, fill and stroke; editing the nodes shows their commands', async ({ page }) => {
+  test('path: Edit nodes, fill and stroke; editing the nodes shows no bar', async ({ page }) => {
     await selectIds(page, ['p'])
     const state = await barState(page)
     expect(state.kind).toBe('path')
@@ -297,11 +297,12 @@ test.describe('Contextual bar (V4): one test for each row of the table', () => {
     expect(await svgOf(page)).toBe(before)
 
     await entry(page, 'command:edit_nodes').click()
-    await page.waitForFunction(() => window.svgEditor.layout.contextBar.kind === 'nodes')
-    const nodes = await barState(page)
-    for (const name of ['verb:tool_node_link', 'list:seg_type', 'verb:tool_node_clone', 'verb:tool_node_delete', 'verb:tool_openclose_path']) {
-      expect(nodes.entries).toContain(name)
-    }
+    await page.waitForFunction(() => window.svgEditor.svgCanvas.getMode() === 'pathedit')
+    // The commands of the nodes left with the Geometry section of the
+    // inspector (retours Plume): the pen and the keys act on the nodes.
+    expect((await barState(page)).entries).toEqual([])
+    await expect(page.locator('#tools_top .path_node_panel')).toHaveCount(0)
+    await expect(page.locator('#path_node_x')).toBeHidden()
   })
 
   test('group: Open group, Ungroup, Select children, fill and stroke, hide', async ({ page }) => {

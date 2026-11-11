@@ -85,7 +85,18 @@ export const STEP_TEXTS = {
   'move path point(s)': 'move_nodes',
   'delete path node(s)': 'delete_nodes',
   'extend path': 'extend_path',
-  'join paths': 'join_paths'
+  'join paths': 'join_paths',
+  // Lot Coins
+  'round corners': 'round_corners',
+  // Lot Plume
+  'bend segment': 'bend_segment',
+  // Lot Propriétés
+  'stroke position': 'stroke_position',
+  'blend mode': 'blend_mode',
+  'hide fill': 'hide_fill',
+  'show fill': 'show_fill',
+  'hide stroke': 'hide_stroke',
+  'show stroke': 'show_stroke'
 }
 
 /** Names that give the number of objects. */
@@ -113,6 +124,7 @@ const ATTRIBUTES = {
   'stroke-dasharray': 'stroke_style',
   'stroke-linejoin': 'stroke_style',
   'stroke-linecap': 'stroke_style',
+  'stroke-miterlimit': 'stroke_style',
   opacity: 'opacity',
   'font-family': 'font',
   'font-size': 'font_size',
@@ -122,6 +134,8 @@ const ATTRIBUTES = {
   'text-anchor': 'text_anchor',
   'se:width': 'text_width',
   'se:line-height': 'line_height',
+  'se:height': 'text_box',
+  'se:valign': 'text_valign',
   'text-decoration': 'text_decoration',
   '#text': 'text',
   rx: 'radius',
@@ -224,6 +238,10 @@ export const describeStep = (cmd) => {
   }
 
   if (STEP_TEXTS[lower]) return done(STEP_TEXTS[lower])
+  // A step of node editing: "Change path Add path point" (lots Chemins and
+  // Plume). The text the canvas gives follows the tag of the path.
+  const ofPath = /^change path (.+)$/.exec(lower)
+  if (ofPath && STEP_TEXTS[ofPath[1]]) return done(STEP_TEXTS[ofPath[1]])
   // "Change fill", from beginUndoableChange or a paint.
   const changeOf = /^change (\S+)$/.exec(lower)
   if (changeOf && cmd.stack) {

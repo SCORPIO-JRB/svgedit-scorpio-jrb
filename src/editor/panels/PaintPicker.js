@@ -117,6 +117,9 @@ export const signatureOf = (paint, mixed = false) => {
   return `${paint.type}:${alpha}:${geometry}:${JSON.stringify(readStops(grad))}`
 }
 
+/** Elements that carry a fill and a stroke. */
+const PAINTED = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'path', 'text'])
+
 export class PaintPicker {
   /**
    * @param {import('../Editor.js').default} editor
@@ -487,25 +490,79 @@ export class PaintPicker {
   }
 
   /**
-   * The − and + of the Fill and Stroke sections of the inspector: remove the
-   * paint, or give one back.
+   * The title line of the Fill and Stroke sections of the inspector, as in
+   * Figma (lot Propriétés): the colour libraries, and + when there is no
+   * paint.
    * @param {HTMLElement} root
    * @returns {void}
    */
   mountToggles (root) {
     this.toggles = {}
     for (const type of ['fill', 'stroke']) {
-      const title = root.querySelector(`.se-inspector [data-section="${type}"] > .se-section-title`)
-      if (!title) continue
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.className = 'se-paint-icon se-paint-toggle'
-      button.dataset.paint = type
-      button.addEventListener('click', () => this.togglePaint(type))
-      title.after(button)
-      this.toggles[type] = button
+      const tools = root.querySelector(`.se-inspector [data-section="${type}"] > .se-section-tools`)
+      if (!tools) continue
+      const styles = this.toolButton(type, 'se-paint-styles', 'styles.svg', this.t('color.styles'))
+      styles.addEventListener('click', () => this.openLibraries(type))
+      const add = this.toolButton(type, 'se-paint-add se-paint-toggle', 'plus.svg', this.t(`color.add_${type}`))
+      add.addEventListener('click', () => this.togglePaint(type))
+      tools.append(styles, add)
+      this.toggles[type] = { add, styles }
     }
     this.refreshToggles()
+  }
+
+  /**
+   * The end of the paint of Fill and Stroke: the eye, which hides the paint
+   * and keeps it, and −, which removes it. Once the fields are in the
+   * inspector.
+   * @returns {void}
+   */
+  mountRows () {
+    for (const type of ['fill', 'stroke']) {
+      const picker = document.querySelector(`.se-inspector #${type}_color`)
+      const toggles = this.toggles?.[type]
+      if (!picker || !toggles || toggles.row) continue
+      const row = document.createElement('div')
+      row.className = 'se-paint-row'
+      picker.before(row)
+      const eye = this.toolButton(type, 'se-paint-eye', 'eye.svg', this.t(`color.hide_${type}`))
+      eye.addEventListener('click', () => this.togglePaintVisible(type))
+      const remove = this.toolButton(type, 'se-paint-remove se-paint-toggle', 'minus.svg', this.t(`color.remove_${type}`))
+      remove.addEventListener('click', () => this.togglePaint(type))
+      row.append(picker, eye, remove)
+      Object.assign(toggles, { row, eye, remove })
+    }
+    this.refreshToggles()
+  }
+
+  /**
+   * @param {"fill"|"stroke"} type
+   * @param {string} className
+   * @param {string} icon
+   * @param {string} label
+   * @returns {HTMLButtonElement}
+   */
+  toolButton (type, className, icon, label) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = `se-paint-icon se-section-tool ${className}`
+    button.dataset.paint = type
+    button.setAttribute('aria-label', label)
+    button.title = label
+    button.innerHTML = this.icon(icon)
+    return button
+  }
+
+  /**
+   * Opens the window on the colour libraries of the fill or the stroke.
+   * @param {"fill"|"stroke"} type
+   * @returns {void}
+   */
+  openLibraries (type) {
+    const picker = document.querySelector(`.se-inspector #${type}_color`)
+    if (!picker) return
+    if (!(this.opened && this.target === picker)) this.open(picker)
+    this.selectTab('libraries')
   }
 
   /**
@@ -517,16 +574,47 @@ export class PaintPicker {
     return signatureOf(box?.paint, box?.mixed) === 'none'
   }
 
+  /**
+   * The shapes whose paint the eye hides: the selected ones, those of the
+   * selected groups included.
+   * @param {"fill"|"stroke"} type
+   * @returns {Element[]}
+   */
+  paintedShapes (type) {
+    const shapes = (this.editor.svgCanvas?.getSelectedElements() ?? []).filter(Boolean).flatMap((el) =>
+      el.tagName === 'g' || el.tagName === 'a' ? [...el.querySelectorAll('*')] : [el])
+    return shapes.filter((el) => PAINTED.has(el.tagName) && !(type === 'fill' && el.tagName === 'line'))
+  }
+
+  /**
+   * @param {"fill"|"stroke"} type
+   * @returns {boolean} Whether the eye hid the paint of every shape selected
+   */
+  isHidden (type) {
+    const shapes = this.paintedShapes(type)
+    return shapes.length > 0 && shapes.every((el) => this.editor.svgCanvas.isPaintHidden?.(el, type))
+  }
+
   /** @returns {void} */
   refreshToggles () {
-    for (const [type, button] of Object.entries(this.toggles ?? {})) {
+    for (const [type, toggles] of Object.entries(this.toggles ?? {})) {
       const none = this.isNone(type)
-      const label = this.t(`color.${none ? 'add' : 'remove'}_${type}`)
-      if (button.dataset.none === String(none)) continue
-      button.dataset.none = String(none)
-      button.setAttribute('aria-label', label)
-      button.title = label
-      button.innerHTML = this.icon(none ? 'plus.svg' : 'minus.svg')
+      toggles.add.hidden = !none
+      const section = toggles.add.closest('.se-section')
+      if (section) section.dataset.paintNone = String(none)
+      if (!toggles.eye) continue
+      const shapes = this.paintedShapes(type)
+      const hidden = this.isHidden(type)
+      toggles.eye.hidden = !shapes.length
+      if (toggles.eye.dataset.hidden !== String(hidden)) {
+        toggles.eye.dataset.hidden = String(hidden)
+        const label = this.t(`color.${hidden ? 'show' : 'hide'}_${type}`)
+        toggles.eye.setAttribute('aria-label', label)
+        toggles.eye.title = label
+        toggles.eye.setAttribute('aria-pressed', String(hidden))
+        toggles.eye.innerHTML = this.icon(hidden ? 'eye_off.svg' : 'eye.svg')
+      }
+      toggles.row.classList.toggle('se-paint-hidden', hidden)
     }
   }
 
@@ -545,6 +633,19 @@ export class PaintPicker {
       : new Paint({ solidColor: 'none' })
     picker.commitPaint(paint)
     if (this.target === picker) this.refresh()
+    this.refreshToggles()
+  }
+
+  /**
+   * Hides the paint of the selected shapes, or shows it again: the eye.
+   * @param {"fill"|"stroke"} type
+   * @returns {void}
+   */
+  togglePaintVisible (type) {
+    const { svgCanvas } = this.editor
+    if (!svgCanvas?.setPaintVisible) return
+    svgCanvas.setPaintVisible(type, this.isHidden(type))
+    this.editor.topPanel?.updateContextPanel?.()
     this.refreshToggles()
   }
 

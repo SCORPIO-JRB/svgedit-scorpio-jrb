@@ -665,6 +665,8 @@ export class UndoManager {
     this.now = () => Date.now()
     this.mergeKey_ = null
     this.mergeDelay_ = MERGE_DELAY
+    /** The step gathering others, between `beginGroup()` and `endGroup()`. */
+    this.group_ = null
 
     // this is the stack that stores the original values, the elements and
     // the attribute name for begin/finish
@@ -750,6 +752,11 @@ export class UndoManager {
     // entire text contents of the text element)
     // TODO: consider limiting the history that we store here (need to do some slicing)
 
+    // A gesture still going on: the step joins the others it made.
+    if (this.group_) {
+      this.group_.addSubCommand(cmd)
+      return
+    }
     // if our stack pointer is not at the end, then we have to remove
     // all commands after the pointer and insert the new command
     if (this.undoStackPointer < this.undoStack.length && this.undoStack.length > 0) {
@@ -833,6 +840,60 @@ export class UndoManager {
   endMerge () {
     const last = this.undoStack[this.undoStack.length - 1]
     if (last) last.mergeKey = null
+  }
+
+  /**
+  * Opens a step that gathers every step added until `endGroup()`, however
+  * long it takes: a value dragged on the icon of its field applies it at
+  * each move of the pointer, and is undone at once (lot Valeurs glissées).
+  * @param {string} [text] - Text of the step; by default that of the first
+  *   step it gathers
+  * @returns {boolean} False when a group is already open
+  */
+  beginGroup (text = '') {
+    if (this.group_) return false
+    this.group_ = new BatchCommand(text)
+    this.groupNamed_ = Boolean(text)
+    return true
+  }
+
+  /**
+  * @returns {boolean} Whether a group is open
+  */
+  isGrouping () {
+    return Boolean(this.group_)
+  }
+
+  /**
+  * Closes the group: its steps go to the history as one step, or as the
+  * step itself when there is only one.
+  * @returns {Command|null} The step added, or null when there was none
+  */
+  endGroup () {
+    const group = this.group_
+    this.group_ = null
+    if (!group || group.isEmpty()) return null
+    const step = group.stack.length === 1 ? group.stack[0] : group
+    if (step === group && !this.groupNamed_) group.text = group.stack[0].text
+    this.addCommandToHistory(step)
+    return step
+  }
+
+  /**
+  * Closes the group and undoes its steps, which never reach the history:
+  * Escape during the drag gives the value it had back.
+  * @returns {boolean} False when there was nothing to undo
+  */
+  cancelGroup () {
+    const group = this.group_
+    this.group_ = null
+    if (!group || group.isEmpty()) return false
+    try {
+      group.unapply(this.handler_)
+    } finally {
+      this.handler_?.flushHistoryEvents?.()
+    }
+    return true
   }
 
   /**

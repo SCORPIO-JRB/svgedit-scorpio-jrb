@@ -134,10 +134,10 @@ export default class ConfigObj {
       * @property {"auto"|"orthogonal"|"straight"} [connectorRouting="auto"] Route of a new connector (lot V7): orthogonal from a port of a symbol and straight between two plain objects ("auto"), always orthogonal, or always straight.
       * @property {Array<{id: string, name: string, description?: string, width?: number, height?: number, layers: Array<{name: string, locked?: boolean, content?: string}>, current?: string, frames?: Array<object>, grid?: {show?: boolean, snap?: boolean, step?: number}}>|null} [templates=null] Templates of the document menu (lot V7). Null for blank, technical diagram and synoptic 1 920 × 1 080; never from the URL.
       * @property {PlainObject} [initFill] Init fill properties
-      * @property {string} [initFill.color="FF0000"] The initial fill color. Must be a hex code string. Defaults to solid red.
+      * @property {string} [initFill.color="DCDCDF"] The initial fill color. Must be a hex code string. Defaults to a light grey, the neutral 100 of the Scorp-io library.
       * @property {Float} [initFill.opacity=1] The initial fill opacity. Must be a number between 0 and 1
       * @property {PlainObject} [initStroke] Init stroke properties
-      * @property {Float} [initStroke.width=5] The initial stroke width. Must be a positive number.
+      * @property {Float} [initStroke.width=1] The initial stroke width. Must be a positive number.
       * @property {string} [initStroke.color="000000"] The initial stroke color. Must be a hex code. Defaults to solid black.
       * @property {Float} [initStroke.opacity=1] The initial stroke opacity. Must be a number between 0 and 1.
       * @property {PlainObject} text Text style properties
@@ -183,11 +183,11 @@ export default class ConfigObj {
       templates: null,
       connectorRouting: 'auto',
       initFill: {
-        color: 'FF0000', // solid red
+        color: 'DCDCDF', // light grey, neutral 100 of the Scorp-io library
         opacity: 1
       },
       initStroke: {
-        width: 5,
+        width: 1,
         color: '000000', // solid black
         opacity: 1
       },

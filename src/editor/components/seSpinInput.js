@@ -3,7 +3,8 @@ import '../dialogs/se-elix/define/NumberSpinBox.js'
 import { t } from '../locale.js'
 import { isPlainNumber, parseFieldExpression } from './fieldExpression.js'
 import './seIcon.js'
-import { titleWithShortcut } from '../commands.js'
+import { adoptTitle, controlTitle } from '../commands.js'
+import { attachScrub, scrubUnit } from './scrub.js'
 
 const template = document.createElement('template')
 template.innerHTML = `
@@ -25,6 +26,24 @@ template.innerHTML = `
   span {
     margin-right: 2px;
     color: var(--se-text-label);
+  }
+  /* The icon or the letter drags the value (lot Valeurs glissées). */
+  .se-scrub-handle {
+    cursor: ew-resize;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  span.se-scrub-handle:not(:empty) {
+    display: inline-flex;
+    align-items: center;
+    align-self: stretch;
+    min-width: 12px;
+    padding: 0 2px;
+  }
+  .se-scrub-handle:hover,
+  :host(.se-scrub-active) .se-scrub-handle {
+    color: var(--se-text);
   }
   elix-number-spin-box {
     box-sizing: border-box;
@@ -90,6 +109,76 @@ export class SESpinInput extends HTMLElement {
     const { stepUp, stepDown } = this.$input
     this.$input.stepUp = () => (this.#mixed ? this.#stepMixed(1) : stepUp.call(this.$input))
     this.$input.stepDown = () => (this.#mixed ? this.#stepMixed(-1) : stepDown.call(this.$input))
+    // The icon and the letter drag the value, as in Figma.
+    for (const handle of [this.$img, this.$label]) {
+      attachScrub(handle, {
+        target: this,
+        begin: () => this.#scrubBegin(),
+        apply: (value, delta) => this.#scrubApply(value, delta),
+        end: (cancelled, start) => this.#scrubEnd(cancelled, start),
+        click: () => this.#inputBox()?.focus()
+      })
+    }
+  }
+
+  /**
+   * @returns {HTMLInputElement|null} The input inside the spin box
+   */
+  #inputBox () {
+    return this.$input.shadowRoot?.getElementById('input') ?? null
+  }
+
+  /**
+   * The value a drag starts from: the exact value behind the one shown, or
+   * none for a field showing "Mixed". A value being typed is committed first.
+   * @returns {import('./scrub.js').ScrubStart|null}
+   */
+  #scrubBegin () {
+    const input = this.#inputBox()
+    if (this.manualEdit && input) this.#commitValue(input.value)
+    if (input && input.matches(':focus')) input.blur()
+    const bound = (name) => {
+      const value = this.getAttribute(name)
+      return value === null || value === '' ? null : Number(value)
+    }
+    const unit = scrubUnit(Number(this.getAttribute('step')))
+    const range = { unit, min: bound('min'), max: bound('max') }
+    if (this.#mixed) return { value: null, ...range }
+    const shown = String(this.committedValue ?? '').trim()
+    const value = this.#precise ?? (shown === '' ? NaN : Number(shown))
+    return Number.isFinite(value) ? { value, ...range } : null
+  }
+
+  /**
+   * @param {number|null} value - The new value; null for "Mixed"
+   * @param {number} delta - Change since the last call
+   * @returns {void}
+   */
+  #scrubApply (value, delta) {
+    this.classList.add('se-scrub-active')
+    if (value === null) {
+      this.#dispatchRelative((current) => current + delta)
+      return
+    }
+    this.manualEdit = false
+    this.value = String(value)
+    this.committedValue = String(value)
+    this.#dispatchChange()
+  }
+
+  /**
+   * @param {boolean} cancelled - Escape: the field shows its value back
+   * @param {import('./scrub.js').ScrubStart} start
+   * @returns {void}
+   */
+  #scrubEnd (cancelled, start) {
+    this.classList.remove('se-scrub-active')
+    if (!cancelled) return
+    if (start.value === null) {
+      this.mixed = true
+    } else {
+      this.value = String(start.value)
+    }
   }
 
   #mixed
@@ -128,9 +217,11 @@ export class SESpinInput extends HTMLElement {
    * @returns {void}
    */
   #dispatchRelative (evaluate) {
+    // Without the noise of floats: 0.51 shown as 51 % and dragged by 1
+    // gives 52, not 52.00000000000001.
     const relative = (value) => {
       const result = evaluate(Number(value))
-      return Number.isFinite(result) ? this.#clamp(result) : Number(value)
+      return Number.isFinite(result) ? Number(this.#clamp(result).toFixed(6)) : Number(value)
     }
     this.manualEdit = false
     this.$input.value = ''
@@ -281,9 +372,11 @@ export class SESpinInput extends HTMLElement {
     if (oldValue === newValue) return
     switch (name) {
       case 'title':
-        this.$div.setAttribute('title', titleWithShortcut(t(newValue), this.getAttribute('shortcut'), t))
-        // The field inside is named after it (elix forwards the label).
-        this.$input.setAttribute('aria-label', t(newValue))
+        // Removed by adoptTitle: the name stays. The field is named after it
+        // (elix forwards the label), and its tooltip is that of the editor
+        // (se-tooltip), over the icon that drags the value too.
+        if (newValue === null) break
+        adoptTitle(this, this.$input, newValue, t)
         break
       case 'src':
         this.$img.setAttribute('src', this.imgPath + '/' + newValue)
@@ -308,7 +401,7 @@ export class SESpinInput extends HTMLElement {
       case 'label':
         this.$label.textContent = t(newValue)
         this.$img.remove()
-        if (!this.hasAttribute('title')) this.$input.setAttribute('aria-label', t(newValue))
+        if (!controlTitle(this)) this.$input.setAttribute('aria-label', t(newValue))
         break
       case 'value':
         this.#setMixed(false)
@@ -328,7 +421,7 @@ export class SESpinInput extends HTMLElement {
    * @returns {any}
    */
   get title () {
-    return this.getAttribute('title')
+    return controlTitle(this)
   }
 
   /**

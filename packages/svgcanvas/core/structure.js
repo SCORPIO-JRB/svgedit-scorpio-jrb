@@ -264,6 +264,31 @@ export const setLayerStyle = (group, { opacity, blend } = {}) => {
 }
 
 /**
+ * Sets the blend mode of elements (lot Propriétés), as the drop of the
+ * Appearance section does: one undo step; the normal mode leaves nothing in
+ * the file.
+ * @param {Element[]} elems
+ * @param {string} blend One of BLEND_MODES
+ * @returns {BatchCommand|null}
+ */
+export const setBlendModes = (elems, blend) => {
+  if (!BLEND_MODES.includes(blend)) return null
+  const batch = new BatchCommand('Blend mode')
+  const changed = []
+  for (const elem of (elems ?? []).filter(Boolean)) {
+    const old = elem.getAttribute('style')
+    setStyleProperty(elem, 'mix-blend-mode', blend === 'normal' ? null : blend)
+    if (elem.getAttribute('style') === old) continue
+    batch.addSubCommand(new ChangeElementCommand(elem, { style: old }))
+    changed.push(elem)
+  }
+  if (batch.isEmpty()) return null
+  svgCanvas.addCommandToHistory(batch)
+  svgCanvas.call('changed', changed)
+  return batch
+}
+
+/**
  * The layer, or the group being edited, where new objects go, when it is
  * locked: nothing is drawn into it.
  * @returns {Element|null}
@@ -291,4 +316,5 @@ export const init = (canvas) => {
   canvas.lockedDrawingTarget = lockedDrawingTarget
   canvas.getBlendMode = getBlendMode
   canvas.setLayerStyle = setLayerStyle
+  canvas.setBlendModes = setBlendModes
 }
