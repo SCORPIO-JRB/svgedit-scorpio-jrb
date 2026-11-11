@@ -413,6 +413,19 @@ const setZoomMethod = (zoomLevel) => {
 }
 
 /**
+* Whether a selected element takes a paint of this type. A line has no
+* inside, and a connector, whatever element draws it, is a line between two
+* objects: neither takes a fill. A filled polyline, as the rooms of an
+* imported plan, does: it used to keep its colour while the opacity chosen
+* went on it, which made a transparent colour twice as transparent.
+* @param {Element} elem
+* @param {"fill"|"stroke"} type
+* @returns {boolean}
+*/
+const takesPaint = (elem, type) => type !== 'fill' ||
+  (elem.tagName !== 'line' && !(elem.getAttributeNS(NS.SE, 'connector') ?? elem.getAttribute('se:connector')))
+
+/**
 * Change the current stroke/fill color/gradient value.
 * @function module:elem-get-set.SvgCanvas#setColor
 * @param {string} type - String indicating fill or stroke
@@ -442,11 +455,7 @@ const setColorMethod = (type, val, preventUndo) => {
     if (elem) {
       if (elem.tagName === 'g') {
         walkTree(elem, addNonG)
-      } else if (type === 'fill') {
-        if (elem.tagName !== 'polyline' && elem.tagName !== 'line') {
-          elems.push(elem)
-        }
-      } else {
+      } else if (takesPaint(elem, type)) {
         elems.push(elem)
       }
     }
@@ -629,7 +638,7 @@ const paintTargets = (type) => {
     const elem = selected[i]
     if (elem.tagName === 'g') {
       walkTree(elem, (e) => { if (e.nodeName !== 'g') colored.push(e) })
-    } else if (type !== 'fill' || (elem.tagName !== 'polyline' && elem.tagName !== 'line')) {
+    } else if (takesPaint(elem, type)) {
       colored.push(elem)
     }
   }

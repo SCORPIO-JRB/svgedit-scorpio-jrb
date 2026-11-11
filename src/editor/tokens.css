@@ -87,6 +87,9 @@
   --se-grid-major: rgb(128 128 128 / 42%);
   --se-guide: #e0115f;
   --se-guide-text: #fff;
+  /* Nodes of a path being edited (lot Chemins): white over any drawing, in
+     both themes; the blue of the selection outlines and fills them. */
+  --se-node-fill: #fff;
   /* Frames to export (lot V5): a grey outline and its name, above it. */
   --se-frame: #8c8c8c;
   --se-frame-label: #a3a3a3;
@@ -231,6 +234,9 @@
   --se-grid-major: rgb(96 96 96 / 38%);
   --se-guide: #e0115f;
   --se-guide-text: #fff;
+  /* Nodes of a path being edited (lot Chemins): white over any drawing, in
+     both themes; the blue of the selection outlines and fills them. */
+  --se-node-fill: #fff;
   --se-frame: #767676;
   --se-frame-label: #5e5e5e;
   --se-preview-page: #fff;

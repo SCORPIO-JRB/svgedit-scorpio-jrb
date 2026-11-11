@@ -16,6 +16,18 @@ import {
   getElement
 } from './utilities.js'
 
+/*
+ * The nodes of a path being edited or drawn (lot Chemins): white discs
+ * outlined in the blue of the selection, filled with it once selected; the
+ * handles of the curves are smaller, on thin arms. The colours below hold
+ * without the editor, whose stylesheet (svgedit.css) gives them its tokens
+ * and the hover. The pink of the guides stays for what attracts the pen.
+ */
+const NODE_COLOR = '#1e66b6'
+const NODE_FILL = '#fff'
+const NODE_RADIUS = 4
+const HANDLE_RADIUS = 3
+
 const TYPE_TO_CMD = {
   1: 'Z',
   2: 'M',
@@ -307,11 +319,12 @@ export const addPointGripMethod = (index, x, y) => {
     pointGrip = document.createElementNS(NS.SVG, 'circle')
     const atts = {
       id: `pathpointgrip_${index}`,
+      class: 'se-node',
       display: 'none',
-      r: 4,
-      fill: '#0FF',
-      stroke: '#00F',
-      'stroke-width': 2,
+      r: NODE_RADIUS,
+      fill: NODE_FILL,
+      stroke: NODE_COLOR,
+      'stroke-width': 1.5,
       cursor: 'move',
       style: 'pointer-events:all'
     }
@@ -330,6 +343,9 @@ export const addPointGripMethod = (index, x, y) => {
       }
     })
   }
+  // A grip serves the next path too: it starts unselected.
+  pointGrip.setAttribute('fill', NODE_FILL)
+  pointGrip.classList.remove('se-node-selected')
   if (x && y) {
     // set up the point grip element and display it
     assignAttributes(pointGrip, {
@@ -354,10 +370,11 @@ export const addCtrlGripMethod = (id) => {
   pointGrip = document.createElementNS(NS.SVG, 'circle')
   const atts = {
     id: 'ctrlpointgrip_' + id,
+    class: 'se-node-handle',
     display: 'none',
-    r: 4,
-    fill: '#0FF',
-    stroke: '#55F',
+    r: HANDLE_RADIUS,
+    fill: NODE_FILL,
+    stroke: NODE_COLOR,
     'stroke-width': 1,
     cursor: 'move',
     style: 'pointer-events:all'
@@ -382,7 +399,9 @@ export const getCtrlLineMethod = (id) => {
   ctrlLine = document.createElementNS(NS.SVG, 'line')
   assignAttributes(ctrlLine, {
     id: 'ctrlLine_' + id,
-    stroke: '#555',
+    class: 'se-node-arm',
+    stroke: NODE_COLOR,
+    'stroke-opacity': 0.6,
     'stroke-width': 1,
     style: 'pointer-events:none'
   })
@@ -576,8 +595,12 @@ export class Segment {
    * @returns {void}
    */
   selectCtrls (y) {
-    document.getElementById(`ctrlpointgrip_${this.index}c1`)?.setAttribute('fill', y ? '#0FF' : '#EEE')
-    document.getElementById(`ctrlpointgrip_${this.index}c2`)?.setAttribute('fill', y ? '#0FF' : '#EEE')
+    // The handles stay white (lot Chemins): a segment selected with its
+    // node holds one handle of the node before, which filling would make
+    // look selected too.
+    for (const c of ['c1', 'c2']) {
+      document.getElementById(`ctrlpointgrip_${this.index}${c}`)?.setAttribute('fill', NODE_FILL)
+    }
   }
 
   /**
@@ -587,7 +610,9 @@ export class Segment {
   show (y) {
     if (this.ptgrip) {
       this.ptgrip.setAttribute('display', y ? 'inline' : 'none')
-      this.segsel.setAttribute('display', y ? 'inline' : 'none')
+      // The segment before a node is no longer outlined (lot Chemins): the
+      // editing is about the nodes, whose own look says which are selected.
+      this.segsel.setAttribute('display', 'none')
       // Show/hide all control points if available
       this.showCtrlPts(y)
     }
@@ -599,8 +624,10 @@ export class Segment {
    */
   select (y) {
     if (this.ptgrip) {
-      this.ptgrip.setAttribute('stroke', y ? '#0FF' : '#00F')
-      this.segsel.setAttribute('display', y ? 'inline' : 'none')
+      // A selected node is filled with the blue of the selection, the
+      // others stay white (lot Chemins).
+      this.ptgrip.setAttribute('fill', y ? NODE_COLOR : NODE_FILL)
+      this.ptgrip.classList.toggle('se-node-selected', y)
       if (this.ctrlpts) {
         this.selectCtrls(y)
       }
@@ -1106,7 +1133,8 @@ export class Path {
   */
   selectPt (pt, ctrlNum) {
     this.clearSelection()
-    if (!pt) {
+    // The first node is 0: only no node at all means the last one.
+    if (pt === undefined || pt === null) {
       this.eachSeg(function (i) {
         // 'this' is the segment here.
         if (this.prev) {
@@ -1167,7 +1195,8 @@ export class Path {
         this.selected_pts.push(index)
       }
     })
-    this.selected_pts.sort()
+    // In the order of the path: the deletion runs from the last node.
+    this.selected_pts.sort((a, b) => a - b)
     let i = this.selected_pts.length
     const grips = []
     grips.length = i

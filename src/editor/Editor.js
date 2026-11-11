@@ -18,7 +18,7 @@ import './dialogs/index.js'
 
 import { isMac } from '@svgedit/svgcanvas/common/browser'
 import { CommandRegistry } from './commands.js'
-import { readsOwnKeys, NAVIGATION_KEYS } from './shortcuts.js'
+import { readsOwnKeys, NAVIGATION_KEYS, eventShortcut } from './shortcuts.js'
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import ConfigObj from './ConfigObj.js'
@@ -410,6 +410,11 @@ class Editor extends EditorStartup {
         label: 'tools.delete',
         key: ['delete/backspace', true],
         fn: () => {
+          // In node editing, the selected nodes (lot Chemins).
+          if (this.svgCanvas.getMode() === 'pathedit') {
+            this.svgCanvas.pathActions.deletePathNode()
+            return
+          }
           if (this.selectedElement || this.multiselected) {
             this.svgCanvas.deleteSelectedElements()
           }
@@ -620,6 +625,27 @@ class Editor extends EditorStartup {
   }
 
   /**
+   * While a path is drawn with the pen, the keys of the history take back
+   * its last point (Ctrl+Z) or put it back (Ctrl+Y, Ctrl+Shift+Z), even
+   * when the history is empty and its buttons disabled; the steps before the
+   * drawing are left as they are (lot Chemins). The keys stay those of the
+   * Undo and Redo commands: no command shares them.
+   * @param {KeyboardEvent} e
+   * @returns {boolean} Whether the key acted on the drawing
+   */
+  penHistoryKey (e) {
+    const { pathActions } = this.svgCanvas
+    if (!pathActions.isDrawing()) return false
+    const key = eventShortcut(e, this.commands.mac)
+    const undo = key === 'mod+z'
+    if (!undo && key !== 'mod+y' && key !== 'mod+shift+z') return false
+    e.preventDefault()
+    if (undo) pathActions.undoDrawnPoint()
+    else pathActions.redoDrawnPoint()
+    return true
+  }
+
+  /**
    *  @lends module:SVGEditor~Actions */
   /**
    * editor shortcuts init
@@ -661,6 +687,7 @@ class Editor extends EditorStartup {
       const origin = path[0]
       const onControl = origin?.nodeType === 1 && origin !== document.body && origin !== document.documentElement
       if (onControl && NAVIGATION_KEYS.has(e.key)) return
+      if (this.penHistoryKey(e)) return
       this.commands.dispatch(e)
     })
 
@@ -1355,12 +1382,18 @@ class Editor extends EditorStartup {
    * @returns {void}
    */
   moveSelected (dx, dy) {
+    const step = this.configObj.curConfig.gridSnapping
+      ? this.configObj.curConfig.snappingStep
+      : 1
+    if (this.svgCanvas.getMode() === 'pathedit') {
+      // In node editing, the arrows move the selected nodes (lot Chemins),
+      // in a row one undo step.
+      this.svgCanvas.undoMgr.merging('nudge', () => this.svgCanvas.pathActions.moveSelectedPoints(dx * step, dy * step))
+      return
+    }
     if (this.selectedElement || this.multiselected) {
       // Arrow keys move by document units (one grid step when snapping),
       // whatever the zoom. moveSelectedElements expects screen pixels.
-      const step = this.configObj.curConfig.gridSnapping
-        ? this.configObj.curConfig.snappingStep
-        : 1
       const multi = this.svgCanvas.getZoom() * step
       // Nudges in a row are one undo step (lot V5).
       this.svgCanvas.undoMgr.merging('nudge', () => this.svgCanvas.moveSelectedElements(dx * multi, dy * multi))

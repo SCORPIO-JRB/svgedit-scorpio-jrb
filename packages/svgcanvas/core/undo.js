@@ -81,6 +81,9 @@ export const getUndoManager = () => {
       if (eventType === EventTypes.BEFORE_UNAPPLY || eventType === EventTypes.BEFORE_APPLY) {
         if (depth++ === 0) {
           changedElems = new Set()
+          // A path being drawn with the pen is given up first: it is not in
+          // the history, and the step may take its layer or group away.
+          if (svgCanvas.getDrawnPath?.()) svgCanvas.pathActions.clear()
           svgCanvas.clearSelection()
         }
       } else if (eventType === EventTypes.AFTER_APPLY || eventType === EventTypes.AFTER_UNAPPLY) {

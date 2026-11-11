@@ -1480,6 +1480,10 @@ const convertToGroup = (elem, outerCmd) => {
     const copy = symbol.cloneNode(true)
     const removed = inlineStyleSheets(copy, { original: (selector) => unscopeSelector(selector, { id: symbol.id, tag: 'symbol' }) })
     styleToAttributes(copy)
+    // The <defs> that only held the stylesheets would stay in the layer.
+    for (const defs of copy.querySelectorAll('defs')) {
+      if (!defs.firstElementChild) defs.remove()
+    }
     const g = svgCanvas.getDOMDocument().createElementNS(NS.SVG, 'g')
     // The attributes of the file's root (fill, font, class...) apply to its objects
     for (const attr of copy.attributes) {

@@ -16,7 +16,6 @@ import {
 } from './math.js'
 import { withStartTransform } from './recalculate.js'
 import * as draw from './draw.js'
-import * as pathModule from './path.js'
 import * as hstry from './history.js'
 import { findPos } from '../../svgcanvas/common/util.js'
 import { isMac } from '../common/browser.js'
@@ -676,6 +675,11 @@ const updateTransformList = (svgRoot, element, dx, dy) => {
 const mouseMoveEvent = (evt) => {
   // Without a gesture, the mouse only shows what a click would select.
   if (!svgCanvas.getStarted()) {
+    if (svgCanvas.getCurrentMode() === 'path') {
+      // The pen shows the end of a path it would extend (lot Chemins).
+      const pt = transformPoint(evt.clientX, evt.clientY, svgCanvas.getrootSctm())
+      svgCanvas.pathActions.showEndAt(pt.x, pt.y)
+    }
     updateHover(evt)
     return
   }
@@ -1145,20 +1149,9 @@ const mouseMoveEvent = (evt) => {
         svgCanvas.setStartX(snapToGrid(svgCanvas.getStartX()))
         svgCanvas.setStartY(snapToGrid(svgCanvas.getStartY()))
       }
-      if (evt.shiftKey) {
-        const { path } = pathModule
-        let x1; let y1
-        if (path) {
-          x1 = path.dragging ? path.dragging[0] : svgCanvas.getStartX()
-          y1 = path.dragging ? path.dragging[1] : svgCanvas.getStartY()
-        } else {
-          x1 = svgCanvas.getStartX()
-          y1 = svgCanvas.getStartY()
-        }
-        xya = snapToAngle(x1, y1, x, y);
-        ({ x, y } = xya)
-      }
-
+      // Shift keeps 45° steps: from the last point of the drawing, from the
+      // point being placed for its handle, or from where a drag of nodes
+      // started. The path actions know these points, not the click.
       if (svgCanvas.getRubberBox()?.getAttribute('display') !== 'none') {
         realX *= zoom
         realY *= zoom
@@ -1169,7 +1162,7 @@ const mouseMoveEvent = (evt) => {
           height: Math.abs(realY - svgCanvas.getRStartY() * zoom)
         }, 100)
       }
-      svgCanvas.pathActions.mouseMove(x, y)
+      svgCanvas.pathActions.mouseMove(x, y, { shift: evt.shiftKey })
 
       break
     }
@@ -1478,7 +1471,11 @@ const mouseUpEvent = (evt) => {
             t = t.firstChild
           }
           if (selectedElements[0].nodeName === 'path' && !selectedElements[1]) {
-            svgCanvas.pathActions.select(selectedElements[0])
+            // Alt+click on the outline of a path already selected adds a
+            // node there, in node editing (lot Chemins, as in Vecta).
+            const addNode = evt.altKey && tempJustSelected !== t && t === selectedElements[0] &&
+              svgCanvas.pathActions.addPointOnPath(t, realX, realY)
+            if (!addNode) svgCanvas.pathActions.select(selectedElements[0])
             // if it was a path
             // else, if it was selected and this is a shift-click, remove it from selection
           } else if (evt.shiftKey && tempJustSelected !== t) {
@@ -1762,6 +1759,9 @@ const mouseUpEvent = (evt) => {
       aniDur = 0
     }
 
+    // The tool the element was drawn with: the one in use when the fade in
+    // ends may be another, chosen meanwhile.
+    const drawnWith = svgCanvas.getCurrentMode()
     // Ideally this would be done on the endEvent of the animation,
     // but that doesn't seem to be supported in Webkit
     setTimeout(() => {
@@ -1770,7 +1770,12 @@ const mouseUpEvent = (evt) => {
       element.setAttribute('style', 'pointer-events:inherit')
       cleanupElement(element)
       if (svgCanvas.getCurrentMode() === 'path') {
-        svgCanvas.pathActions.toEditMode(element)
+        // A path the pen ended goes to node editing, unless the pen has
+        // started the next one. A shape drawn just before the pen was
+        // chosen does not: it is no path, and this threw.
+        if (drawnWith === 'path' && element.tagName === 'path' && !svgCanvas.getDrawnPath()) {
+          svgCanvas.pathActions.toEditMode(element)
+        }
       } else if (svgCanvas.getCurConfig().selectNew) {
         const modes = ['circle', 'ellipse', 'square', 'rect', 'fhpath', 'line', 'fhellipse', 'fhrect', 'star', 'polygon', 'shapelib']
         if (modes.indexOf(svgCanvas.getCurrentMode()) !== -1 && !evt.altKey) {

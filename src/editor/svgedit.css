@@ -55,6 +55,46 @@
   left: 0;
 }
 
+/*
+ * Nodes of the path being edited or drawn (lot Chemins): white discs
+ * outlined in the blue of the selection, filled with it once selected; the
+ * handles of the curves smaller, on light arms. Under the pointer a node
+ * grows: a click takes it, or closes the path on the first point drawn.
+ */
+#pathpointgrip_container .se-node,
+#pathpointgrip_container .se-node-handle {
+  fill: var(--se-node-fill);
+  stroke: var(--se-selection);
+  transition: r 80ms ease-out, fill 80ms ease-out;
+}
+
+#pathpointgrip_container .se-node {
+  stroke-width: 1.5px;
+}
+
+#pathpointgrip_container .se-node:hover {
+  r: 5.5px;
+  fill: color-mix(in srgb, var(--se-selection) 22%, var(--se-node-fill));
+}
+
+#pathpointgrip_container .se-node-handle:hover {
+  r: 4px;
+}
+
+#pathpointgrip_container .se-node.se-node-selected {
+  r: 4.5px;
+}
+
+#pathpointgrip_container .se-node-selected,
+#pathpointgrip_container .se-node-selected:hover {
+  fill: var(--se-selection);
+}
+
+#pathpointgrip_container .se-node-arm,
+#path_stretch_line {
+  stroke: var(--se-selection);
+}
+
 #workarea {
   grid-area: workarea;
   background-color: var(--se-canvas);

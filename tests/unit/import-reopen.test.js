@@ -129,4 +129,20 @@ describe('Opening and saving again (lot 6)', () => {
     svgCanvas.undoMgr.redo()
     assert.equal(svgCanvas.getSvgString(), ungrouped)
   })
+
+  it('leaves no empty <defs> in the layer when the stylesheet of an import becomes attributes', () => {
+    svgCanvas.setSvgString(`<svg xmlns="${NS.SVG}" width="640" height="480"><g class="layer"><title>L</title></g></svg>`)
+    const use = svgCanvas.importSvgString(`<svg xmlns="${NS.SVG}" viewBox="0 0 100 50">` +
+      '<defs><style>.a{fill:rgba(255,255,255,.1);stroke:#fff}</style></defs>' +
+      '<defs><linearGradient id="dg"><stop offset="0"/></linearGradient></defs>' +
+      '<rect class="a" width="40" height="20"/><rect width="9" height="9" fill="url(#dg)"/></svg>')
+    svgCanvas.selectOnly([use])
+    svgCanvas.ungroupSelectedElement()
+
+    const layer = document.querySelector('#svgcontent g.layer')
+    const rect = layer.querySelector('rect.a')
+    assert.deepEqual([rect.getAttribute('fill'), rect.getAttribute('stroke')], ['rgba(255,255,255,.1)', '#fff'])
+    // The <defs> that held a gradient stays: a shape uses it.
+    assert.deepEqual([...layer.querySelectorAll('defs')].map((defs) => defs.firstElementChild?.tagName), ['linearGradient'])
+  })
 })

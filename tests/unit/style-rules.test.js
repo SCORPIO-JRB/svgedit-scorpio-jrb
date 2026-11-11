@@ -175,6 +175,15 @@ describe('getStyledValue', () => {
     assert.equal(getStyledValue($('fond'), 'fill').value, '#160F23')
     assert.equal(getStyledValue($('fond'), 'stroke'), null)
   })
+
+  it('keeps the transparency of a colour, and writes an opaque one in hexadecimal', () => {
+    drawing('.room { fill: rgba(255, 255, 255, .1); stroke: rgb(0 0 0 / 40%) } .wall { fill: rgba(0, 0, 255, 1); stroke: rgb(255, 0, 0) }',
+      '<rect id="room" class="room"/><rect id="wall" class="wall"/>')
+    assert.equal(getStyledValue($('room'), 'fill').value, 'rgba(255, 255, 255, .1)')
+    assert.equal(getStyledValue($('room'), 'stroke').value, 'rgb(0 0 0 / 40%)')
+    assert.equal(getStyledValue($('wall'), 'fill').value, '#0000ff')
+    assert.equal(getStyledValue($('wall'), 'stroke').value, '#ff0000')
+  })
 })
 
 describe('a change of the canvas goes to the rule', () => {

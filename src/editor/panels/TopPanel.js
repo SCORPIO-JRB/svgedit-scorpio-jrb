@@ -3,7 +3,7 @@
 
 import SvgCanvas from '@svgedit/svgcanvas'
 import topPanelHTML from './TopPanel.html'
-import { commonValueOf, roundForField, styledAttribute } from './panelValues.js'
+import { commonValueOf, lengthOf, roundForField, strokeWidthOf, styledAttribute } from './panelValues.js'
 import { askText } from '../components/askText.js'
 import { stepTargets } from '../history-steps.js'
 import { renameId, ungroupSelected } from '../binding.js'
@@ -171,7 +171,7 @@ class TopPanel {
           const childs = this.selectedElement.getElementsByTagName('*')
           let gWidth = null
           for (i = 0, len = childs.length; i < len; i++) {
-            const swidth = styledAttribute(this.editor.svgCanvas, childs[i], 'stroke-width')
+            const swidth = lengthOf(styledAttribute(this.editor.svgCanvas, childs[i], 'stroke-width'))
 
             if (i === 0) {
               gWidth = swidth
@@ -189,7 +189,7 @@ class TopPanel {
 
           // As drawn: a rule of the style sheets can give these (lot S2)
           const styled = (name) => styledAttribute(this.editor.svgCanvas, this.selectedElement, name)
-          $id('stroke_width').value = styled('stroke-width') || 1
+          $id('stroke_width').value = strokeWidthOf(this.editor.svgCanvas, this.selectedElement)
           $id('stroke_style').value = styled('stroke-dasharray') || 'none'
           $id('stroke_style').setAttribute('value', $id('stroke_style').value)
 
@@ -630,7 +630,10 @@ class TopPanel {
    * @returns {void}
    */
   clickUndo () {
-    const { undoMgr } = this.editor.svgCanvas
+    const { undoMgr, pathActions } = this.editor.svgCanvas
+    // While a path is drawn with the pen, its last point is taken back; the
+    // steps before the drawing are left as they are (lot Chemins).
+    if (pathActions.undoDrawnPoint()) return
     if (undoMgr.getUndoStackSize() > 0) {
       this.goToHistory(undoMgr.getUndoStackSize() - 1)
     }
@@ -641,7 +644,8 @@ class TopPanel {
    * @returns {void}
    */
   clickRedo () {
-    const { undoMgr } = this.editor.svgCanvas
+    const { undoMgr, pathActions } = this.editor.svgCanvas
+    if (pathActions.redoDrawnPoint()) return
     if (undoMgr.getRedoStackSize() > 0) {
       this.goToHistory(undoMgr.getUndoStackSize() + 1)
     }

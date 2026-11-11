@@ -113,6 +113,23 @@ describe('paint history and preview', () => {
     expect(svgCanvas.cancelPaintPreview()).toBe(false)
   })
 
+  it('gives a filled polyline its new fill, not a line or a connector', () => {
+    svgCanvas.setSvgString('<svg xmlns="http://www.w3.org/2000/svg" xmlns:se="http://svg-edit.googlecode.com" width="640" height="480">' +
+      '<polyline id="room" points="0,0 50,0 50,40" fill="rgba(255, 255, 255, .1)"/>' +
+      '<line id="ln" x1="0" y1="0" x2="9" y2="9" stroke="#000"/>' +
+      '<polyline id="conn" points="0,0 9,9" fill="none" stroke="#000" se:connector="a b"/></svg>')
+    const [room, line, conn] = ['room', 'ln', 'conn'].map((id) => document.getElementById(id))
+    select('room', 'ln', 'conn')
+    svgCanvas.previewPaint('fill', new Paint({ solidColor: 'ff0000', alpha: 10 }))
+    expect([room.getAttribute('fill'), line.getAttribute('fill'), conn.getAttribute('fill')]).toEqual(['#ff0000', null, 'none'])
+    svgCanvas.setPaint('fill', new Paint({ solidColor: 'ff0000', alpha: 10 }))
+    // The transparency of the old colour does not stay under the new opacity.
+    expect([room.getAttribute('fill'), room.getAttribute('fill-opacity')]).toEqual(['#ff0000', '0.1'])
+    expect([line.getAttribute('fill'), conn.getAttribute('fill')]).toEqual([null, 'none'])
+    svgCanvas.undoMgr.undo()
+    expect([room.getAttribute('fill'), room.getAttribute('fill-opacity')]).toEqual(['rgba(255, 255, 255, .1)', null])
+  })
+
   it('records a previewed paint against the paint before the preview', () => {
     select('r1')
     const r1 = document.getElementById('r1')

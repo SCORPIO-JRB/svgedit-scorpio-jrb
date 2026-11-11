@@ -79,7 +79,13 @@ export const STEP_TEXTS = {
   'add connector': 'connector_add',
   'change route': 'connector_route',
   'change fluid': 'connector_fluid',
-  'apply template': 'template'
+  'apply template': 'template',
+  // Lot Chemins
+  'add path point': 'add_nodes',
+  'move path point(s)': 'move_nodes',
+  'delete path node(s)': 'delete_nodes',
+  'extend path': 'extend_path',
+  'join paths': 'join_paths'
 }
 
 /** Names that give the number of objects. */
