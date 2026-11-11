@@ -330,7 +330,8 @@ test.describe('Inspector (V3)', () => {
   test('the sections at their place; a section where nothing applies is hidden', async ({ page }) => {
     await load(page)
     // With the frames to export of lot V5, and the current layer of lot V7.
-    expect(await sections(page)).toEqual(['appearance', 'fill', 'stroke', 'layer', 'document', 'frames'])
+    // Appearance, Fill and Stroke only with a drawing tool since lot Fond.
+    expect(await sections(page)).toEqual(['layer', 'document', 'frames'])
     await expect(page.locator('#se-tabpanel-properties .se-inspector-type')).toHaveText('Document')
     await select(page, ['r1'])
     // Effects only for an object that has a blur, since lot S1.

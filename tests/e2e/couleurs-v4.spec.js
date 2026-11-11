@@ -129,8 +129,10 @@ test.describe('Colour window (V4 couleurs)', () => {
     await undo(page)
     expect(await attr(page, 'r1', 'fill-opacity')).not.toBe('0.5')
     expect(await attr(page, 'r1', 'fill')).toBe('#f08a62')
-    // The format is kept for the next time.
+    // The format is kept for the next time. (Undo left nothing selected:
+    // without a selection, Fill shows only with a drawing tool, lot Fond.)
     await page.keyboard.press('Escape')
+    await select(page, 'r1')
     await openFill(page)
     await expect(page.locator('#se-paint-format')).toHaveValue('hsl')
   })
