@@ -8,7 +8,6 @@ import {
   rotateAbout,
   scale,
   shearFreeMatrix,
-  singleTextPreview,
   textPreviewMatrix,
   translate
 } from '../../packages/svgcanvas/core/multi-transform.js'
@@ -135,12 +134,6 @@ describe('multi-transform geometry (M2)', () => {
       const preview = textPreviewMatrix(scale(-2, 2), info)
       expect(preview.a).toBeCloseTo(-2)
       expect(preview.d).toBeCloseTo(2)
-    })
-
-    it('matches the single text grip preview', () => {
-      const box = { x: 100, y: 30, width: 100, height: 40 }
-      const p = singleTextPreview(box, 2, 1, 100, 30)
-      expect(p).toEqual({ origin: { x: 150, y: 50 }, sx: 1, sy: 1, target: { x: 200, y: 50 } })
     })
   })
 })

@@ -23,7 +23,7 @@ Les miroirs quittent le menu « … » : ils sont à côté de l'angle, avec leu
 
 ## 3. Apparence
 
-- **L'œil** masque la sélection (la commande « Masquer la sélection », `Ctrl`+`Maj`+`H`).
+- **L'œil** masque la sélection, puis la réaffiche (la commande « Afficher/Masquer la sélection », `Ctrl`+`Maj`+`H`). L'objet masqué reste sélectionné, comme dans Figma (lot Texte et masquage, `docs/texte-masquer.md`).
 - **La goutte** ouvre la liste des modes de fusion : Normal, Produit, Superposition, Incrustation, Obscurcir, Éclaircir, Différence. Elle se colore quand l'objet en a un autre que Normal. Le mode s'écrit en `mix-blend-mode` dans le style de l'objet ; Normal n'écrit rien.
 - **Rayon des coins.** Il s'affiche pour un rectangle, un polygone, une polyligne ou un chemin qui a des angles :
   - un rectangle garde `rx` et `ry` ;

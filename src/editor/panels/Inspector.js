@@ -55,6 +55,7 @@ import { scrubInput, SCRUBBING_CLASS } from '../components/scrub.js'
 import { shapesOf, styledAttribute, commonValueOf } from './panelValues.js'
 import { firstFamily, numericWeight, DEFAULT_TEXT_STYLES } from './TextStyles.js'
 import { parseColor, toHex } from '../color/color.js'
+import { isAllHidden } from '../structure.js'
 
 const { isValidUnit, Paint } = SvgCanvas
 
@@ -1096,8 +1097,8 @@ export class Inspector {
     const tools = this.root.querySelector('[data-section="appearance"] > .se-section-tools')
     const modes = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'difference']
     tools.innerHTML = `
-      <button type="button" class="se-section-tool" data-command="hide_selection" aria-label="${t('structure.hide')}"
-        title="${t('structure.hide')}"><se-icon src="${imgPath}/eye.svg"></se-icon></button>
+      <button type="button" class="se-section-tool" data-command="hide_selection" aria-label="${t('layout.hide')}"
+        title="${t('layout.hide')}"><se-icon src="${imgPath}/eye.svg"></se-icon></button>
       <label class="se-section-tool se-blend" title="${t('layout.blend_mode')}"><se-icon src="${imgPath}/blend.svg"></se-icon
         ><select id="se-blend-mode" aria-label="${t('layout.blend_mode')}">${modes.map((mode) =>
           `<option value="${mode}">${t(`structure.blend_${mode}`)}</option>`).join('')}</select></label>`
@@ -1125,6 +1126,18 @@ export class Inspector {
     const { svgCanvas } = this.editor
     const tools = this.root.querySelector('[data-section="appearance"] > .se-section-tools')
     if (tools) tools.hidden = !selected.length
+    const eye = tools?.querySelector('[data-command="hide_selection"]')
+    if (eye) {
+      // As in Figma, the eye that hid the selection shows it again.
+      const hidden = isAllHidden(selected)
+      const label = this.editor.i18next.t(hidden ? 'layout.show' : 'layout.hide')
+      const src = `${this.editor.configObj.curConfig.imgPath}/${hidden ? 'eye_off' : 'eye'}.svg`
+      eye.setAttribute('aria-pressed', String(hidden))
+      eye.setAttribute('aria-label', label)
+      eye.title = label
+      const icon = eye.querySelector('se-icon')
+      if (icon && icon.getAttribute('src') !== src) icon.setAttribute('src', src)
+    }
     if (this.$blend) {
       const modes = new Set(selected.map((el) => svgCanvas.getBlendMode?.(el) ?? 'normal'))
       const blend = modes.size === 1 ? [...modes][0] : 'normal'

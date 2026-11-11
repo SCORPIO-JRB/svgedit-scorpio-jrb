@@ -1255,7 +1255,9 @@ export class SelectorManager {
         attr: {
           id: ('selectorGrip_rotateconnector'),
           stroke: SELECTION_COLOR,
-          'stroke-width': '1'
+          'stroke-width': '1',
+          // It ends in the middle of the top grip: the grip takes the pointer.
+          'pointer-events': 'none'
         }
       })
     this.selectorGripsGroup.append(this.rotateGripConnector)

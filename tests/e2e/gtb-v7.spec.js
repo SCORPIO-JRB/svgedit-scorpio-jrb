@@ -107,7 +107,8 @@ test.describe('Full tree (V7)', () => {
     await select(page, 'cadre')
     await page.keyboard.press('Control+Shift+H')
     expect(await attr(page, 'cadre', 'display')).toBe('none')
-    expect(await selected(page)).toEqual([])
+    // A hidden object stays selected, as in Figma (lot Texte et masquage).
+    expect(await selected(page)).toEqual(['cadre'])
     await page.evaluate(() => window.svgEditor.commands.execute('unlock_all'))
     await page.evaluate(() => window.svgEditor.commands.execute('show_all'))
     expect(await attr(page, 'r2', 'se:locked')).toBe(null)

@@ -26,6 +26,7 @@
 import { escapeHtml } from './TopBar.js'
 import { isShown } from './Inspector.js'
 import { controlTitle } from '../commands.js'
+import { isAllHidden } from '../structure.js'
 
 /** Distance from the rotation zone to the bar, in pixels. */
 export const BAR_GAP = 12
@@ -165,6 +166,17 @@ const TEXT_LABELS = {
   tool_unlink_use: 'context.unlink',
   tool_group_elements: 'context.group'
 }
+
+/**
+ * The short labels of the commands on the bar: the hide button says
+ * "Show" once the selection is hidden.
+ * @param {string} id
+ * @param {Element[]} elements
+ * @returns {string|undefined} A translation key
+ */
+const commandLabel = (id, elements) => id === 'hide_selection'
+  ? (isAllHidden(elements) ? 'context.show' : 'context.hide')
+  : undefined
 
 const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
 
@@ -315,16 +327,6 @@ export class ContextBar {
         label: 'context.select_children',
         when: () => Boolean(one([...CONTAINERS])),
         run: () => this.svgCanvas.selectChildren()
-      },
-      {
-        id: 'hide_selection',
-        label: 'context.hide',
-        when: () => selected().length > 0,
-        run: () => {
-          const elems = selected()
-          this.svgCanvas.changeSelectedAttribute('display', 'none', elems)
-          this.svgCanvas.clearSelection()
-        }
       },
       {
         id: 'select_same',
@@ -618,7 +620,7 @@ export class ContextBar {
       case 'command': {
         const command = commands.get(id)
         if (!command) return null
-        const label = this.t(command.label)
+        const label = this.t(commandLabel(id, this.svgCanvas.getSelectedElements().filter(Boolean)) ?? command.label)
         return button('se-text-button', `<span>${escapeHtml(label)}</span>`, label, hintOf(commands, id))
       }
       case 'anchor': {
@@ -780,6 +782,14 @@ export class ContextBar {
         }
         case 'command': {
           holder.hidden = !this.editor.commands.isEnabled(id)
+          const key = commandLabel(id, elements)
+          if (key) {
+            const label = this.t(key)
+            const hint = hintOf(this.editor.commands, id)
+            if (el.textContent !== label) el.querySelector('span').textContent = label
+            el.setAttribute('aria-label', hint ? `${label} (${hint})` : label)
+            el.seTooltip = { label, shortcut: hint }
+          }
           break
         }
         case 'anchor': {
@@ -981,7 +991,7 @@ export class ContextBar {
       if (type === 'command') {
         const command = editor.commands.get(id)
         if (!command || !editor.commands.isEnabled(id)) continue
-        items.push({ id, label: this.t(command.label), hint: hintOf(editor.commands, id), run: () => editor.commands.execute(id) })
+        items.push({ id, label: this.t(commandLabel(id, elements) ?? command.label), hint: hintOf(editor.commands, id), run: () => editor.commands.execute(id) })
       } else {
         const original = this.original(id)
         if (!this.applies(original) || original.hasAttribute('disabled')) continue

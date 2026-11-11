@@ -74,8 +74,9 @@ export const setLocked = (elems, locked) => {
 }
 
 /**
- * Shows or hides objects (`display="none"`); a hidden object leaves the
- * selection.
+ * Shows or hides objects (`display="none"`). A hidden object stays selected,
+ * as in Figma: the eye that hid it shows it again. It can no longer be
+ * picked on the canvas, only in the Layers tab.
  * @param {Element[]} elems
  * @param {boolean} visible
  * @returns {BatchCommand|null}
@@ -90,10 +91,6 @@ export const setVisible = (elems, visible) => {
     if (visible) elem.removeAttribute('display')
     else elem.setAttribute('display', 'none')
     batch.addSubCommand(new ChangeElementCommand(elem, { display: old }))
-  }
-  if (!visible) {
-    const selected = svgCanvas.getSelectedElements().filter((elem) => elem && changed.includes(elem))
-    if (selected.length) svgCanvas.removeFromSelection(selected)
   }
   svgCanvas.addCommandToHistory(batch)
   svgCanvas.call('changed', changed)

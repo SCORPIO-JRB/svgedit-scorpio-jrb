@@ -40,7 +40,7 @@ Un texte d'une ligne reste ce qu'il a toujours été : ses caractères seuls, da
 ## 3. Largeur, poignées, alignement
 
 - **Poignées latérales (est, ouest).** Elles donnent au texte une largeur fixe. Un texte large comme ses lignes en prend une. Les lignes se recoupent en direct pendant le geste, sans transformation ni changement de police. `Alt` déplace les deux bords ; `Échap` annule le geste. Le geste entier forme une étape d'annulation.
-- **Poignées des coins, haut et bas.** Elles agrandissent le texte en proportion, comme avant (la taille de police change, lot M4). La largeur fixe suit.
+- **Poignées des coins, haut et bas.** Depuis le lot Texte et masquage (`docs/texte-masquer.md`), elles donnent la hauteur de la boîte, ou sa largeur et sa hauteur ; la police ne change plus. L'outil Échelle agrandit un texte en proportion.
 - **Boîte de sélection.** Celle d'un texte de largeur fixe a cette largeur, que les lignes la remplissent ou non (comme le cadre d'un bloc de texte dans Figma).
 - **Largeur automatique.** Le bouton de la section Texte rend au texte la largeur de ses lignes.
 - **Alignement.** Le bloc reste en place et ses lignes s'alignent dedans. L'ancre `x` passe au bord gauche, au milieu ou au bord droit du bloc, en une étape d'annulation. Avant, un texte changeait de place quand on changeait son alignement.
