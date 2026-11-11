@@ -39,7 +39,6 @@ export const SECTIONS = ['actions', 'geometry', 'symbol', 'connector', 'appearan
 
 /** Order of the geometry groups: position, size, then angle. */
 const GEOMETRY_ORDER = {
-  path_node_panel: 0,
   xy_panel: 10,
   wh_panel: 20,
   rect_panel: 30,

@@ -37,6 +37,18 @@ export default defineConfig({
   },
   plugins: [
     {
+      // `npm start` serves the editor from its sources, and the canvas from
+      // them too: the package points to its build, which only `npm run build`
+      // makes, and a build left from another branch hid every change of the
+      // canvas. The unit tests import the sources themselves.
+      name: 'svgedit-canvas-sources',
+      apply: (_config, { command }) => command === 'serve' && !process.env.VITEST,
+      enforce: 'pre',
+      resolveId (id) {
+        if (id === '@svgedit/svgcanvas') return resolve(__dirname, 'packages/svgcanvas/svgcanvas.js')
+      }
+    },
+    {
       name: 'svgedit-skip-vite-build-html',
       apply: 'build',
       enforce: 'pre',

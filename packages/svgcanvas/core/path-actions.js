@@ -1731,6 +1731,7 @@ class PathActions {
     const { subpaths, hit: at } = found
     const sub = subpaths[at.sub]
     const p0 = at.seg ? sub.segs[at.seg - 1] : sub
+    const curved = sub.segs[at.seg].type === 'C'
     const cubic = toCubic(p0, sub.segs[at.seg])
     sub.segs[at.seg] = cubic
     elem.setAttribute('d', writePath(subpaths, shortFloat))
@@ -1740,7 +1741,7 @@ class PathActions {
     const im = getMatrix(elem).inverse()
     const zoom = svgCanvas.getZoom()
     const from = transformPoint(startX / zoom, startY / zoom, im)
-    this.#penGesture = { kind: 'bend', subpaths, sub: at.sub, seg: at.seg, t: at.t, p0, cubic, im, from, index, moved: false }
+    this.#penGesture = { kind: 'bend', subpaths, sub: at.sub, seg: at.seg, t: at.t, p0, cubic, im, from, index, curved, moved: false }
     return true
   }
 
@@ -1762,15 +1763,17 @@ class PathActions {
   }
 
   /**
-   * The end of the bend: one undo step, or the side as it was when the
-   * click did not drag.
+   * The end of the bend: one undo step. A click that did not drag makes a
+   * straight side a curve all the same, its course unchanged, with its two
+   * handles to pull; a side already curved stays as it was.
    * @param {object} g
    * @returns {void}
    */
   #bendEnd (g) {
-    if (!g.moved) path.elem.setAttribute('d', path.last_d)
+    const unchanged = !g.moved && g.curved
+    if (unchanged) path.elem.setAttribute('d', path.last_d)
     path.init().update()
-    if (!g.moved) return
+    if (unchanged) return
     if (path.segs[g.index]?.ptgrip) path.addPtsToSelection(g.index)
     path.endChanges('Bend segment')
   }

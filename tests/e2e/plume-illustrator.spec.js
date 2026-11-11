@@ -162,6 +162,27 @@ test.describe('The pen on a path', () => {
     expect(await segTypes(page, 't')).toBe('MLLLZ')
   })
 
+  test('Alt and a click make a side a curve, its course kept, with its two handles', async ({ page }) => {
+    await load(page, TRIANGLE)
+    await select(page, 't')
+    await chooseTool(page, 'tool_path')
+    await moveTo(page, 200, 300)
+    await page.keyboard.down('Alt')
+    await clickAt(page, 200, 300)
+    await page.keyboard.up('Alt')
+    expect(await d(page, 't')).toBe('M200,100 L320,300 C240,300 160,300 80,300 L200,100 Z')
+    const handles = await page.evaluate(() => [...document.querySelectorAll('#pathpointgrip_container .se-node-handle')]
+      .filter((g) => g.getAttribute('display') !== 'none').length)
+    expect(handles).toBe(2)
+    expect(await steps(page)).toBe(1)
+    expect(await undoName(page)).toBe('Undo: Bend the side')
+    // A side already curved: nothing more.
+    await page.keyboard.down('Alt')
+    await clickAt(page, 200, 300)
+    await page.keyboard.up('Alt')
+    expect(await steps(page)).toBe(1)
+  })
+
   test('Escape during the bend puts the side back', async ({ page }) => {
     await load(page, TRIANGLE)
     await select(page, 't')

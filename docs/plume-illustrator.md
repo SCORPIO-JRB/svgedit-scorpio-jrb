@@ -50,7 +50,7 @@ Le bouton de la plume reste enfoncé pendant l'édition des nœuds avec la plume
 | Un point | Plume « − » | Le supprime, au relâchement. Ses voisins se rejoignent. Un chemin réduit à un point disparaît, dans la même étape, et la plume reste. |
 | Une extrémité d'un chemin ouvert | Plume | Prolonge le chemin depuis ce point (lot Chemins). |
 | Un segment | Plume « + » | Ajoute un point à cet endroit, sans changer la forme. Un glisser le déplace aussitôt. |
-| Un segment, avec `Alt` | Flèche avec une courbe | Le glisser courbe le segment (§ 4). |
+| Un segment, avec `Alt` | Flèche avec une courbe | Le glisser courbe le segment ; un clic seul le rend courbe sans changer son tracé, ses deux poignées à tirer (§ 4). |
 | Une poignée de courbe | Celui des nœuds | La tire, comme en édition des nœuds. |
 | La poignée d'un coin (lot Coins) | Celui des nœuds | Arrondit le coin. |
 | Ailleurs | Plume | Commence un nouveau chemin. L'édition des nœuds du précédent prend fin. |
@@ -85,7 +85,7 @@ La plume reste l'outil. Un second `Échap` ne fait rien de plus.
 
 Les poignées s'affichent pendant et après le glisser : on peut les tirer ensuite.
 
-Un `Alt`+clic sans glisser ne change rien. Le glisser fait une étape d'annulation, « Courber le côté ».
+Un `Alt`+clic sans glisser rend le segment courbe sans changer son tracé : une droite devient une cubique, ses deux poignées au tiers et aux deux tiers, à tirer ensuite. Sur un segment déjà courbe, il ne change rien. Le glisser, comme le clic, fait une étape d'annulation, « Courber le côté ».
 
 ## 5. Formes : chemin au premier changement
 
@@ -101,7 +101,22 @@ Le chemin garde ce qu'avait la forme : identifiant, style, transformation (voir 
 
 Avec la plume, une annulation ou un rétablissement remontre les points de l'objet que l'étape a changé : le chemin en édition des nœuds, ou la forme rendue. La plume reste l'outil. Avant, l'annulation pendant l'édition des nœuds repassait à l'outil Sélection.
 
-## 7. Code
+## 7. Retours après essai
+
+- **Géométrie des nœuds.** La section Géométrie de l'inspecteur en édition des nœuds disparaît, ainsi que ses commandes dans la barre contextuelle. Elle contenait :
+  - les coordonnées du point ;
+  - droit ou courbe ;
+  - poignées liées ;
+  - dupliquer, supprimer ;
+  - ouvrir ou fermer ;
+  - sous-chemin.
+
+  Ses champs restent dans la page, cachés, pour le code qui les met à jour, comme les autres commandes retirées (`RETIRED_CONTROLS`). La plume les remplace : elle ajoute et supprime des points, et `Alt` courbe un segment. `Suppr` et les flèches agissent sur les points sélectionnés. La mise en page classique garde la barre des nœuds.
+- **`Alt`+clic** rend un segment courbe, avec ses deux poignées (§ 4). Il ne faisait rien jusqu'ici.
+- **`npm start`** sert le canevas depuis ses sources, comme l'éditeur. Le paquet `@svgedit/svgcanvas` pointe sur sa version construite, `packages/svgcanvas/dist`, que seul `npm run build` refait. Une version construite sur une autre branche cachait tous les changements du canevas, dont la plume, alors que l'inspecteur, lui, était à jour. La correction tient dans le greffon `svgedit-canvas-sources` de `vite.config.mjs`, actif en développement seulement : ni la construction ni les tests unitaires ne changent.
+- **Style par défaut.** Une forme tracée a un fond gris clair et un contour noir de 1. Le gris est `#DCDCDF`, le neutre 100 de la bibliothèque Scorp-io. Avant, le fond était rouge et le contour de 5. Le texte reste noir, sans contour. Voir `initFill` et `initStroke` dans `ConfigObj.js`.
+
+## 8. Code
 
 | Fichier | Rôle |
 | --- | --- |
@@ -113,16 +128,19 @@ Avec la plume, une annulation ou un rétablissement remontre les points de l'obj
 | `src/editor/Editor.js` | `Échap` avec la plume. |
 | `src/editor/panels/TopPanel.js` | Le bouton de la plume reste enfoncé en édition des nœuds ; après une annulation, la plume remontre les points ; les boutons Annuler et Rétablir suivent aussi les changements de nœuds (`updateHistoryButtons`). |
 | `src/editor/svgedit.css` | Les quatre curseurs, en SVG dans la feuille de style, et les points d'une forme. |
+| `src/editor/simplification.js`, `src/editor/panels/ContextBar.js` | La Géométrie des nœuds retirée de l'inspecteur et de la barre contextuelle (§ 7). |
+| `src/editor/ConfigObj.js` | Style par défaut des formes (§ 7). |
+| `vite.config.mjs` | `npm start` sert le canevas depuis ses sources (§ 7). |
 | `src/editor/history-steps.js`, `locale/lang.*.js` | Étape « Courber le côté » (`bend_segment`). Les étapes de nœuds sont nommées d'après leur texte (« Change path Add path point »). |
 
-## 8. Limites
+## 9. Limites
 
 - **Pas de conversion de point.** `Alt` au-dessus d'un point ne le change pas en point d'angle ou point lisse (outil Conversion de point d'ancrage d'Illustrator).
 - **Pas de contour du chemin survolé.** Illustrator surligne le chemin sous la plume dans la couleur du calque ; ici seuls les points s'affichent.
 - **Un glisser depuis un point** ne déplace pas ce point : il le supprime au relâchement. Pour déplacer un point, `Ctrl`+glisser.
 - **Un objet dans un groupe fermé** n'est pas concerné : on ouvre d'abord le groupe, comme pour le sélectionner seul.
 
-## 9. Vérifications
+## 10. Vérifications
 
 - Unitaires, `tests/unit/path-points.test.js`, 6 tests de plus :
   - droite, quadratique et arc rendus cubiques ;
@@ -130,11 +148,12 @@ Avec la plume, une annulation ou un rétablissement remontre les points de l'obj
   - poids des poignées ;
   - bouts du segment.
 - Unitaire, `tests/unit/history-v5.test.js` : noms des étapes de nœuds, et d'une forme convertie puis courbée.
-- Bout en bout, `tests/e2e/plume-illustrator.spec.js`, 11 tests :
+- Bout en bout, `tests/e2e/plume-illustrator.spec.js`, 12 tests :
   - plume choisie sur un chemin ;
   - curseurs avec et sans `Alt` ;
   - ajout et suppression, puis annulation qui garde la plume ;
   - courbure en une étape ;
+  - `Alt`+clic : segment courbe, tracé gardé, deux poignées ;
   - `Échap` pendant la courbure ;
   - nouveau tracé et `Échap` ;
   - extrémité prolongée ;
