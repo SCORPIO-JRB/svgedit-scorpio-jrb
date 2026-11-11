@@ -16,6 +16,8 @@ import { visitAndApproveStorage } from './helpers.js'
 //   opens, moves, resizes, rotates, groups, undoes and saves as before.
 // - The behaviour S2 corrected (objects styled by a class, X Y W H of a
 //   polygon) was recorded before it; S2 turned these tests round.
+// - The grips of a text set its box since the lot texte-masquer: the
+//   resize step measures the frame of the selection, not the glyphs.
 
 const DIR = path.join(process.cwd(), 'tests/fixtures/simplification')
 const read = (name) => fs.readFileSync(path.join(DIR, name), 'utf8')
@@ -173,7 +175,9 @@ test.describe('Simplification net (S0)', () => {
       await select(page, [id])
       await page.evaluate(() => window.svgEditor.svgCanvas.moveSelectedElements(15, 10))
       await nextFrame(page)
-      const width = () => page.evaluate((id) => document.getElementById(id).getBoundingClientRect().width, id)
+      // The frame of the selection: the grips of a text set its box, not its
+      // glyphs (docs/texte-masquer.md).
+      const width = () => page.evaluate((id) => window.svgEditor.svgCanvas.getSelectionBox([document.getElementById(id)]).width, id)
       const widthBefore = await width()
       const grip = await page.locator('#selectorGrip_resize_se').boundingBox()
       await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)

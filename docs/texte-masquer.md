@@ -79,3 +79,8 @@ La barre contextuelle avait en plus sa propre commande « Masquer », enregistr�
   - la poignée du haut d'un rectangle ;
   - l'œil de l'Apparence et `Ctrl`+`Maj`+`H` ;
   - la barre d'un groupe et l'onglet Calques.
+- **Tests mis à jour** pour le nouveau comportement :
+  - `gtb-v7` : après `Ctrl`+`Maj`+`H`, l'objet masqué reste sélectionné ;
+  - `selection-m2` : le coin d'un texte lui donne une taille fixe, sa police ne change pas ;
+  - `simplification-s0` : l'étape « redimensionné » mesure le cadre de la sélection, plus les glyphes, puisque la poignée d'un texte règle sa boîte.
+- **Suite E2E complète** : 664 tests passent. Les 6 échecs restants étaient ces anciennes attentes ; une fois mises à jour, les spécifications touchées passent (83 tests).

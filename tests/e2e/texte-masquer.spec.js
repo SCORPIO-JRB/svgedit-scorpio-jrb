@@ -150,9 +150,11 @@ test.describe('Grips of a text and the eye of Appearance, as in Figma', () => {
     await page.keyboard.press('Control+Shift+H')
     expect(await attr(page, 'r1', 'display')).toBeNull()
     expect(await steps(page)).toBe(4)
-    await undo(page)
+    // Ctrl+Z hides it again and selects it, its eye showing « Show ».
+    await page.keyboard.press('ControlOrMeta+z')
     expect(await attr(page, 'r1', 'display')).toBe('none')
     expect(await selected(page)).toEqual(['r1'])
+    await expect(eye).toHaveAttribute('aria-label', 'Show')
   })
 
   test('the bar of a group says Show once it is hidden; the Layers tab hides without deselecting', async ({ page }) => {
