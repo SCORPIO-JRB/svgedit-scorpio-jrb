@@ -20,6 +20,7 @@ import { ChangeElementCommand, InsertElementCommand } from './history.js'
 import { getStrokeAlign } from './stroke-align.js'
 import { getTextSource, getLineHeight, getTextWidth, getTextHeight, getTextVerticalAlign } from './text-lines.js'
 import { readStyleRules, findStyleSource, getStyledValue } from './style-rules.js'
+import { fitPageBackground } from './page-background.js'
 
 let svgCanvas = null
 
@@ -295,6 +296,8 @@ const setResolutionMethod = (x, y) => {
     svgCanvas.contentH = newH
     svgContent.setAttribute('viewBox', [0, 0, newW, newH].join(' '))
     batchCmd.addSubCommand(new ChangeElementCommand(svgContent, { width: w, height: h, viewBox: oldViewBox }))
+    // The background of the page follows it (lot Fond).
+    fitPageBackground(batchCmd, newW, newH)
 
     svgCanvas.addCommandToHistory(batchCmd)
     svgCanvas.call('changed', [svgContent])

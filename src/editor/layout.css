@@ -930,6 +930,15 @@
   flex-wrap: wrap;
 }
 
+/* The background of the page (lot Fond): its caption, then the colour and
+   + or −, as the paint of Fill. */
+.se-layout-canvas .se-inspector .se-doc-background {
+  display: grid;
+  flex-basis: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 2px;
+}
+
 .se-layout-canvas .se-section-links {
   display: flex;
   flex-basis: 100%;

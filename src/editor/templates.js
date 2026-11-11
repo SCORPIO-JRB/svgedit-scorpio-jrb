@@ -61,7 +61,7 @@ export const DEFAULT_TEMPLATES = [
     height: 1080,
     layers: [
       // The background of the synoptics of the corpus (Nuit 70)
-      { name: 'templates.layer_background', locked: true, content: '<rect x="0" y="0" width="1920" height="1080" fill="#160F23"/>' },
+      { name: 'templates.layer_background', locked: true, content: '<rect x="0" y="0" width="1920" height="1080" fill="#160F23" data-se-background="true"/>' },
       { name: 'templates.layer_networks' },
       { name: 'templates.layer_equipment' },
       { name: 'templates.layer_values' }

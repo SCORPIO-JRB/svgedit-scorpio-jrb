@@ -447,7 +447,11 @@ export class PaintPicker {
     if (this.$popover.opened) this.$popover.close()
     this.target = target
     this.type = target.getAttribute('type') === 'stroke' ? 'stroke' : 'fill'
-    this.$title.textContent = this.t(this.type === 'stroke' ? 'color.title_stroke' : 'color.title_fill')
+    // A field may name the window, and take solid colours only: the
+    // background of the page (lot Fond).
+    this.$title.textContent = this.t(target.dataset.title ?? (this.type === 'stroke' ? 'color.title_stroke' : 'color.title_fill'))
+    this.solidOnly = target.hasAttribute('data-solid')
+    this.$segments.closest('.se-paint-row').style.display = this.solidOnly ? 'none' : ''
     this.read()
     this.selectTab('custom')
     this.renderSwatches()
@@ -826,7 +830,7 @@ export class PaintPicker {
    * @returns {void}
    */
   setMode (mode) {
-    if (mode === this.mode) return
+    if (mode === this.mode || (mode === 'gradient' && this.solidOnly)) return
     if (mode === 'gradient') {
       // From the colour: opaque to transparent, left to right.
       const color = toHex(this.rgb)

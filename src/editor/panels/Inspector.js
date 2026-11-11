@@ -54,8 +54,27 @@ import { RETIRED_CONTROLS, SHOWN_SHORTCUTS } from '../simplification.js'
 import { scrubInput, SCRUBBING_CLASS } from '../components/scrub.js'
 import { shapesOf, styledAttribute, commonValueOf } from './panelValues.js'
 import { firstFamily, numericWeight, DEFAULT_TEXT_STYLES } from './TextStyles.js'
+import { parseColor, toHex } from '../color/color.js'
 
-const { isValidUnit } = SvgCanvas
+const { isValidUnit, Paint } = SvgCanvas
+
+/**
+ * The modes where nothing is drawn with the paint of the inspector: without
+ * a selection, Appearance, Fill and Stroke do not show there (lot Fond). In
+ * the other modes, a drawing tool, they give the paint of the next shape.
+ */
+export const UNPAINTED_MODES = new Set(['select', 'multiselect', 'zoom', 'ext-panning', 'frame', 'image', 'connector', 'pathedit', 'textedit', 'resize', 'rotate'])
+
+/**
+ * The paint the field of the background shows.
+ * @param {{color: string, opacity: number}|null} background
+ * @returns {object} A Paint: the colour without #, or none
+ */
+export const backgroundPaint = (background) => {
+  const rgb = background ? parseColor(background.color) : null
+  if (!rgb) return new Paint({ solidColor: 'none' })
+  return new Paint({ solidColor: toHex(rgb), alpha: Math.round((background.opacity ?? 1) * 100) })
+}
 
 export const SECTIONS = ['actions', 'geometry', 'size', 'symbol', 'connector', 'appearance', 'text', 'fill', 'stroke', 'effects', 'identity', 'extensions', 'frame', 'layer', 'document', 'frames']
 
@@ -331,6 +350,9 @@ export class Inspector {
       if (records.some((record) => record.type === 'attributes')) this.refreshSections()
     })
     this.observer.observe(this.root, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'hidden'] })
+    // A drawing tool chosen without a selection shows the paint of the next
+    // shape; the selection tool hides it.
+    document.addEventListener('modeChange', () => this.refreshSections())
   }
 
   /**
@@ -1248,6 +1270,14 @@ export class Inspector {
       <label class="se-field se-field-wide">${t('layout.doc_title')}<input type="text" id="se-doc-title"></label>
       <label class="se-field se-field-short"><span class="se-field-letter">${t('properties.w_label')}</span><input type="text" id="se-doc-width" inputmode="decimal" size="5"></label>
       <label class="se-field se-field-short"><span class="se-field-letter">${t('properties.h_label')}</span><input type="text" id="se-doc-height" inputmode="decimal" size="5"></label>
+      <div class="se-doc-background se-captioned">
+        <span class="se-caption" id="se-doc-background-label">${t('layout.page_background')}</span>
+        <div class="se-paint-row">
+          <se-colorpicker id="se-doc-background" type="background" src="fill.svg" label="layout.page_background"
+            data-title="layout.page_background" data-solid editable></se-colorpicker>
+          <button type="button" class="se-paint-icon se-section-tool se-paint-toggle" id="se-doc-background-toggle"></button>
+        </div>
+      </div>
       <label class="se-check"><input type="checkbox" id="se-doc-grid">${t('layout.grid')}</label>
       <label class="se-check"><input type="checkbox" id="se-doc-gridsnap">${t('layout.grid_snapping')}</label>
       <label class="se-check"><input type="checkbox" id="se-doc-objectsnap">${t('layout.object_snapping')}</label>
@@ -1294,6 +1324,7 @@ export class Inspector {
       editor.configObj.pref('img_save', e.target.value)
       editor.$container.querySelector('#se-img-prop')?.setAttribute('save', e.target.value)
     })
+    this.buildBackground(body)
     field('se-doc-grid').addEventListener('change', (e) => editor.grid?.setVisible(e.target.checked))
     const snapping = (key) => (e) => editor.setConfig({ [key]: e.target.checked })
     field('se-doc-gridsnap').addEventListener('change', snapping('gridSnapping'))
@@ -1397,6 +1428,64 @@ export class Inspector {
   }
 
   /**
+   * The background of the page, as in the Page section of Figma (lot Fond):
+   * a colour and its opacity, typed or chosen in the colour window, + to
+   * give one, − to remove it. It is a rectangle in a locked layer under the
+   * others, in the file (canvas: page-background.js).
+   * @param {HTMLElement} body
+   * @returns {void}
+   */
+  buildBackground (body) {
+    const { editor } = this
+    const picker = body.querySelector('#se-doc-background')
+    const toggle = body.querySelector('#se-doc-background-toggle')
+    const imgPath = editor.configObj.curConfig.imgPath
+    const layerName = () => editor.i18next.t('templates.layer_background')
+    const solid = (paint) => paint?.type === 'solidColor' && paint.solidColor && paint.solidColor !== 'none'
+    const changed = () => {
+      editor.layersPanel?.populateLayers?.()
+      editor.layout?.layersChanged?.()
+      this.refreshDocument()
+    }
+    queueMicrotask(() => picker.init?.(editor.i18next))
+    picker.addEventListener('input', (e) => {
+      const paint = e.detail?.paint
+      if (solid(paint)) editor.svgCanvas.previewPageBackground(`#${paint.solidColor}`, paint.alpha / 100)
+    })
+    picker.addEventListener('change', (e) => {
+      const paint = e.detail?.paint
+      editor.svgCanvas.setPageBackground(solid(paint) ? `#${paint.solidColor}` : null, (paint?.alpha ?? 100) / 100, layerName())
+      changed()
+    })
+    toggle.addEventListener('click', () => {
+      if (editor.svgCanvas.getPageBackground()) editor.svgCanvas.setPageBackground(null)
+      else editor.svgCanvas.setPageBackground(editor.configObj.curConfig.pageBackground, 1, layerName())
+      changed()
+    })
+    this.$background = { picker, toggle, imgPath }
+  }
+
+  /**
+   * @returns {void}
+   */
+  refreshBackground () {
+    const { picker, toggle, imgPath } = this.$background ?? {}
+    if (!picker) return
+    const background = this.editor.svgCanvas.getPageBackgroundColor?.() ?? null
+    const paint = backgroundPaint(background)
+    const shown = picker.paintBox?.paint
+    if (picker.paintBox && (shown?.solidColor !== paint.solidColor || shown?.alpha !== paint.alpha)) picker.setPaint(paint)
+    const key = background ? 'layout.page_background_remove' : 'layout.page_background_add'
+    if (toggle.dataset.state !== key) {
+      const label = this.editor.i18next.t(key)
+      toggle.dataset.state = key
+      toggle.title = label
+      toggle.setAttribute('aria-label', label)
+      toggle.innerHTML = `<se-icon src="${escapeHtml(imgPath)}/${background ? 'minus' : 'plus'}.svg"></se-icon>`
+    }
+  }
+
+  /**
    * @returns {void}
    */
   refreshDocument () {
@@ -1417,6 +1506,7 @@ export class Inspector {
     body.querySelector('#se-doc-gridsnap').checked = Boolean(curConfig.gridSnapping)
     body.querySelector('#se-doc-objectsnap').checked = curConfig.objectSnapping !== false
     body.querySelector('#se-doc-images').value = editor.configObj.pref('img_save') === 'ref' ? 'ref' : 'embed'
+    this.refreshBackground()
   }
 
   /**
@@ -1438,7 +1528,9 @@ export class Inspector {
       if (frame) shown = name === 'frame'
       else if (name === 'frame') shown = false
       else if (name === 'document' || name === 'frames' || name === 'layer') shown = none && Boolean(section.querySelector('.se-section-body').children.length)
-      else if (['fill', 'stroke', 'appearance'].includes(name)) shown = true
+      // Without a selection, they give the paint of the next shape: only
+      // with a drawing tool (lot Fond). The page has its background.
+      else if (['fill', 'stroke', 'appearance'].includes(name)) shown = !none || !UNPAINTED_MODES.has(this.editor.svgCanvas?.getMode?.())
       else shown = [...section.querySelector('.se-section-body').children].some(isShown)
       if (name === 'actions') {
         // The verbs are in the "…" menu: its button shows when one applies.
