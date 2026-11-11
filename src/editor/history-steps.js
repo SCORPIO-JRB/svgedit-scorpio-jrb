@@ -87,7 +87,9 @@ export const STEP_TEXTS = {
   'extend path': 'extend_path',
   'join paths': 'join_paths',
   // Lot Coins
-  'round corners': 'round_corners'
+  'round corners': 'round_corners',
+  // Lot Plume
+  'bend segment': 'bend_segment'
 }
 
 /** Names that give the number of objects. */
@@ -226,6 +228,10 @@ export const describeStep = (cmd) => {
   }
 
   if (STEP_TEXTS[lower]) return done(STEP_TEXTS[lower])
+  // A step of node editing: "Change path Add path point" (lots Chemins and
+  // Plume). The text the canvas gives follows the tag of the path.
+  const ofPath = /^change path (.+)$/.exec(lower)
+  if (ofPath && STEP_TEXTS[ofPath[1]]) return done(STEP_TEXTS[ofPath[1]])
   // "Change fill", from beginUndoableChange or a paint.
   const changeOf = /^change (\S+)$/.exec(lower)
   if (changeOf && cmd.stack) {

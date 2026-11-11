@@ -550,6 +550,11 @@ const cancelGesture = () => {
     svgCanvas.setStarted(false)
     return true
   }
+  // A click of the pen on a path (lot Plume): the path, or the shape it was.
+  if (svgCanvas.pathActions.cancelPen?.()) {
+    svgCanvas.setStarted(false)
+    return true
+  }
   const mode = svgCanvas.getCurrentMode()
   if (!['select', 'resize', 'rotate', 'multiselect'].includes(mode)) { return false }
   endSnap()
@@ -685,6 +690,10 @@ const mouseMoveEvent = (evt) => {
       // The pen shows the end of a path it would extend (lot Chemins).
       const pt = transformPoint(evt.clientX, evt.clientY, svgCanvas.getrootSctm())
       svgCanvas.pathActions.showEndAt(pt.x, pt.y)
+    }
+    // Its cursor says what a click does: delete a node, add one (lot Plume).
+    if (['path', 'pathedit'].includes(svgCanvas.getCurrentMode())) {
+      svgCanvas.pathActions.penHover?.(evt)
     }
     updateHover(evt)
     return

@@ -389,6 +389,9 @@ class TopPanel {
             segType.setAttribute('disabled', 'disabled')
           }
         }
+        // A change of the nodes is undone as any other (lot Plume): the
+        // buttons, and Ctrl+Z which runs the Undo button, stayed disabled.
+        this.updateHistoryButtons()
         return
       }
 
@@ -561,11 +564,7 @@ class TopPanel {
     // Copy and paste properties (M7)
     this.editor.updatePropertiesMenu?.()
 
-    // update history buttons
-    $id('tool_undo').disabled =
-      this.editor.svgCanvas.undoMgr.getUndoStackSize() === 0
-    $id('tool_redo').disabled =
-      this.editor.svgCanvas.undoMgr.getRedoStackSize() === 0
+    this.updateHistoryButtons()
 
     this.editor.svgCanvas.addedNew = false
 
@@ -652,6 +651,17 @@ class TopPanel {
   }
 
   /**
+   * The Undo and Redo buttons, enabled when there is a step to undo or redo.
+   * @returns {void}
+   */
+  updateHistoryButtons () {
+    $id('tool_undo').disabled =
+      this.editor.svgCanvas.undoMgr.getUndoStackSize() === 0
+    $id('tool_redo').disabled =
+      this.editor.svgCanvas.undoMgr.getRedoStackSize() === 0
+  }
+
+  /**
    * Undoes or redoes steps until `index` of them are applied (the History
    * menu of lot V5). In the canvas layout, the objects of the last step
    * undone or redone that are still in the drawing are then selected.
@@ -677,6 +687,9 @@ class TopPanel {
     if (svgCanvas.getMode() === 'textedit') {
       textActions.clear()
     }
+    // With the pen, the nodes of what the step changed are shown again, and
+    // the pen stays the tool (lot Plume).
+    if (svgCanvas.pathActions.penAfterHistory?.(stepTargets(last))) return
     if (this.editor.layout?.canvas) {
       const targets = stepTargets(last)
       if (targets.length) svgCanvas.selectElements(targets)
@@ -1573,7 +1586,15 @@ class TopPanel {
     } else {
       this.hideTool('path_node_panel')
     }
-    if (editMode) {
+    if (editMode && this.editor.svgCanvas.pathActions.isPen?.()) {
+      // The pen edits the nodes: it stays the tool pressed (lot Plume).
+      $id('tool_select').pressed = false
+      $id('tool_path').pressed = true
+      this.editor.multiselected = false
+      if (elems.length) {
+        this.editor.selectedElement = elems[0]
+      }
+    } else if (editMode) {
       // Change select icon
       $id('tool_path').pressed = false
       $id('tool_select').pressed = true

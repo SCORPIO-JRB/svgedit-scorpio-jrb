@@ -15,11 +15,11 @@ import {
 } from './math.js'
 import {
   readPath, writePath, nearestPoint, insertNode, nodeIndex, openEnds,
-  transformSubpath, joinSubpaths
+  transformSubpath, joinSubpaths, toCubic, bendCubic
 } from './path-points.js'
 import {
   assignAttributes, getElement, getRotationAngle, snapToGrid,
-  getBBox
+  getBBox, getPathDFromElement
 } from './utilities.js'
 
 let svgCanvas = null
@@ -40,6 +40,11 @@ const REACH = 6
  * the drag bends the segment: below, a hand that shakes leaves it straight.
  */
 const BEND_AFTER = 4
+/**
+ * The shapes whose nodes the pen shows before they are paths (lot Plume):
+ * the first change turns them into one.
+ */
+const PEN_SHAPES = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon'])
 
 /**
 * @function module:path-actions.init
@@ -275,6 +280,22 @@ class PathActions {
   /** Where the pen was pressed (screen units), and whether the drag bends. */
   #downAt = null
   #bending = false
+  /**
+   * The pen is the tool (lot Plume, as in Illustrator): in node editing, a
+   * click deletes a node, adds one on a side, goes on from an end, or starts
+   * a new path elsewhere; Alt bends a side.
+   */
+  #pen = false
+  /** What the click of the pen in node editing does at mouse up. */
+  #penGesture = null
+  /** A shape whose nodes the pen shows: it becomes a path at the first change. */
+  #penShape = null
+  /** That conversion, recorded with the change that follows, as one step. */
+  #conversion = null
+  #convertedFrom = null
+  /** The pointer last seen by the pen, for Alt pressed or released in place. */
+  #penPointer = null
+  #keysHeard = false
 
   /**
   * This function converts a polyline (created by the fh_path tool) into
@@ -511,7 +532,14 @@ class PathActions {
   */
   mouseDown (evt, mouseTarget, startX, startY) {
     let id
+    // A shape whose nodes the pen shows: a click on one of them, or on a
+    // side, makes it a path and works on it (lot Plume).
+    if (svgCanvas.getCurrentMode() === 'path' && this.#penShape && !svgCanvas.getDrawnPath() &&
+      this.#shapeDown(evt, mouseTarget, startX, startY)) {
+      return undefined
+    }
     if (svgCanvas.getCurrentMode() === 'path') {
+      if (this.#pen) this.#setCursor('draw')
       let mouseX = startX // Was this meant to work with the other `mouseX`? (was defined globally so adding `let` to at least avoid a global)
       let mouseY = startY // Was this meant to work with the other `mouseY`? (was defined globally so adding `let` to at least avoid a global)
 
@@ -751,7 +779,13 @@ class PathActions {
     const additive = isAdditive(evt)
     this.#added = false
     this.#rubberBase = null
-    this.#dragOrigin = [startX, startY];
+    this.#dragOrigin = [startX, startY]
+    this.#penGesture = null
+    // The pen (lot Plume): Ctrl or Cmd leave the nodes to be selected and
+    // moved as without it.
+    if (this.#pen && !evt.ctrlKey && !evt.metaKey && this.#penDown(evt, mouseTarget, startX, startY)) {
+      return undefined
+    }
 
     ({ id } = evt.target)
     let curPt
@@ -926,6 +960,11 @@ class PathActions {
       }
       return
     }
+    // Alt and the pen bend a side (lot Plume).
+    if (this.#penGesture?.kind === 'bend') {
+      this.#bendTo(mouseX, mouseY)
+      return
+    }
     // if we are dragging a point, let's move it
     if (path.dragging) {
       if (shift && this.#dragOrigin) {
@@ -1016,7 +1055,31 @@ class PathActions {
       }
     }
 
-    // Edit mode
+    // Edit mode. A shape the pen made a path at mouse down: its conversion
+    // and the change make one undo step (lot Plume).
+    if (this.#conversion) {
+      this.#withConversion(() => this.#editUp(evt))
+    } else {
+      this.#editUp(evt)
+    }
+    return undefined
+  }
+
+  /**
+   * The mouse up of node editing.
+   * @param {MouseEvent} evt
+   * @returns {void}
+   */
+  #editUp (evt) {
+    // The click of the pen (lot Plume).
+    const gesture = this.#penGesture
+    this.#penGesture = null
+    if (gesture) {
+      this.#hasMoved = false
+      if (gesture.kind === 'delete') this.#deleteNode(gesture.index)
+      else if (gesture.kind === 'bend') this.#bendEnd(gesture)
+      return
+    }
     const rubberBox = svgCanvas.getRubberBox()
     if (path.dragging) {
       const lastPt = path.cur_pt
@@ -1062,7 +1125,6 @@ class PathActions {
       pathActionsMethod.toSelectMode(evt.target)
     }
     this.#hasMoved = false
-    return undefined
   }
 
   /**
@@ -1101,6 +1163,616 @@ class PathActions {
       svgCanvas.call('selected', [elem])
       svgCanvas.addToSelection([elem], true)
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // The pen on a path or a shape (lot Plume, as in Illustrator)
+
+  /**
+   * The pen is chosen: the path selected, or the one whose nodes were being
+   * edited, goes to node editing; a shape shows the nodes it would have as a
+   * path. Elsewhere the pen draws, as before.
+   * @param {Element|null} [edited] The path whose nodes were being edited
+   * @returns {void}
+   */
+  penChosen (edited) {
+    this.#pen = true
+    this.#listenToKeys()
+    this.#dropShape()
+    const selected = svgCanvas.getSelectedElements().filter(Boolean)
+    const elem = edited ?? (selected.length === 1 ? selected[0] : null)
+    if (elem && this.#penEditable(elem)) {
+      if (elem.tagName === 'path') {
+        this.#penEdit(elem)
+      } else {
+        svgCanvas.clearSelection()
+        this.#penShape = elem
+        this.#drawShape()
+      }
+    }
+    this.#setCursor('draw')
+  }
+
+  /**
+   * Another tool than the pen.
+   * @returns {void}
+   */
+  penLeft () {
+    this.#pen = false
+    this.#penGesture = null
+    this.#dropShape()
+    this.#setCursor(null)
+  }
+
+  /**
+   * @returns {boolean} Whether the pen is the tool
+   */
+  isPen () {
+    return this.#pen
+  }
+
+  /**
+   * Ends node editing without the selection mode, for another tool, and
+   * gives the path edited (lot Plume). Going through the selection mode
+   * chose the Select tool back, over the one clicked.
+   * @returns {SVGPathElement|null}
+   */
+  endNodeEditing () {
+    if (svgCanvas.getCurrentMode() !== 'pathedit' || !path) return null
+    path.setPathContext()
+    path.show(false)
+    if (path.matrix) svgCanvas.recalcRotatedPath()
+    this.#currentPath = false
+    return path.elem?.isConnected ? path.elem : null
+  }
+
+  /**
+   * Escape with the pen: node editing ends, or the nodes of a shape go away;
+   * the pen stays the tool (lot Plume).
+   * @returns {boolean} Whether there was something to leave
+   */
+  leaveNodes () {
+    if (!this.#pen) return false
+    if (svgCanvas.getCurrentMode() === 'pathedit') {
+      this.#leaveNodes()
+      return true
+    }
+    if (this.#penShape) {
+      this.#dropShape()
+      return true
+    }
+    return false
+  }
+
+  /**
+   * Undo or redo: the nodes of a shape are no longer shown, as the step may
+   * change or remove it (lot Plume).
+   * @returns {void}
+   */
+  dropPenShape () {
+    this.#dropShape()
+  }
+
+  /**
+   * After an undo or redo with the pen: the nodes of the path or shape the
+   * step changed are shown again, the pen still the tool (lot Plume).
+   * @param {Element[]} targets The elements of the step
+   * @returns {boolean} Whether the pen is the tool
+   */
+  penAfterHistory (targets) {
+    if (!this.#pen) return false
+    if (svgCanvas.getCurrentMode() === 'pathedit') this.endNodeEditing()
+    svgCanvas.setCurrentMode('path')
+    this.#dropShape()
+    const elem = targets.length === 1 ? targets[0] : null
+    if (elem && this.#penEditable(elem)) {
+      if (elem.tagName === 'path') {
+        this.#penEdit(elem)
+      } else {
+        svgCanvas.clearSelection()
+        this.#penShape = elem
+        this.#drawShape()
+      }
+    } else {
+      svgCanvas.clearSelection()
+    }
+    this.#setCursor('draw')
+    return true
+  }
+
+  /**
+   * Shows with the cursor what a click of the pen does there (lot Plume): a
+   * minus on a node, a plus on a side, the bend of the side with Alt.
+   * @param {MouseEvent|object} evt
+   * @returns {void}
+   */
+  penHover (evt) {
+    if (!this.#pen) return
+    const { clientX, clientY, target, ctrlKey, metaKey } = evt
+    this.#penPointer = { clientX, clientY, target, ctrlKey, metaKey }
+    let kind = 'draw'
+    if (svgCanvas.getCurrentMode() === 'pathedit' && (ctrlKey || metaKey)) {
+      // Ctrl or Cmd: the nodes are selected and moved as without the pen.
+      kind = 'handle'
+    } else {
+      const hit = this.#penHit(evt)
+      if (hit?.kind === 'node') kind = 'remove'
+      else if (hit?.kind === 'side') kind = evt.altKey ? 'bend' : 'add'
+      else if (hit?.kind === 'handle') kind = 'handle'
+    }
+    this.#setCursor(kind)
+  }
+
+  /**
+   * Escape during a click of the pen: the path as it was, and a shape made a
+   * path for the click a shape again (lot Plume).
+   * @returns {boolean} Whether there was such a click
+   */
+  cancelPen () {
+    if (!this.#pen || svgCanvas.getCurrentMode() !== 'pathedit' || !path) return false
+    const gesture = this.#penGesture
+    if (!gesture && !this.#added) return false
+    this.#penGesture = null
+    if (gesture?.kind !== 'delete') {
+      path.dragging = false
+      this.#added = false
+      path.elem.setAttribute('d', path.last_d)
+      path.init().update()
+    }
+    this.#hasMoved = false
+    const conversion = this.#conversion
+    if (conversion) {
+      const shape = this.#convertedFrom
+      this.#conversion = null
+      this.#convertedFrom = null
+      const { id } = path.elem
+      this.#leaveNodes()
+      conversion.unapply()
+      svgCanvas.removePath_(id)
+      if (shape?.isConnected) {
+        this.#penShape = shape
+        this.#drawShape()
+      }
+    }
+    return true
+  }
+
+  /**
+   * The path whose last segment the pen deleted goes, in the same undo step
+   * as its nodes; the pen stays the tool (lot Plume).
+   * @returns {void}
+   */
+  removeEditedPath () {
+    const { elem } = path
+    const batch = new BatchCommand('Delete path node(s)')
+    batch.addSubCommand(new ChangeElementCommand(elem, { d: path.last_d }))
+    path.show(false)
+    const { nextSibling, parentNode } = elem
+    svgCanvas.removePath_(elem.id)
+    elem.remove()
+    batch.addSubCommand(new RemoveElementCommand(elem, nextSibling, parentNode))
+    this.#currentPath = false
+    svgCanvas.setCurrentMode('path')
+    svgCanvas.clearSelection()
+    this.#setCursor('draw')
+    svgCanvas.addCommandToHistory(batch)
+    svgCanvas.call('changed', [elem])
+  }
+
+  /**
+   * Whether the pen shows the nodes of an element when chosen with it.
+   * @param {Element} elem
+   * @returns {boolean}
+   */
+  #penEditable (elem) {
+    if (!elem?.isConnected || elem.getAttribute('display') === 'none') return false
+    if (svgCanvas.isLocked?.(elem) || elem.hasAttributeNS(NS.SE, 'connector')) return false
+    return elem.tagName === 'path' || PEN_SHAPES.has(elem.tagName)
+  }
+
+  /**
+   * Node editing of a path with the pen, no node selected: a click works on
+   * the node or side under it.
+   * @param {SVGPathElement} elem
+   * @returns {void}
+   */
+  #penEdit (elem) {
+    svgCanvas.removePath_(elem.id)
+    this.toEditMode(elem)
+    path.clearSelection()
+    path.addPtsToSelection([])
+  }
+
+  /**
+   * Node editing ends, the pen ready for a new path.
+   * @returns {void}
+   */
+  #leaveNodes () {
+    this.endNodeEditing()
+    svgCanvas.setCurrentMode('path')
+    svgCanvas.clearSelection()
+    this.#setCursor('draw')
+  }
+
+  /**
+   * Alt pressed or released with the pointer still: the cursor follows.
+   * @returns {void}
+   */
+  #listenToKeys () {
+    if (this.#keysHeard) return
+    this.#keysHeard = true
+    const onKey = (e) => {
+      // Escape with Alt still held during a bend: the editor hears Alt+Escape,
+      // a key of no command.
+      if (e.key === 'Escape' && e.type === 'keydown' && this.#penGesture && svgCanvas.getStarted()) {
+        svgCanvas.cancelGesture?.()
+        return
+      }
+      if (e.key !== 'Alt' || !this.#pen || !this.#penPointer || svgCanvas.getStarted()) return
+      this.penHover({ ...this.#penPointer, altKey: e.type === 'keydown' })
+    }
+    globalThis.addEventListener?.('keydown', onKey)
+    globalThis.addEventListener?.('keyup', onKey)
+  }
+
+  /**
+   * The cursor of the pen, drawn by the editor's style sheet.
+   * @param {'draw'|'add'|'remove'|'bend'|'handle'|null} kind
+   * @returns {void}
+   */
+  #setCursor (kind) {
+    const container = svgCanvas.getContainer?.()
+    if (!container?.dataset) return
+    if (kind) container.dataset.pen = kind
+    else delete container.dataset.pen
+  }
+
+  /**
+   * The point of the drawing under the pointer.
+   * @param {MouseEvent|object} evt
+   * @returns {{x: Float, y: Float}|null}
+   */
+  #userPoint (evt) {
+    const m = getElement('svgcontent')?.querySelector('g')?.getScreenCTM?.()
+    return m ? transformPoint(evt.clientX, evt.clientY, m.inverse()) : null
+  }
+
+  /**
+   * What the pen is over: a node of the path in node editing, or of the
+   * shape shown, an end of an open one, a handle, or a side.
+   * @param {MouseEvent|object} evt
+   * @returns {{kind: 'node'|'end'|'handle'|'side', index?: Integer, x: Float, y: Float}|null}
+   */
+  #penHit (evt) {
+    if (svgCanvas.getDrawnPath()) return null
+    const pt = this.#userPoint(evt)
+    if (!pt) return null
+    // The handle of a corner (lot Coins) rounds it, as without the pen.
+    if (evt.target?.closest?.('#selectorCornerGrips')) return { kind: 'handle', x: pt.x, y: pt.y }
+    const mode = svgCanvas.getCurrentMode()
+    if (mode === 'pathedit') {
+      if (!path?.elem?.isConnected) return null
+      const id = evt.target?.id ?? ''
+      if (id.startsWith('ctrlpointgrip_')) return { kind: 'handle', x: pt.x, y: pt.y }
+      const index = id.startsWith('pathpointgrip_') ? Number(id.slice(14)) : this.#gripAt(pt)
+      const seg = index === null ? null : path.segs[index]
+      if (seg?.ptgrip) return { kind: seg.prev && seg.next ? 'node' : 'end', index, x: pt.x, y: pt.y }
+      return this.#outlineAt(path.elem, pt.x, pt.y) ? { kind: 'side', x: pt.x, y: pt.y } : null
+    }
+    if (mode === 'path' && this.#penShape) {
+      if (!this.#penShape.isConnected) {
+        this.#dropShape()
+        return null
+      }
+      const node = this.#shapeNodeAt(pt)
+      if (node) return { kind: node.end ? 'end' : 'node', x: pt.x, y: pt.y }
+      const d = getPathDFromElement(this.#penShape)
+      return d && this.#outlineAt(this.#penShape, pt.x, pt.y, d) ? { kind: 'side', x: pt.x, y: pt.y } : null
+    }
+    return null
+  }
+
+  /**
+   * The node of the path in node editing within reach of a point.
+   * @param {{x: Float, y: Float}} pt In user units of the drawing
+   * @returns {Integer|null}
+   */
+  #gripAt (pt) {
+    const zoom = svgCanvas.getZoom()
+    let best = null
+    path.segs.forEach((seg, i) => {
+      if (!seg.ptgrip || seg.ptgrip.getAttribute('display') === 'none') return
+      const g = svgCanvas.getGripPt(seg)
+      const distance = Math.hypot(g.x - pt.x * zoom, g.y - pt.y * zoom)
+      if (distance <= REACH + 2 && (!best || distance < best.distance)) best = { i, distance }
+    })
+    return best?.i ?? null
+  }
+
+  /**
+   * The nodes the shape shown would have as a path, in user units.
+   * @returns {{x: Float, y: Float, end: boolean}[]}
+   */
+  #shapeNodes () {
+    const elem = this.#penShape
+    const d = elem && getPathDFromElement(elem)
+    if (!d) return []
+    const m = getMatrix(elem)
+    const nodes = []
+    for (const sub of readPath(d)) {
+      // A closed subpath ends on its start: one node there.
+      const points = sub.closed ? sub.segs : [sub, ...sub.segs]
+      points.forEach((p, i) => {
+        const end = !sub.closed && (i === 0 || i === points.length - 1)
+        nodes.push({ ...transformPoint(p.x, p.y, m), end })
+      })
+    }
+    return nodes
+  }
+
+  /**
+   * The node of the shape shown within reach of a point.
+   * @param {{x: Float, y: Float}} pt In user units of the drawing
+   * @returns {{x: Float, y: Float, end: boolean}|null}
+   */
+  #shapeNodeAt (pt) {
+    const zoom = svgCanvas.getZoom()
+    let best = null
+    for (const node of this.#shapeNodes()) {
+      const distance = Math.hypot(node.x - pt.x, node.y - pt.y) * zoom
+      if (distance <= REACH + 2 && (!best || distance < best.distance)) best = { ...node, distance }
+    }
+    return best
+  }
+
+  /**
+   * Draws the nodes of the shape shown, as those of node editing.
+   * @returns {void}
+   */
+  #drawShape () {
+    let group = getElement('pen_shape_nodes')
+    if (!this.#penShape) {
+      group?.remove()
+      return
+    }
+    if (!group) {
+      group = document.createElementNS(NS.SVG, 'g')
+      assignAttributes(group, { id: 'pen_shape_nodes', style: 'pointer-events:none' })
+      getElement('selectorParentGroup').append(group)
+    }
+    const zoom = svgCanvas.getZoom()
+    group.replaceChildren(...this.#shapeNodes().map((node) => {
+      const circle = document.createElementNS(NS.SVG, 'circle')
+      assignAttributes(circle, {
+        class: 'se-node',
+        cx: node.x * zoom,
+        cy: node.y * zoom,
+        r: 4,
+        fill: '#fff',
+        stroke: '#1e66b6',
+        'stroke-width': 1.5
+      })
+      return circle
+    }))
+  }
+
+  /**
+   * The shape no longer shows its nodes.
+   * @returns {void}
+   */
+  #dropShape () {
+    this.#penShape = null
+    getElement('pen_shape_nodes')?.remove()
+  }
+
+  /**
+   * A click of the pen on the shape shown: on a node or a side, the shape
+   * becomes a path, in node editing, and the click works on it. Elsewhere,
+   * a new path starts.
+   * @param {MouseEvent} evt
+   * @param {Element} mouseTarget
+   * @param {Float} startX
+   * @param {Float} startY
+   * @returns {boolean} Whether the click was taken
+   */
+  #shapeDown (evt, mouseTarget, startX, startY) {
+    const hit = evt.ctrlKey || evt.metaKey ? null : this.#penHit(evt)
+    const shape = this.#penShape
+    this.#dropShape()
+    if (!hit) return false
+    const converted = this.#convertShape(shape)
+    if (!converted) return false
+    svgCanvas.removePath_(converted.id)
+    this.toEditMode(converted)
+    this.mouseDown(evt, mouseTarget, startX, startY)
+    return true
+  }
+
+  /**
+   * Turns a shape into a path, the step kept until the change that follows.
+   * @param {Element} shape
+   * @returns {SVGPathElement|null}
+   */
+  #convertShape (shape) {
+    let captured = null
+    const own = Object.prototype.hasOwnProperty.call(svgCanvas, 'addCommandToHistory')
+    const add = svgCanvas.addCommandToHistory
+    let converted = null
+    svgCanvas.addCommandToHistory = (cmd) => { captured = cmd }
+    try {
+      converted = svgCanvas.convertToPath(shape)
+    } finally {
+      if (own) svgCanvas.addCommandToHistory = add
+      else delete svgCanvas.addCommandToHistory
+    }
+    if (!converted || !captured) {
+      captured?.unapply()
+      return null
+    }
+    this.#conversion = captured
+    this.#convertedFrom = shape
+    return converted
+  }
+
+  /**
+   * The conversion of a shape, recorded alone.
+   * @returns {void}
+   */
+  #flushConversion () {
+    const conversion = this.#conversion
+    this.#conversion = null
+    this.#convertedFrom = null
+    if (!conversion) return
+    svgCanvas.addCommandToHistory(conversion)
+    svgCanvas.call('changed', conversion.elements())
+  }
+
+  /**
+   * Runs a change, recorded with the conversion of the shape it works on as
+   * one undo step, named after the change.
+   * @param {() => void} fn
+   * @returns {void}
+   */
+  #withConversion (fn) {
+    const conversion = this.#conversion
+    this.#conversion = null
+    this.#convertedFrom = null
+    const steps = []
+    const own = Object.prototype.hasOwnProperty.call(svgCanvas, 'addCommandToHistory')
+    const add = svgCanvas.addCommandToHistory
+    svgCanvas.addCommandToHistory = (cmd) => { steps.push(cmd) }
+    try {
+      fn()
+    } finally {
+      if (own) svgCanvas.addCommandToHistory = add
+      else delete svgCanvas.addCommandToHistory
+    }
+    if (!steps.length) {
+      svgCanvas.addCommandToHistory(conversion)
+      svgCanvas.call('changed', conversion.elements())
+      return
+    }
+    const batch = new BatchCommand(steps.at(-1).getText())
+    batch.addSubCommand(conversion)
+    steps.forEach((cmd) => batch.addSubCommand(cmd))
+    svgCanvas.addCommandToHistory(batch)
+    // The editor learns of the step: the change was told before it was in
+    // the history.
+    svgCanvas.call('changed', batch.elements())
+  }
+
+  /**
+   * A click of the pen in node editing: a node is deleted at mouse up, a
+   * side gets a node (that a drag moves) or, with Alt, bends; an end goes
+   * on; elsewhere a new path starts.
+   * @param {MouseEvent} evt
+   * @param {Element} mouseTarget
+   * @param {Float} startX
+   * @param {Float} startY
+   * @returns {boolean} Whether the pen took the click
+   */
+  #penDown (evt, mouseTarget, startX, startY) {
+    const hit = this.#penHit(evt)
+    switch (hit?.kind) {
+      case 'handle':
+        return false
+      case 'node':
+        this.#penGesture = { kind: 'delete', index: hit.index }
+        return true
+      case 'side': {
+        if (evt.altKey) {
+          if (!this.#bendStart(hit, startX, startY)) this.#penGesture = { kind: 'none' }
+          return true
+        }
+        const index = this.addPointAt(hit.x, hit.y, { record: false })
+        if (index === null) {
+          this.#penGesture = { kind: 'none' }
+          return true
+        }
+        this.#added = true
+        path.cur_pt = index
+        path.dragging = [startX, startY]
+        return true
+      }
+      default:
+        // An end goes on, as the pen extends a path; elsewhere, a new path.
+        // A shape made a path for the click stays one, a step of its own.
+        this.#flushConversion()
+        this.#leaveNodes()
+        this.mouseDown(evt, mouseTarget, startX, startY)
+        return true
+    }
+  }
+
+  /**
+   * Deletes a node clicked with the pen.
+   * @param {Integer} index
+   * @returns {void}
+   */
+  #deleteNode (index) {
+    if (!path?.segs[index]) return
+    path.clearSelection()
+    path.addPtsToSelection(index)
+    this.deletePathNode()
+  }
+
+  /**
+   * Alt and the pen on a side: the side becomes a cubic curve, which the
+   * drag bends through the pointer.
+   * @param {{x: Float, y: Float}} hit In user units of the drawing
+   * @param {Float} startX In screen units
+   * @param {Float} startY
+   * @returns {boolean} False when the point is not on the outline
+   */
+  #bendStart (hit, startX, startY) {
+    const { elem } = path
+    const found = this.#outlineAt(elem, hit.x, hit.y)
+    if (!found) return false
+    const { subpaths, hit: at } = found
+    const sub = subpaths[at.sub]
+    const p0 = at.seg ? sub.segs[at.seg - 1] : sub
+    const cubic = toCubic(p0, sub.segs[at.seg])
+    sub.segs[at.seg] = cubic
+    elem.setAttribute('d', writePath(subpaths, shortFloat))
+    const index = nodeIndex(subpaths, at.sub, at.seg)
+    path.init().update()
+    if (path.segs[index]?.ptgrip) path.addPtsToSelection(index)
+    const im = getMatrix(elem).inverse()
+    const zoom = svgCanvas.getZoom()
+    const from = transformPoint(startX / zoom, startY / zoom, im)
+    this.#penGesture = { kind: 'bend', subpaths, sub: at.sub, seg: at.seg, t: at.t, p0, cubic, im, from, index, moved: false }
+    return true
+  }
+
+  /**
+   * The side bent through the pointer.
+   * @param {Float} mouseX In screen units
+   * @param {Float} mouseY
+   * @returns {void}
+   */
+  #bendTo (mouseX, mouseY) {
+    const g = this.#penGesture
+    const zoom = svgCanvas.getZoom()
+    const p = transformPoint(mouseX / zoom, mouseY / zoom, g.im)
+    g.subpaths[g.sub].segs[g.seg] = bendCubic(g.p0, g.cubic, g.t, p.x - g.from.x, p.y - g.from.y)
+    path.elem.setAttribute('d', writePath(g.subpaths, shortFloat))
+    path.init().update()
+    if (path.segs[g.index]?.ptgrip) path.addPtsToSelection(g.index)
+    g.moved = true
+  }
+
+  /**
+   * The end of the bend: one undo step, or the side as it was when the
+   * click did not drag.
+   * @param {object} g
+   * @returns {void}
+   */
+  #bendEnd (g) {
+    if (!g.moved) path.elem.setAttribute('d', path.last_d)
+    path.init().update()
+    if (!g.moved) return
+    if (path.segs[g.index]?.ptgrip) path.addPtsToSelection(g.index)
+    path.endChanges('Bend segment')
   }
 
   /**
@@ -1191,7 +1863,10 @@ class PathActions {
       svgCanvas.setDrawnPath(null)
       svgCanvas.setStarted(false)
     } else if (svgCanvas.getCurrentMode() === 'pathedit') {
-      this.toSelectMode()
+      // With the pen, node editing ends and the pen stays the tool, after an
+      // undo too (lot Plume).
+      if (this.#pen) this.#leaveNodes()
+      else this.toSelectMode()
     }
     if (path) { path.init().show(false) }
   }
@@ -1329,6 +2004,8 @@ class PathActions {
     if (svgCanvas.getCurrentMode() === 'pathedit') {
       path.update()
     }
+    // The nodes of a shape the pen shows (lot Plume).
+    if (this.#penShape) this.#drawShape()
   }
 
   /**
@@ -1392,12 +2069,13 @@ class PathActions {
    * @param {SVGPathElement} elem
    * @param {Float} x In user units of the drawing
    * @param {Float} y
+   * @param {string} [d] Its outline, for a shape that is not yet a path
    * @returns {{subpaths: object[], hit: object}|null}
    */
-  #outlineAt (elem, x, y) {
+  #outlineAt (elem, x, y, d = elem.getAttribute('d')) {
     const m = getMatrix(elem)
     const local = transformPoint(x, y, m.inverse())
-    const subpaths = readPath(elem.getAttribute('d'))
+    const subpaths = readPath(d)
     const hit = nearestPoint(subpaths, local)
     if (!hit) return null
     const onCanvas = transformPoint(hit.x, hit.y, m)
@@ -1640,6 +2318,11 @@ class PathActions {
 
     // Completely delete a path with 1 or 0 segments
     if (path.elem.pathSegList.numberOfItems <= 1) {
+      // The pen stays the tool, ready for the next path (lot Plume).
+      if (pathActionsMethod.isPen()) {
+        pathActionsMethod.removeEditedPath()
+        return
+      }
       pathActionsMethod.toSelectMode(path.elem)
       svgCanvas.canvas.deleteSelectedElements()
       return

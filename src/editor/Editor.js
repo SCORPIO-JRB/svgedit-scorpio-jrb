@@ -521,6 +521,10 @@ class Editor extends EditorStartup {
           if (this.svgCanvas.cancelGesture?.()) { return }
           if (!this.enableToolCancel) { return }
           const mode = this.svgCanvas.getMode()
+          // With the pen, node editing ends and the pen stays (lot Plume).
+          if (['path', 'pathedit'].includes(mode) && this.svgCanvas.pathActions.leaveNodes?.()) {
+            return
+          }
           if (mode === 'pathedit') {
             this.svgCanvas.pathActions.toSelectMode()
             return

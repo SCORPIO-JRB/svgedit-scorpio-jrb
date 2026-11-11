@@ -845,6 +845,7 @@ export default {
     extend_path: 'Extend the path',
     join_paths: 'Join the paths',
     round_corners: 'Round the corners',
+    bend_segment: 'Bend the side',
     layer_create: 'Create a layer',
     layer_delete: 'Delete the layer',
     layer_duplicate: 'Duplicate the layer',
