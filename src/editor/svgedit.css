@@ -624,3 +624,12 @@ input[type=text] {
 #se-connector-overlay .se-elbow-h {
   cursor: ns-resize;
 }
+
+/* Lot Valeurs glissées: while a value is dragged on the icon of its field,
+   the pointer shows ↔ wherever it goes, and nothing gets selected. */
+html.se-scrubbing,
+html.se-scrubbing * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}

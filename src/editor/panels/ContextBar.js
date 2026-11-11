@@ -707,7 +707,8 @@ export class ContextBar {
     field.dataset.entry = `field:${id}`
     field.dataset.original = id
     for (const name of ['min', 'max', 'step', 'src', 'title']) {
-      const value = original.getAttribute(name)
+      // The title of a field became its tooltip (controlTitle keeps it).
+      const value = name === 'title' ? controlTitle(original) : original.getAttribute(name)
       if (value !== null) field.setAttribute(name, value)
     }
     if (id === 'stroke_width' && !field.hasAttribute('src')) field.setAttribute('src', 'stroke.svg')

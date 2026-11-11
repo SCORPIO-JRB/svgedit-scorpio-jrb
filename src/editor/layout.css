@@ -3049,3 +3049,23 @@
 .se-layout-canvas .se-inspector .se-rule-note::before {
   content: "← ";
 }
+
+/* Lot Valeurs glissées, after the fields of Figma.
+—————————————————————————————*/
+
+/* The letter of a plain field (W, H, X, Y, Opacity) drags its value. */
+.se-layout-canvas .se-field-letter.se-scrub-handle {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  margin: 0 calc(-1 * var(--se-space-1));
+  padding: 0 var(--se-space-1);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.se-layout-canvas .se-field-letter.se-scrub-handle:hover {
+  color: var(--se-text);
+}

@@ -42,6 +42,7 @@
 import SvgCanvas from '@svgedit/svgcanvas'
 import { escapeHtml } from './TopBar.js'
 import { RETIRED_CONTROLS, SHOWN_SHORTCUTS } from '../simplification.js'
+import { scrubInput } from '../components/scrub.js'
 
 const { isValidUnit } = SvgCanvas
 
@@ -718,8 +719,8 @@ export class Inspector {
     const body = this.body('document')
     body.innerHTML = `
       <label class="se-field se-field-wide">${t('layout.doc_title')}<input type="text" id="se-doc-title"></label>
-      <label class="se-field se-field-short">${t('properties.w_label')}<input type="text" id="se-doc-width" inputmode="decimal" size="5"></label>
-      <label class="se-field se-field-short">${t('properties.h_label')}<input type="text" id="se-doc-height" inputmode="decimal" size="5"></label>
+      <label class="se-field se-field-short"><span class="se-field-letter">${t('properties.w_label')}</span><input type="text" id="se-doc-width" inputmode="decimal" size="5"></label>
+      <label class="se-field se-field-short"><span class="se-field-letter">${t('properties.h_label')}</span><input type="text" id="se-doc-height" inputmode="decimal" size="5"></label>
       <label class="se-check"><input type="checkbox" id="se-doc-grid">${t('layout.grid')}</label>
       <label class="se-check"><input type="checkbox" id="se-doc-gridsnap">${t('layout.grid_snapping')}</label>
       <label class="se-check"><input type="checkbox" id="se-doc-objectsnap">${t('layout.object_snapping')}</label>
@@ -748,6 +749,10 @@ export class Inspector {
     }
     field('se-doc-width').addEventListener('change', resize)
     field('se-doc-height').addEventListener('change', resize)
+    // The letters W and H drag the size (lot Valeurs glissées).
+    for (const id of ['se-doc-width', 'se-doc-height']) {
+      scrubInput(field(id).previousElementSibling, field(id), { min: 1 })
+    }
     // The size of the content, as "Fit to content" of the dialog did.
     field('se-doc-fit').addEventListener('click', () => {
       if (!editor.svgCanvas.setResolution('fit', 'fit')) {
@@ -784,7 +789,7 @@ export class Inspector {
     const modes = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'difference']
     body.innerHTML = `
       <label class="se-field se-field-wide">${t('layers.layer')}<input type="text" id="se-layer-name"></label>
-      <label class="se-field se-field-short">${t('structure.layer_opacity')}<input type="text" id="se-layer-opacity" inputmode="decimal" size="4"></label>
+      <label class="se-field se-field-short"><span class="se-field-letter">${t('structure.layer_opacity')}</span><input type="text" id="se-layer-opacity" inputmode="decimal" size="4"></label>
       <label class="se-field se-field-short">${t('structure.blend')}<select id="se-layer-blend">${modes.map((mode) =>
         `<option value="${mode}">${t(`structure.blend_${mode}`)}</option>`).join('')}</select></label>
       <label class="se-check"><input type="checkbox" id="se-layer-visible">${t('structure.visible')}</label>
@@ -821,6 +826,10 @@ export class Inspector {
       if (value > 1 || /%/.test(e.target.value)) value /= 100
       editor.svgCanvas.setLayerStyle(layer(), { opacity: value })
       done()
+    })
+    // "Opacity" drags it, from 0 to 100 % (lot Valeurs glissées).
+    scrubInput(field('se-layer-opacity').previousElementSibling, field('se-layer-opacity'), {
+      min: 0, max: 100, format: (value) => `${value} %`
     })
     field('se-layer-blend').addEventListener('change', (e) => {
       editor.svgCanvas.setLayerStyle(layer(), { blend: e.target.value })
