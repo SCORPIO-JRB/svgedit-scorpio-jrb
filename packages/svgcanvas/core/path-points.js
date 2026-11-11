@@ -428,6 +428,94 @@ export const insertNode = (subpaths, subIndex, segIndex, t) => {
 export const endOf = (sub) => sub.segs.at(-1) ?? sub
 
 /**
+ * The same segment as a cubic Bézier curve (lot Plume): a line has its
+ * handles at a third and two thirds of it, a quadratic curve is raised to a
+ * cubic one, the same curve, and an arc becomes the cubic curve that leaves
+ * and reaches its ends along it, close to it for an arc up to a half turn.
+ * @param {{x: number, y: number}} p0 Start of the segment
+ * @param {object} seg
+ * @returns {object} A segment of type C
+ */
+export const toCubic = (p0, seg) => {
+  switch (seg.type) {
+    case 'C':
+      return { ...seg }
+    case 'Q':
+      return {
+        type: 'C',
+        x1: p0.x + (2 / 3) * (seg.x1 - p0.x),
+        y1: p0.y + (2 / 3) * (seg.y1 - p0.y),
+        x2: seg.x + (2 / 3) * (seg.x1 - seg.x),
+        y2: seg.y + (2 / 3) * (seg.y1 - seg.y),
+        x: seg.x,
+        y: seg.y
+      }
+    case 'A': {
+      const e = arcCenter(p0, seg)
+      if (!e) break
+      // Tangent of the ellipse at an angle, and the length of the handles
+      // of the unit circle for the angle swept.
+      const tangent = (a) => ({
+        x: -e.rx * Math.sin(a) * Math.cos(e.phi) - e.ry * Math.cos(a) * Math.sin(e.phi),
+        y: -e.rx * Math.sin(a) * Math.sin(e.phi) + e.ry * Math.cos(a) * Math.cos(e.phi)
+      })
+      const k = (4 / 3) * Math.tan(e.delta / 4)
+      const t0 = tangent(e.theta)
+      const t1 = tangent(e.theta + e.delta)
+      return {
+        type: 'C',
+        x1: p0.x + k * t0.x,
+        y1: p0.y + k * t0.y,
+        x2: seg.x - k * t1.x,
+        y2: seg.y - k * t1.y,
+        x: seg.x,
+        y: seg.y
+      }
+    }
+  }
+  return {
+    type: 'C',
+    x1: p0.x + (seg.x - p0.x) / 3,
+    y1: p0.y + (seg.y - p0.y) / 3,
+    x2: p0.x + (2 * (seg.x - p0.x)) / 3,
+    y2: p0.y + (2 * (seg.y - p0.y)) / 3,
+    x: seg.x,
+    y: seg.y
+  }
+}
+
+/**
+ * Bends a cubic curve so that its point at `t` moves by (dx, dy), its ends
+ * in place (lot Plume): both handles move, the nearer one more, with the
+ * weights Inkscape gives the drag of a curve. `t` is kept away from the ends,
+ * where a handle would have to go very far.
+ * @param {{x: number, y: number}} p0 Start of the segment
+ * @param {object} cubic A segment of type C
+ * @param {number} t Where the curve was taken, from 0 to 1
+ * @param {number} dx
+ * @param {number} dy
+ * @returns {object} The bent segment, of type C
+ */
+export const bendCubic = (p0, cubic, t, dx, dy) => {
+  t = Math.min(0.9, Math.max(0.1, t))
+  let weight
+  if (t <= 1 / 6) weight = 0
+  else if (t <= 0.5) weight = ((6 * t - 1) / 2) ** 3 / 2
+  else if (t <= 5 / 6) weight = (1 - ((6 * (1 - t) - 1) / 2) ** 3) / 2 + 0.5
+  else weight = 1
+  const u = 1 - t
+  const k1 = (1 - weight) / (3 * t * u * u)
+  const k2 = weight / (3 * t * t * u)
+  return {
+    ...cubic,
+    x1: cubic.x1 + k1 * dx,
+    y1: cubic.y1 + k1 * dy,
+    x2: cubic.x2 + k2 * dx,
+    y2: cubic.y2 + k2 * dy
+  }
+}
+
+/**
  * The same subpath, run from its end to its start.
  * @param {object} sub
  * @returns {object}

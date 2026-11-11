@@ -21,6 +21,7 @@ import { Templates } from './templates.js'
 import { BindingPanel, ungroupSelected } from './binding.js'
 import { Preview } from './preview.js'
 import { EditorLayout } from './layout.js'
+import { SCRUB_START, SCRUB_END } from './components/scrub.js'
 
 /**
    * @fires module:svgcanvas.SvgCanvas#event:svgEditorReady
@@ -168,6 +169,27 @@ class EditorStartup {
      * disables on dragging (mousedown) to avoid changing mode in the middle of drawing
     */
     this.enableToolCancel = true
+
+    // A value dragged on the icon of its field is one undo step, and Escape
+    // gives the value back, the selection kept (lot Valeurs glissées).
+    let scrubbed = []
+    this.$container.addEventListener(SCRUB_START, () => {
+      scrubbed = this.svgCanvas.getSelectedElements().filter(Boolean)
+      this.svgCanvas.undoMgr.beginGroup()
+    })
+    this.$container.addEventListener(SCRUB_END, (e) => {
+      const { undoMgr } = this.svgCanvas
+      const selection = scrubbed
+      scrubbed = []
+      if (!e.detail?.cancelled) {
+        undoMgr.endGroup()
+        return
+      }
+      // Undoing a step clears the selection: it is given back.
+      if (!undoMgr.cancelGroup()) return
+      const kept = selection.filter((elem) => elem.isConnected)
+      if (kept.length) this.svgCanvas.selectOnly(kept, true)
+    })
 
     this.leftPanel.init()
     this.bottomPanel.init()

@@ -4,7 +4,9 @@
  * typography window, context menu).
  *
  * - It opens under its anchor, or above it, left or right aligned, and is
- *   shifted to stay inside the window.
+ *   shifted to stay inside the window. With a "left-" placement it opens at
+ *   the left of the panel given as `beside` (or of its anchor), its top at
+ *   the top of the anchor: the windows of settings of the right panel.
  * - Escape closes it and gives the focus back to the anchor; so does a press
  *   outside it, or a click on an entry of a menu.
  * - With the `menu` attribute it is a menu: role="menu", the arrows move
@@ -85,11 +87,17 @@ const MARGIN = 8
  * @param {{left: number, top: number, right: number, bottom: number}} anchor
  * @param {{width: number, height: number}} size
  * @param {{width: number, height: number}} viewport
- * @param {string} [placement="bottom-start"] "bottom-start", "bottom-end", "top-start", "top-end"
- * @returns {{x: number, y: number, side: "top"|"bottom"}}
+ * @param {string} [placement="bottom-start"] "bottom-start", "bottom-end", "top-start", "top-end", "left-start"
+ * @returns {{x: number, y: number, side: "top"|"bottom"|"left"}}
  */
 export const placePopover = (anchor, size, viewport, placement = 'bottom-start') => {
   const [side, align] = placement.split('-')
+  if (side === 'left') {
+    const x = Math.max(MARGIN, anchor.left - GAP - size.width)
+    const top = align === 'end' ? anchor.bottom - size.height : anchor.top
+    const y = Math.max(MARGIN, Math.min(top, viewport.height - size.height - MARGIN))
+    return { x: Math.round(x), y: Math.round(y), side: 'left' }
+  }
   const below = anchor.bottom + GAP
   const above = anchor.top - GAP - size.height
   const fitsBelow = below + size.height <= viewport.height - MARGIN
@@ -156,11 +164,13 @@ export class SePopover extends HTMLElement {
 
   /**
    * @param {Element} anchor
-   * @param {{placement?: string, focus?: boolean}} [options]
+   * @param {{placement?: string, focus?: boolean, beside?: Element}} [options]
+   *   `beside`: the panel at the left of which a "left-" placement opens
    * @returns {void}
    */
-  open (anchor, { placement = this.getAttribute('placement') || 'bottom-start', focus = true } = {}) {
+  open (anchor, { placement = this.getAttribute('placement') || 'bottom-start', focus = true, beside = null } = {}) {
     this.anchor = anchor
+    this.beside = beside
     this.setAttribute('open', '')
     anchor?.setAttribute?.('aria-expanded', 'true')
     this.position(placement)
@@ -179,7 +189,11 @@ export class SePopover extends HTMLElement {
    */
   position (placement = this.getAttribute('placement') || 'bottom-start') {
     if (!this.anchor) return
-    const anchor = this.anchor.getBoundingClientRect()
+    let anchor = this.anchor.getBoundingClientRect()
+    if (this.beside && placement.startsWith('left')) {
+      const panel = this.beside.getBoundingClientRect()
+      anchor = { left: panel.left, right: panel.right, top: anchor.top, bottom: anchor.bottom }
+    }
     const own = this.getBoundingClientRect()
     const { x, y, side } = placePopover(anchor, own, { width: window.innerWidth, height: window.innerHeight }, placement)
     this.style.transform = `translate(${x}px, ${y}px)`

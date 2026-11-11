@@ -40,7 +40,7 @@ const SHAPES = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygo
 const CONTAINERS = new Set(['g', 'a', 'switch'])
 const ANCHORS = ['start', 'middle', 'end']
 /** Buttons of the inspector that stay pressed while their state holds. */
-const TOGGLES = new Set(['tool_bold', 'tool_italic', 'tool_text_decoration_underline', 'tool_node_link'])
+const TOGGLES = new Set(['tool_bold', 'tool_italic', 'tool_text_decoration_underline'])
 
 /**
  * What the selection is, for the content of the bar.
@@ -91,8 +91,9 @@ export const barEntries = (kind, elem) => {
     case 'path':
       return ['command:edit_nodes', 'paint:fill', 'paint:stroke', 'field:stroke_width', 'sep', 'verb:tool_flip_h', 'more']
     case 'nodes':
-      return ['verb:tool_node_link', 'list:seg_type', 'verb:tool_node_clone', 'verb:tool_node_delete',
-        'verb:tool_openclose_path', 'verb:tool_add_subpath']
+      // The commands of the nodes left the inspector with its Geometry
+      // section: the pen and the keys act on the nodes.
+      return []
     case 'group':
       return ['command:open_group', 'text:tool_ungroup', 'command:select_group_children', 'paint:fill', 'paint:stroke',
         'sep', 'command:hide_selection', 'more']
@@ -556,6 +557,8 @@ export class ContextBar {
     const top = this.editor.$svgEditor.querySelector('#tools_top')
     for (let node = el; node && node !== top && node !== document.body; node = node.parentElement) {
       if (node.classList?.contains('se-section')) break
+      // Folded settings (More options, the settings of the stroke) apply.
+      if (node.classList?.contains('se-more-body')) continue
       if (!isShown(node)) return false
     }
     return true
@@ -704,7 +707,8 @@ export class ContextBar {
     field.dataset.entry = `field:${id}`
     field.dataset.original = id
     for (const name of ['min', 'max', 'step', 'src', 'title']) {
-      const value = original.getAttribute(name)
+      // The title of a field became its tooltip (controlTitle keeps it).
+      const value = name === 'title' ? controlTitle(original) : original.getAttribute(name)
       if (value !== null) field.setAttribute(name, value)
     }
     if (id === 'stroke_width' && !field.hasAttribute('src')) field.setAttribute('src', 'stroke.svg')

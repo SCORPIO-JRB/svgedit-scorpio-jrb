@@ -374,15 +374,22 @@ test.describe('Commands of a multi-selection, W and H of an element alone (M4)',
     expect(round2(box.width)).toBe('90')
   })
 
-  test('a text alone always keeps its proportions', async ({ page }) => {
+  test('a text alone: W and H are those of its box, as in Figma; its font keeps its size (lot Texte)', async ({ page }) => {
     await select(page, ['t1'])
     const lock = page.locator('#tool_ratio_lock')
-    expect(await lock.evaluate((el) => el.pressed)).toBe(true)
+    expect(await lock.evaluate((el) => el.pressed)).toBe(false)
     expect(await lock.evaluate((el) => el.disabled)).toBe(true)
-    const width = Number(await field(page, 'selected_w'))
-    await typeField(page, 'selected_w', round2(width * 1.5))
-    // The field shows the width rounded to two decimals.
-    expect(await numAttr(page, 't1', 'font-size')).toBeCloseTo(30, 1)
+    const seAttr = (name) => page.evaluate((name) => document.getElementById('t1').getAttributeNS('http://svg-edit.googlecode.com', name), name)
+    // W: a fixed width, the lines break in it.
+    await typeField(page, 'selected_w', '90')
+    expect(await seAttr('width')).toBe('90')
+    expect(await numAttr(page, 't1', 'font-size')).toBe(20)
+    expect(await field(page, 'selected_w')).toBe('90')
+    // H: a fixed size.
+    await typeField(page, 'selected_h', '60')
+    expect(await seAttr('height')).toBe('60')
+    expect(await field(page, 'selected_h')).toBe('60')
+    expect(await numAttr(page, 't1', 'font-size')).toBe(20)
     // Another element alone gets the lock back as it was.
     await select(page, ['p1'])
     expect(await lock.evaluate((el) => el.disabled)).toBe(false)

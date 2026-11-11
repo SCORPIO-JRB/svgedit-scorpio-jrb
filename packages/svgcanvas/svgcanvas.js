@@ -43,6 +43,8 @@ import { init as structureInit } from './core/structure.js'
 import { init as portsInit } from './core/ports.js'
 import { init as symbolsInit } from './core/symbols.js'
 import { init as connectorsInit } from './core/connectors.js'
+import { init as cornerActionsInit } from './core/corner-actions.js'
+import { init as strokeAlignInit } from './core/stroke-align.js'
 import {
   init as jsonInit,
   getJsonFromSvgElements,
@@ -293,6 +295,8 @@ class SvgCanvas {
     portsInit(this)
     symbolsInit(this)
     connectorsInit(this)
+    cornerActionsInit(this)
+    strokeAlignInit(this)
 
     // prevent links from being followed in the canvas
     const handleLinkInCanvas = e => {
@@ -491,6 +495,9 @@ class SvgCanvas {
 
   setCurrentMode (cm) {
     this.currentMode = cm
+    // The handles of the corners show in the selection and node editing
+    // only (lot Coins).
+    this.cornerActions?.schedule()
     return this.currentMode
   }
 
@@ -892,6 +899,12 @@ class SvgCanvas {
     // The Scale tool works in the select mode only.
     if (name !== 'select') { this.setScaleTool?.(false) }
     this.selectorManager?.hideHover?.()
+    // Node editing ends without going through the selection mode, whose
+    // event chose the Select tool back over the one clicked. The pen goes on
+    // with the path edited (lot Plume).
+    const wasEditing = this.currentMode === 'pathedit'
+    const edited = this.pathActions.endNodeEditing()
+    if (wasEditing) this.currentMode = name
     this.pathActions.clear(true)
     this.textActions.clear()
     this.curProperties =
@@ -899,6 +912,10 @@ class SvgCanvas {
         ? this.curText
         : this.curShape
     this.currentMode = name
+    if (wasEditing) this.clearSelection()
+    // The pen shows the nodes of the path or shape selected (lot Plume).
+    if (name === 'path') this.pathActions.penChosen(edited)
+    else this.pathActions.penLeft()
 
     // fires modeChange event for the editor
     if (this.modeEvent) {

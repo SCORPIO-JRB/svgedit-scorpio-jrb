@@ -115,10 +115,16 @@ describe('inspector (V3)', () => {
     expect(sectionOfTopGroup(group('<div class="xy_panel"></div>'))).toBe('geometry')
     expect(sectionOfTopGroup(group('<div class="angle_panel"></div>'))).toBe('geometry')
     expect(sectionOfTopGroup(group('<div class="image_panel"><se-input id="image_url"></se-input></div>'))).toBe('identity')
-    expect(sectionOfTopGroup(group('<div class="image_panel"></div>'))).toBe('geometry')
+    expect(sectionOfTopGroup(group('<div class="image_panel"></div>'))).toBe('size')
+    // Lot Propriétés: Position and Dimensions, as in Figma.
+    expect(sectionOfTopGroup(group('<div class="wh_panel"></div>'))).toBe('size')
+    expect(sectionOfTopGroup(group('<div class="rect_panel"></div>'))).toBe('size')
+    expect(sectionOfTopGroup(group('<div class="circle_panel"><se-spin-input id="circle_cx"></se-spin-input></div>'))).toBe('geometry')
+    expect(sectionOfTopGroup(group('<div class="circle_panel"><se-spin-input id="circle_r"></se-spin-input></div>'))).toBe('size')
+    expect(sectionOfTopGroup(group('<div class="line_panel"></div>'))).toBe('geometry')
     expect(sectionOfTopGroup(group('<div class="text_panel"></div>'))).toBe('text')
     expect(sectionOfTopGroup(group('<div id="marker_panel"></div>'))).toBe('stroke')
-    expect(sectionOfTopGroup(group('<div id="star_panel"></div>'))).toBe('geometry')
+    expect(sectionOfTopGroup(group('<div id="star_panel"></div>'))).toBe('size')
     expect(sectionOfTopGroup(group('<div id="some_extension_panel"></div>'))).toBe('extensions')
   })
 

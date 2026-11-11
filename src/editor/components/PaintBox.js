@@ -180,6 +180,9 @@ class PaintBox {
         // one it is drawn with: inherited from a group, currentColor.
         let drawn
         let color = styled(elem, type)
+        // A paint the eye of the inspector hid shows as it was (lot Propriétés).
+        const hidden = elem.getAttribute(`data-se-${type}-hidden`)
+        if (hidden !== null && (color === null || color.trim() === 'none')) color = hidden
         if (color === null || /^(?:inherit|currentcolor)$/i.test(color.trim())) {
           drawn = drawnPaint(elem, type)
           color = drawn.color ?? (type === 'fill' ? 'black' : 'none')

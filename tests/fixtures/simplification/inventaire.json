@@ -346,25 +346,19 @@
     "tool_align_menu",
     "tool_clone",
     "tool_delete",
-    "tool_flip_h",
-    "tool_flip_v",
     "tool_move_bottom",
     "tool_move_top",
     "tool_topath"
   ],
   "textSection": {
     "shown": [
-      "tool_bold",
-      "tool_italic",
-      "tool_text_decoration_underline",
       "tool_font_family",
       "font_size",
-      "tool_text_anchor",
       "tool_line_height",
-      "tool_text_auto_width"
+      "tool_letter_spacing"
     ],
     "more": [
-      "tool_letter_spacing"
+      "tool_text_decoration_underline"
     ]
   }
 }

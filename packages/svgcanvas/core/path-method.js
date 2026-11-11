@@ -993,6 +993,7 @@ export class Path {
     }
     this.segs[index].select(false)
     this.selected_pts.splice(pos, 1)
+    svgCanvas.cornerActions?.schedule()
   }
 
   /**
@@ -1004,6 +1005,7 @@ export class Path {
       this.select(false)
     })
     this.selected_pts = []
+    svgCanvas.cornerActions?.schedule()
   }
 
   /**
@@ -1026,6 +1028,7 @@ export class Path {
     if (y) {
       this.selectPt(this.first_seg.index)
     }
+    svgCanvas.cornerActions?.schedule()
     return this
   }
 
@@ -1170,6 +1173,8 @@ export class Path {
       this.item = elem.pathSegList.getItem(i)
       this.update()
     })
+    // The handles of the rounded corners follow the nodes (lot Coins).
+    svgCanvas.cornerActions?.schedule()
 
     return this
   }
@@ -1210,6 +1215,7 @@ export class Path {
 
     const closedSubpath = Path.subpathIsClosed(this.selected_pts[0])
     svgCanvas.addPtsToSelection({ grips, closedSubpath })
+    svgCanvas.cornerActions?.schedule()
   }
 
   // STATIC

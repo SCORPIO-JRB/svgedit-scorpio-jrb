@@ -267,13 +267,19 @@ test.describe('Colour window (V4 couleurs)', () => {
   })
 
   test('− removes the fill, + gives one back', async ({ page }) => {
-    const toggle = page.locator('.se-paint-toggle[data-paint="fill"]')
-    await expect(toggle).toHaveAttribute('aria-label', 'Remove the fill')
-    await toggle.click()
+    // − at the end of the paint, + on the title line once there is none
+    // (lot Propriétés).
+    const remove = page.locator('.se-paint-remove[data-paint="fill"]')
+    const add = page.locator('.se-paint-add[data-paint="fill"]')
+    await expect(remove).toHaveAttribute('aria-label', 'Remove the fill')
+    await expect(add).toBeHidden()
+    await remove.click()
     expect(await attr(page, 'r1', 'fill')).toBe('none')
-    await expect(toggle).toHaveAttribute('aria-label', 'Add a fill')
-    await toggle.click()
-    expect(await attr(page, 'r1', 'fill')).toBe('#ff0000')
+    await expect(remove).toBeHidden()
+    await expect(add).toHaveAttribute('aria-label', 'Add a fill')
+    await add.click()
+    // The fill given back is the default one: light grey.
+    expect(await attr(page, 'r1', 'fill')).toBe('#dcdcdf')
     await undo(page)
     expect(await attr(page, 'r1', 'fill')).toBe('none')
   })

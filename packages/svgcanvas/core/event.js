@@ -544,6 +544,17 @@ const flushPendingClone = () => {
  */
 const cancelGesture = () => {
   if (!svgCanvas.getStarted()) { return false }
+  // The handle of a corner (lot Coins): the corners as they were.
+  if (svgCanvas.cornerActions?.isDragging()) {
+    svgCanvas.cornerActions.cancel()
+    svgCanvas.setStarted(false)
+    return true
+  }
+  // A click of the pen on a path (lot Plume): the path, or the shape it was.
+  if (svgCanvas.pathActions.cancelPen?.()) {
+    svgCanvas.setStarted(false)
+    return true
+  }
   const mode = svgCanvas.getCurrentMode()
   if (!['select', 'resize', 'rotate', 'multiselect'].includes(mode)) { return false }
   endSnap()
@@ -680,10 +691,21 @@ const mouseMoveEvent = (evt) => {
       const pt = transformPoint(evt.clientX, evt.clientY, svgCanvas.getrootSctm())
       svgCanvas.pathActions.showEndAt(pt.x, pt.y)
     }
+    // Its cursor says what a click does: delete a node, add one (lot Plume).
+    if (['path', 'pathedit'].includes(svgCanvas.getCurrentMode())) {
+      svgCanvas.pathActions.penHover?.(evt)
+    }
     updateHover(evt)
     return
   }
   if (evt.button === 1 || svgCanvas.spaceKey) { return }
+
+  // The drag of the handle of a corner (lot Coins).
+  if (svgCanvas.cornerActions?.isDragging()) {
+    evt.preventDefault()
+    svgCanvas.cornerActions.move(evt)
+    return
+  }
 
   svgCanvas.textActions.init()
 
@@ -1276,6 +1298,12 @@ const mouseUpEvent = (evt) => {
   if (evt.button === 2) { return }
   if (!svgCanvas.getStarted()) { return }
 
+  if (svgCanvas.cornerActions?.isDragging()) {
+    svgCanvas.setStarted(false)
+    svgCanvas.cornerActions.end()
+    return
+  }
+
   svgCanvas.textActions.init()
 
   const selectedElements = svgCanvas.getSelectedElements()
@@ -1584,6 +1612,17 @@ const mouseUpEvent = (evt) => {
       const widthNum = Number(width)
       const heightNum = Number(height)
       keep = widthNum >= 1 || heightNum >= 1 || svgCanvas.getCurrentMode() === 'image'
+      // A radius no larger than the rectangle takes (lot Coins).
+      if (keep && element.tagName === 'rect' && element.hasAttribute('rx')) {
+        const radius = Math.min(Number(element.getAttribute('rx')) || 0, widthNum / 2, heightNum / 2)
+        if (radius > 0) {
+          element.setAttribute('rx', Math.round(radius * 100) / 100)
+          element.setAttribute('ry', element.getAttribute('rx'))
+        } else {
+          element.removeAttribute('rx')
+          element.removeAttribute('ry')
+        }
+      }
     }
       break
     case 'circle':
@@ -1943,6 +1982,14 @@ const mouseDownEvent = (evt) => {
     svgCanvas.setStartY(y)
   }
 
+  // The handle of a corner (lot Coins), in the selection or node editing.
+  if (!rightClick && mouseTarget === svgCanvas.selectorManager.selectorParentGroup &&
+    dataStorage.get(evt.target, 'type') === 'corner' &&
+    svgCanvas.cornerActions?.begin(evt, dataStorage.get(evt.target, 'dir'))) {
+    svgCanvas.setStarted(true)
+    return
+  }
+
   // if it is a selector grip, then it must be a single element selected,
   // set the mouseTarget to that and update the mode to rotate/resize
 
@@ -2153,10 +2200,12 @@ const mouseDownEvent = (evt) => {
     // TODO: once we create the rect, we lose information that this was a square
     // (for resizing purposes this could be important)
     // Fallthrough
-    case 'rect':
+    case 'rect': {
       svgCanvas.setStarted(true)
       svgCanvas.setStartX(x)
       svgCanvas.setStartY(y)
+      // The radius given last to a rectangle (lot Coins).
+      const radius = svgCanvas.cornerActions?.rememberedRadius() || 0
       svgCanvas.addSVGElementsFromJson({
         element: 'rect',
         curStyles: true,
@@ -2165,11 +2214,13 @@ const mouseDownEvent = (evt) => {
           y,
           width: 0,
           height: 0,
+          ...(radius > 0 ? { rx: radius, ry: radius } : {}),
           id: svgCanvas.getNextId(),
           opacity: curShape.opacity / 2
         }
       })
       break
+    }
     case 'line': {
       svgCanvas.setStarted(true)
       const strokeW = Number(curShape.stroke_width) === 0 ? 1 : curShape.stroke_width

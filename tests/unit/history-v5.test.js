@@ -101,6 +101,23 @@ describe('history (V5)', () => {
     expect(describeStep(batch).count).toBe(1)
   })
 
+  it('names the steps of node editing by their text (lots Chemins and Plume)', () => {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    path.setAttribute('d', 'M0,0 L10,0')
+    $('g1').append(path)
+    const change = (text) => new ChangeElementCommand(path, { d: 'M0,0 L5,5' }, text)
+    expect(describeStep(change('Add path point'))).toEqual({ key: 'add_nodes' })
+    expect(describeStep(change('Delete path node(s)'))).toEqual({ key: 'delete_nodes' })
+    expect(describeStep(change('Bend segment'))).toEqual({ key: 'bend_segment' })
+    // Without a text of its own, a change of the nodes.
+    expect(describeStep(change())).toEqual({ key: 'edit_nodes' })
+    // A shape made a path by the pen, then a side bent: named by the bend.
+    const batch = new BatchCommand(change('Bend segment').text)
+    batch.addSubCommand(new InsertElementCommand(path))
+    batch.addSubCommand(change('Bend segment'))
+    expect(describeStep(batch)).toEqual({ key: 'bend_segment' })
+  })
+
   it('names every step text of the canvas', () => {
     // Every literal label given to a batch in the canvas and the editor is
     // known: a new one must be named here.

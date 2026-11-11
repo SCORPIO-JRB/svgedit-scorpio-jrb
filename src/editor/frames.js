@@ -17,6 +17,7 @@
 import { escapeHtml } from './panels/TopBar.js'
 import { insertByRank } from './panels/Toolbar.js'
 import { readsOwnKeys } from './shortcuts.js'
+import { scrubInput } from './components/scrub.js'
 
 const NS_SVG = 'http://www.w3.org/2000/svg'
 
@@ -422,10 +423,10 @@ export class FrameLayer {
         ${FRAME_FORMATS.map((key) => `<option value="${key}">${t(`frames.format_${key}`, { width: presets[key][0], height: presets[key][1] })}</option>`).join('')}
         <option value="custom">${t('frames.format_custom')}</option>
       </select></label>
-      <label class="se-field se-field-short">${t('properties.x_label')}<input type="text" id="se-frame-x" inputmode="decimal" size="5"></label>
-      <label class="se-field se-field-short">${t('properties.y_label')}<input type="text" id="se-frame-y" inputmode="decimal" size="5"></label>
-      <label class="se-field se-field-short">${t('properties.w_label')}<input type="text" id="se-frame-width" inputmode="decimal" size="5"></label>
-      <label class="se-field se-field-short">${t('properties.h_label')}<input type="text" id="se-frame-height" inputmode="decimal" size="5"></label>
+      <label class="se-field se-field-short"><span class="se-field-letter">${t('properties.x_label')}</span><input type="text" id="se-frame-x" inputmode="decimal" size="5"></label>
+      <label class="se-field se-field-short"><span class="se-field-letter">${t('properties.y_label')}</span><input type="text" id="se-frame-y" inputmode="decimal" size="5"></label>
+      <label class="se-field se-field-short"><span class="se-field-letter">${t('properties.w_label')}</span><input type="text" id="se-frame-width" inputmode="decimal" size="5"></label>
+      <label class="se-field se-field-short"><span class="se-field-letter">${t('properties.h_label')}</span><input type="text" id="se-frame-height" inputmode="decimal" size="5"></label>
       <div class="se-section-links">
         <button type="button" class="se-link-button" id="se-frame-export">${t('frames.export')}</button>
         <button type="button" class="se-link-button" id="se-frame-delete">${t('frames.delete')}</button>
@@ -465,6 +466,11 @@ export class FrameLayer {
           this.refreshInspector({ force: true })
         }
       })
+    }
+    // The letters drag the position and the size (lot Valeurs glissées).
+    for (const name of ['x', 'y', 'width', 'height']) {
+      const input = field(`se-frame-${name}`)
+      scrubInput(input.previousElementSibling, input, { min: name === 'x' || name === 'y' ? null : 1 })
     }
     for (const input of frameBody.querySelectorAll('input')) {
       input.addEventListener('keydown', (e) => {

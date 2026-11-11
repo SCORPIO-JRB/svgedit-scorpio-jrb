@@ -8,7 +8,7 @@ import Paint from './paint.js'
 import { NS } from './namespaces.js'
 import {
   getVisibleElements, getStrokedBBoxDefaultVisible, findDefs,
-  walkTree, getHref, setHref, getElement
+  walkTree, getHref, setHref, getElement, getBBox
 } from './utilities.js'
 import {
   convertToNum
@@ -16,8 +16,9 @@ import {
 import { getParents } from '../common/util.js'
 import { isSafeHref } from './sanitize.js'
 import { warn } from '../common/logger.js'
-import { InsertElementCommand } from './history.js'
-import { getTextSource, getLineHeight, getTextWidth } from './text-lines.js'
+import { ChangeElementCommand, InsertElementCommand } from './history.js'
+import { getStrokeAlign } from './stroke-align.js'
+import { getTextSource, getLineHeight, getTextWidth, getTextHeight, getTextVerticalAlign } from './text-lines.js'
 import { readStyleRules, findStyleSource, getStyledValue } from './style-rules.js'
 
 let svgCanvas = null
@@ -41,6 +42,12 @@ export const init = (canvas) => {
   svgCanvas.setLineHeight = setLineHeightMethod // Sets the line height of the selected texts
   svgCanvas.getTextWidth = getTextWidthMethod // The fixed width of the selected text, or 0
   svgCanvas.setTextWidth = setTextWidthMethod // Sets or removes the fixed width of the selected texts
+  svgCanvas.getTextHeight = getTextHeightMethod // The fixed height of a text, or 0
+  svgCanvas.getTextVerticalAlign = getTextVerticalAlignMethod // Where the lines of a text go in its box
+  svgCanvas.setTextVerticalAlign = setTextVerticalAlignMethod // Places the lines of the selected texts in their boxes
+  svgCanvas.getTextResizing = getTextResizingMethod // How a text is sized: auto-width, auto-height, fixed
+  svgCanvas.setTextResizing = setTextResizingMethod // Sizes the selected texts so
+  svgCanvas.setTextBox = setTextBoxMethod // The width or the height of the box of the selected text
   svgCanvas.setLetterSpacing = setLetterSpacingMethod // Set the new letter spacing.
   svgCanvas.setWordSpacing = setWordSpacingMethod // Set the new word spacing.
   svgCanvas.setTextLength = setTextLengthMethod // Set the new text length.
@@ -77,6 +84,8 @@ export const init = (canvas) => {
   svgCanvas.setPaint = setPaintMethod // Set a color/gradient to a fill/stroke.
   svgCanvas.previewPaint = previewPaintMethod // Show a paint on the selection, outside the history.
   svgCanvas.cancelPaintPreview = cancelPaintPreviewMethod // Give back the paint a preview replaced.
+  svgCanvas.setPaintVisible = setPaintVisibleMethod // Hide or show the fill or the stroke (the eye of the inspector).
+  svgCanvas.isPaintHidden = isPaintHidden
 }
 
 /**
@@ -608,6 +617,13 @@ const setPaintMethod = (type, paint) => {
 
     // now set the current paint object
     svgCanvas.setCurProperties(`${type}_paint`, p)
+    // A paint hidden by the eye of the inspector shows again with the new one.
+    const hidden = hiddenPaintAttr(type)
+    for (const elem of paintTargets(type).colored) {
+      if (!elem.hasAttribute(hidden)) continue
+      batch.addSubCommand(new ChangeElementCommand(elem, { [hidden]: elem.getAttribute(hidden) }))
+      elem.removeAttribute(hidden)
+    }
     switch (p.type) {
       case 'solidColor':
         svgCanvas.setColor(type, p.solidColor !== 'none' ? `#${p.solidColor}` : 'none')
@@ -643,6 +659,59 @@ const paintTargets = (type) => {
     }
   }
   return { selected, colored }
+}
+
+/**
+* The attribute where a hidden fill or stroke waits (lot Propriétés).
+* @param {"fill"|"stroke"} type
+* @returns {string}
+*/
+export const hiddenPaintAttr = (type) => `data-se-${type}-hidden`
+
+/**
+* @param {Element} elem
+* @param {"fill"|"stroke"} type
+* @returns {boolean} Whether the eye of the inspector hid this paint
+*/
+export const isPaintHidden = (elem, type) => Boolean(elem?.hasAttribute?.(hiddenPaintAttr(type)))
+
+/**
+* Hides or shows the fill or the stroke of the selected shapes, as the eye of
+* the inspector does (lot Propriétés): a hidden paint is `none`, and the paint
+* it had waits in `data-se-fill-hidden` or `data-se-stroke-hidden`, in the
+* file too. One undo step. A shape without this paint is left as it is.
+* @function module:elem-get-set.SvgCanvas#setPaintVisible
+* @param {"fill"|"stroke"} type
+* @param {boolean} visible
+* @returns {BatchCommand|null}
+*/
+const setPaintVisibleMethod = (type, visible) => {
+  cancelPaintPreviewMethod()
+  const attr = hiddenPaintAttr(type)
+  const rules = readStyleRules(svgCanvas.getSvgContent())
+  const paintOf = (elem) => getStyledValue(elem, type, rules)?.value ?? elem.getAttribute(type)
+  const { colored } = paintTargets(type)
+  const targets = colored.filter((elem) => visible
+    ? elem.hasAttribute(attr)
+    : !elem.hasAttribute(attr) && (paintOf(elem) ?? (type === 'fill' ? 'black' : 'none')).trim() !== 'none')
+  if (!targets.length) return null
+  const batch = svgCanvas.groupHistory(`${visible ? 'Show' : 'Hide'} ${type}`, (step) => {
+    for (const elem of targets) {
+      const old = { [attr]: elem.getAttribute(attr), [type]: elem.getAttribute(type), style: elem.getAttribute('style') }
+      if (visible) {
+        const value = elem.getAttribute(attr)
+        elem.removeAttribute(attr)
+        svgCanvas.changeSelectedAttributeNoUndo(type, value || (type === 'fill' ? 'black' : 'none'), [elem])
+      } else {
+        elem.setAttribute(attr, paintOf(elem) ?? 'black')
+        svgCanvas.changeSelectedAttributeNoUndo(type, 'none', [elem])
+      }
+      const changed = Object.keys(old).filter((name) => elem.getAttribute(name) !== old[name])
+      step.addSubCommand(new ChangeElementCommand(elem, Object.fromEntries(changed.map((name) => [name, old[name]]))))
+    }
+  })
+  svgCanvas.call('changed', targets)
+  return batch.isEmpty() ? null : batch
 }
 
 /** The paint a preview replaced, to give it back. */
@@ -762,7 +831,15 @@ const setStrokeWidthMethod = (val) => {
     }
   }
   if (elems.length > 0) {
-    svgCanvas.changeSelectedAttribute('stroke-width', val, elems)
+    // A stroke inside or outside its shape is drawn twice as wide (lot
+    // Propriétés): the value is its weight.
+    if (elems.some((elem) => getStrokeAlign(elem) !== 'center')) {
+      const number = Number(val)
+      svgCanvas.changeSelectedAttributeEach('stroke-width', (elem) =>
+        getStrokeAlign(elem) !== 'center' && Number.isFinite(number) ? String(Math.round(number * 2000) / 1000) : val, elems)
+    } else {
+      svgCanvas.changeSelectedAttribute('stroke-width', val, elems)
+    }
     svgCanvas.call('changed', selectedElements)
   }
 }
@@ -1030,6 +1107,125 @@ const setTextWidthMethod = (value) => {
     svgCanvas.changeSelectedAttribute('se:width', width, changedTextElements)
   }
   notifyTextChange(changedTextElements)
+}
+
+const roundBox = (n) => String(Math.round(n * 100) / 100)
+
+/**
+ * @function module:svgcanvas.SvgCanvas#getTextHeight
+ * @param {Element} [elem] - The selected text when absent
+ * @returns {number} The fixed height of the text, or 0
+ */
+const getTextHeightMethod = (elem) => {
+  const text = elem ?? getSelectedTextElements()[0]
+  return text ? getTextHeight(text) : 0
+}
+
+/**
+ * @function module:svgcanvas.SvgCanvas#getTextVerticalAlign
+ * @param {Element} [elem] - The selected text when absent
+ * @returns {"top"|"middle"|"bottom"}
+ */
+const getTextVerticalAlignMethod = (elem) => {
+  const text = elem ?? getSelectedTextElements()[0]
+  return text ? getTextVerticalAlign(text) : 'top'
+}
+
+/**
+ * How a text is sized, as the Resizing of Figma: as wide as its lines
+ * ("auto-width"), of a fixed width and as high as its lines
+ * ("auto-height"), or of a fixed width and height ("fixed").
+ * @function module:svgcanvas.SvgCanvas#getTextResizing
+ * @param {Element} [elem] - The selected text when absent
+ * @returns {"auto-width"|"auto-height"|"fixed"}
+ */
+const getTextResizingMethod = (elem) => {
+  const text = elem ?? getSelectedTextElements()[0]
+  if (text && getTextHeight(text)) return 'fixed'
+  return text && getTextWidth(text) ? 'auto-height' : 'auto-width'
+}
+
+/**
+ * Writes the attributes of the box of a text that differ, each a step of
+ * the history (a group gathers them).
+ * @param {Element} elem
+ * @param {Object<string, string>} values
+ * @returns {void}
+ */
+const writeBox = (elem, values) => {
+  for (const [attr, value] of Object.entries(values)) {
+    if ((elem.getAttribute(attr) || '') !== value) svgCanvas.changeSelectedAttribute(attr, value, [elem])
+  }
+}
+
+/**
+ * Sizes the selected texts as the Resizing of Figma, in one undo step: a
+ * fixed width and height are those of their boxes now. The vertical
+ * alignment goes with the fixed height.
+ * @function module:svgcanvas.SvgCanvas#setTextResizing
+ * @param {"auto-width"|"auto-height"|"fixed"} mode
+ * @returns {void}
+ */
+const setTextResizingMethod = (mode) => {
+  const textElements = getSelectedTextElements().filter((elem) => getTextResizingMethod(elem) !== mode)
+  if (!textElements.length) return
+  svgCanvas.groupHistory('Text resizing', () => {
+    textElements.forEach((elem) => {
+      const box = getBBox(elem)
+      const width = roundBox(getTextWidth(elem) || box?.width || 0)
+      if (mode === 'auto-width') {
+        writeBox(elem, { 'se:valign': '', 'se:height': '', 'se:width': '' })
+      } else if (mode === 'auto-height') {
+        writeBox(elem, { 'se:valign': '', 'se:height': '', 'se:width': width })
+      } else {
+        writeBox(elem, { 'se:width': width, 'se:height': roundBox(getTextHeight(elem) || box?.height || 0) })
+      }
+    })
+  })
+  notifyTextChange(textElements)
+}
+
+/**
+ * Gives the selected texts a width (their lines break in it) or a height
+ * (their boxes become of fixed size), as the W and H fields of Figma.
+ * @function module:svgcanvas.SvgCanvas#setTextBox
+ * @param {number|null} width
+ * @param {number|null} height
+ * @returns {void}
+ */
+const setTextBoxMethod = (width, height) => {
+  const textElements = getSelectedTextElements()
+  const w = Number.parseFloat(width)
+  const h = Number.parseFloat(height)
+  if (!textElements.length || (!(w > 0) && !(h > 0))) return
+  svgCanvas.groupHistory('Text box', () => {
+    textElements.forEach((elem) => {
+      const values = {}
+      if (w > 0) values['se:width'] = roundBox(w)
+      if (h > 0) {
+        if (!values['se:width']) values['se:width'] = roundBox(getTextWidth(elem) || getBBox(elem)?.width || 0)
+        values['se:height'] = roundBox(h)
+      }
+      writeBox(elem, values)
+    })
+  })
+  notifyTextChange(textElements)
+}
+
+/**
+ * Places the lines of the selected texts of fixed height in their boxes.
+ * @function module:svgcanvas.SvgCanvas#setTextVerticalAlign
+ * @param {"top"|"middle"|"bottom"} value
+ * @returns {void}
+ */
+const setTextVerticalAlignMethod = (value) => {
+  const written = value === 'middle' || value === 'bottom' ? value : ''
+  const textElements = getSelectedTextElements()
+    .filter((elem) => getTextHeight(elem) && (elem.getAttribute('se:valign') || '') !== written)
+  if (textElements.length > 0) {
+    svgCanvas.changeSelectedAttribute('se:valign', written, textElements)
+  }
+  notifyTextChange(textElements)
 }
 
 /**
@@ -1324,6 +1520,8 @@ const setRectRadiusMethod = (val) => {
   if (!Number.isFinite(radius) || radius < 0) {
     return
   }
+  // The next rectangle is drawn with it (lot Coins).
+  svgCanvas.cornerActions?.remember(radius)
 
   const oldRx = selected.getAttribute('rx')
   const oldRy = selected.getAttribute('ry')

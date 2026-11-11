@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseD, readPath, writePath, nodeIndex, pointAt, splitSegment, nearestPoint,
-  insertNode, reverseSubpath, transformSubpath, openEnds, joinSubpaths, arcCenter
+  insertNode, reverseSubpath, transformSubpath, openEnds, joinSubpaths, arcCenter,
+  toCubic, bendCubic
 } from '../../packages/svgcanvas/core/path-points.js'
 
 const close = (a, b, eps = 1e-6) => {
@@ -188,5 +189,64 @@ describe('path-points: extending and joining', () => {
     expect(writePath([joinSubpaths({ drawn, target: other, targetEnd: 'start' })])).toBe('M30,30 L50,0 L60,0')
     const [toEnd] = readPath('M30,30 L60,0')
     expect(writePath([joinSubpaths({ drawn: toEnd, target: other, targetEnd: 'end' })])).toBe('M50,0 L60,0 L30,30')
+  })
+})
+
+describe('path-points: bending a side (lot Plume)', () => {
+  const p0 = { x: 0, y: 0 }
+
+  it('makes a line a cubic curve on the same line', () => {
+    const c = toCubic(p0, { type: 'L', x: 90, y: 30 })
+    expect(c).toMatchObject({ type: 'C', x1: 30, y1: 10, x2: 60, y2: 20, x: 90, y: 30 })
+    for (let k = 0; k <= 10; k++) {
+      const q = pointAt(p0, c, k / 10)
+      expect(Math.abs(q.y - q.x / 3)).toBeLessThan(1e-9)
+    }
+  })
+
+  it('raises a quadratic curve to the same cubic one', () => {
+    const q = { type: 'Q', x1: 50, y1: 80, x: 100, y: 0 }
+    const c = toCubic(p0, q)
+    for (let k = 0; k <= 10; k++) close(pointAt(p0, c, k / 10), pointAt(p0, q, k / 10), 1e-9)
+  })
+
+  it('follows an arc closely', () => {
+    // A quarter of the circle of radius 50 about (0, 50), then a half.
+    const quarter = { type: 'A', rx: 50, ry: 50, angle: 0, large: 0, sweep: 1, x: 50, y: 50 }
+    const half = { type: 'A', rx: 50, ry: 50, angle: 0, large: 0, sweep: 1, x: 0, y: 100 }
+    for (const arc of [quarter, half]) {
+      const c = toCubic(p0, arc)
+      expect(c).toMatchObject({ type: 'C', x: arc.x, y: arc.y })
+      for (let k = 0; k <= 16; k++) {
+        const q = pointAt(p0, c, k / 16)
+        expect(Math.abs(Math.hypot(q.x, q.y - 50) - 50)).toBeLessThan(0.02 * 50)
+      }
+    }
+  })
+
+  it('moves the point taken by the drag, the ends in place', () => {
+    const c = toCubic(p0, { type: 'L', x: 120, y: 0 })
+    for (const t of [0.2, 0.5, 0.75]) {
+      const before = pointAt(p0, c, t)
+      const bent = bendCubic(p0, c, t, 10, 40)
+      close(pointAt(p0, bent, t), { x: before.x + 10, y: before.y + 40 }, 1e-9)
+      close(pointAt(p0, bent, 0), p0)
+      close(pointAt(p0, bent, 1), { x: 120, y: 0 })
+    }
+  })
+
+  it('moves both handles alike from the middle, the nearer one more elsewhere', () => {
+    const c = toCubic(p0, { type: 'L', x: 120, y: 0 })
+    const middle = bendCubic(p0, c, 0.5, 0, 30)
+    expect(middle.y1).toBeCloseTo(middle.y2)
+    const near = bendCubic(p0, c, 0.3, 0, 30)
+    expect(near.y1).toBeGreaterThan(near.y2)
+  })
+
+  it('keeps the taken point away from the ends', () => {
+    const c = toCubic(p0, { type: 'L', x: 120, y: 0 })
+    const bent = bendCubic(p0, c, 0, 0, 30)
+    expect(Number.isFinite(bent.y1) && Number.isFinite(bent.y2)).toBe(true)
+    close(pointAt(p0, bent, 0.1), { x: pointAt(p0, c, 0.1).x, y: 30 }, 1e-9)
   })
 })

@@ -222,21 +222,26 @@ export class TextStyles {
    * @returns {void}
    */
   syncButton (el) {
+    const holder = el.querySelector('.se-ctx-textstyle-name')
+    // The icon of Typography has no name to write.
+    if (!holder) return
     const current = this.current()
     let name
     if (current === 'mixed') name = this.t('properties.mixed')
     else if (current === 'custom' || !current) name = this.t('textstyles.custom')
     else name = this.t(current.label)
-    el.querySelector('.se-ctx-textstyle-name').textContent = name
+    holder.textContent = name
     el.setAttribute('aria-label', `${this.t('textstyles.title')} : ${name}`)
   }
 
   /**
-   * Opens the window under the button of the bar.
+   * Opens the window under the button of the bar, or at the left of the
+   * panel from the icon of Typography (`beside`, lot Texte).
    * @param {HTMLElement} button
+   * @param {{beside?: Element}} [options]
    * @returns {void}
    */
-  open (button) {
+  open (button, { beside = null } = {}) {
     if (this.$popover.opened) {
       this.$popover.close({ restoreFocus: true })
       return
@@ -244,7 +249,7 @@ export class TextStyles {
     this.button = button
     this.render()
     this.selectTab('theme')
-    this.$popover.open(button)
+    this.$popover.open(button, beside ? { beside, placement: 'left-start' } : {})
     button.setAttribute('aria-expanded', 'true')
   }
 
