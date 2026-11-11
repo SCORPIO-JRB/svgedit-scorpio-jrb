@@ -879,11 +879,8 @@ export class SeColorPicker extends HTMLElement {
    * @returns {void}
    */
   update (svgCanvas, selectedElement, apply) {
+    // A group whose shapes differ shows stripes (PaintBox.update).
     const paint = this.paintBox.update(svgCanvas, selectedElement)
-    if (!paint && this.paintBox.mixed && this.paintBox.paint) {
-      // An element alone without paint: the stripes of a multi-selection go.
-      this.paintBox.setPaint(this.paintBox.paint)
-    }
     this.classList.toggle('mixed', this.paintBox.mixed)
 
     // We check if the color picker popup is already open

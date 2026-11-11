@@ -75,6 +75,71 @@ describe('Paint box', () => {
   })
 })
 
+// 11 November: a group of the synoptic library (its title, a transparent
+// zone for the click, its body, alarm markers hidden until their state)
+// kept the paint of the previous selection, black or red: its title, which
+// has no paint, made it "mixed", and nothing was shown.
+describe('Paint of a group', () => {
+  const box = (type) => new PaintBox(document.createElement('div'), type)
+  const make = (tag, attrs = {}, children = []) => {
+    const elem = document.createElementNS(NS, tag)
+    for (const [name, value] of Object.entries(attrs)) elem.setAttribute(name, value)
+    elem.append(...children)
+    return elem
+  }
+  const group = (...children) => {
+    const g = make('g', {}, children)
+    document.body.append(g)
+    return g
+  }
+  const title = () => make('title', {}, ['Bouteille de découplage'])
+
+  it('shows the paint of its body, its title left out', () => {
+    const g = group(title(), make('rect', { fill: '#1f1638', stroke: '#9b92aa' }))
+    expect(box('fill').paintOf(g)).toEqual({ color: '#1f1638', opacity: 100 })
+    expect(box('stroke').paintOf(g)).toEqual({ color: '#9b92aa', opacity: 100 })
+  })
+
+  it('leaves out a hidden marker and a zone that draws nothing', () => {
+    const marker = make('g', { display: 'none' }, [make('circle', { fill: '#ef4444', stroke: '#160f23' })])
+    const g = group(title(), make('rect', { fill: 'transparent', stroke: 'none' }),
+      make('rect', { fill: 'rgba(255, 255, 255, .05)', stroke: '#766d85' }), marker)
+    expect(box('fill').paintOf(g)).toEqual({ color: '#ffffff', opacity: 5 })
+    expect(box('stroke').paintOf(g)).toEqual({ color: '#766d85', opacity: 100 })
+  })
+
+  it('reads the shapes of its subgroups, and a line has no fill', () => {
+    const g = group(make('g', {}, [make('rect', { fill: '#00f', stroke: '#000' })]), make('line', { stroke: '#000' }))
+    expect(box('fill').paintOf(g)).toEqual({ color: '#0000ff', opacity: 100 })
+    expect(box('stroke').paintOf(g)).toEqual({ color: '#000000', opacity: 100 })
+    expect(box('fill').paintOf(group(make('line', { stroke: '#000' })))).toEqual({ color: 'none', opacity: 100 })
+  })
+
+  it('shows stripes when its shapes differ, and the paint again for a shape', () => {
+    const fill = box('fill')
+    expect(fill.update({}, group(title(), make('rect', { fill: '#f00' }), make('text', { fill: '#fff' })))).toBeNull()
+    expect(fill.mixed).toBe(true)
+    expect(fill.rect.getAttribute('fill')).toBe(fill.mixedFill)
+    fill.update({}, shape({ fill: '#0f0' }))
+    expect(fill.mixed).toBe(false)
+    expect(fill.rect.getAttribute('fill')).toBe('#00ff00')
+  })
+
+  it('without a shape, keeps the paint shown', () => {
+    const fill = box('fill')
+    fill.update({}, shape({ fill: '#0f0' }))
+    expect(fill.update({}, group(title(), make('image')))).toBeNull()
+    expect([fill.mixed, fill.rect.getAttribute('fill')]).toEqual([false, '#00ff00'])
+  })
+
+  it('is one paint in a multi-selection with a shape of the same colour', () => {
+    const fill = box('fill')
+    fill.updateMany({}, [group(title(), make('rect', { fill: '#c00' })), shape({ fill: '#cc0000' })])
+    expect(fill.mixed).toBe(false)
+    expect(fill.paint.solidColor).toBe('cc0000')
+  })
+})
+
 describe('Stroke width shown', () => {
   it('is a number of user units, without its unit', () => {
     expect(lengthOf('5px')).toBe('5')
