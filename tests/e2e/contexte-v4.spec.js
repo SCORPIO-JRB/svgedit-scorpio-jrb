@@ -376,9 +376,17 @@ test.describe('Contextual bar (V4): one test for each row of the table', () => {
     // The alignment panel of the inspector, lent to the bar.
     await entry(page, 'align').click()
     await expect(page.locator('#se-ctx-align #tool_align_popup')).toBeVisible()
-    await page.locator('#se-ctx-align #tool_align_top').click()
-    const tops = await page.evaluate(() => ['r', 'p'].map((id) => Math.round(document.getElementById(id).getBBox().y)))
-    expect(tops[0]).toBe(tops[1])
+    // The two objects end at different heights (their tops are the same
+    // from the start): aligned on the bottom, they show that the panel works.
+    const bottoms = () => page.evaluate(() => ['r', 'p'].map((id) => {
+      const box = document.getElementById(id).getBBox()
+      return Math.round(box.y + box.height)
+    }))
+    const apart = await bottoms()
+    expect(apart[0]).not.toBe(apart[1])
+    await page.locator('#se-ctx-align #tool_align_bottom').click()
+    const aligned = await bottoms()
+    expect(Math.abs(aligned[0] - aligned[1])).toBeLessThanOrEqual(1)
     await page.keyboard.press('Escape')
     expect(await page.evaluate(() => document.getElementById('tool_align_popup').closest('#se-ctx-align'))).toBeNull()
     await undo(page)

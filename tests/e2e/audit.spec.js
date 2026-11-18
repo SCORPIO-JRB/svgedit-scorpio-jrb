@@ -234,4 +234,18 @@ test.describe('audit corrections: panels', () => {
     expect(await attr(page, 'q', 'fill')).toBe('#00ff00')
     expect(await attr(page, 'r', 'fill')).toBe('#ff0000')
   })
+
+  test('the alignment panel lent to the context bar aligns', async ({ page }) => {
+    // A press in the panel closed it, as a press outside its menu: the click
+    // never reached the button
+    await load(page, SHAPES)
+    await page.evaluate(() => window.svgEditor.svgCanvas.selectOnly(['r', 'q'].map((id) => document.getElementById(id))))
+    await page.locator('#se-context-bar [data-entry="align"]').click()
+    await expect(page.locator('#se-ctx-align #tool_align_popup')).toBeVisible()
+    await page.locator('#se-ctx-align #tool_align_top').click()
+
+    expect(await attr(page, 'q', 'y')).toBe('200')
+    expect(await attr(page, 'r', 'y')).toBe('200')
+    expect(await undoSize(page)).toBe(1)
+  })
 })
