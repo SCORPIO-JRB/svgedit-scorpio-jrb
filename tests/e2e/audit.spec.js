@@ -120,4 +120,26 @@ test.describe('audit corrections: gestures', () => {
   test('the pen: a click on the first point still closes a path of three points', async ({ page }) => {
     expect(await penPaths(page, [A, B, C, A])).toEqual(['MLLLz'])
   })
+
+  test('a drag released outside the canvas ends there', async ({ page }) => {
+    await load(page, drawing('<rect id="r1" x="200" y="200" width="80" height="60" fill="#3a6"/>'))
+    const start = await screenPoint(page, 240, 230)
+    const panel = await page.locator('.se-inspector').boundingBox()
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(start.x + 60, start.y, { steps: 6 })
+    await page.mouse.move(panel.x + panel.width / 2, start.y, { steps: 10 })
+    await page.mouse.up()
+
+    expect(await page.evaluate(() => window.svgEditor.svgCanvas.getStarted())).toBe(false)
+    expect(await undoSize(page)).toBe(1)
+    const released = await attr(page, 'r1', 'x')
+    expect(Number(released)).toBeGreaterThan(200)
+
+    // Back over the canvas, button up: the object used to follow the pointer
+    await page.mouse.move(start.x - 100, start.y + 80, { steps: 10 })
+    expect(await attr(page, 'r1', 'x')).toBe(released)
+    expect(await attr(page, 'r1', 'transform')).toBeNull()
+    expect(await undoSize(page)).toBe(1)
+  })
 })

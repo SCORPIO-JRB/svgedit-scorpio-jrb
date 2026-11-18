@@ -311,6 +311,14 @@ class SvgCanvas {
     container.addEventListener('dblclick', this.dblClickEvent)
     container.addEventListener('mouseup', this.mouseUpEvent)
     container.addEventListener('mouseleave', this.mouseOutEvent)
+    // A drag of the selection goes on when the pointer leaves the canvas
+    // (mouseOutEvent ends the other gestures): a release out there ends it,
+    // or the objects follow the pointer, button up, when it comes back.
+    window.addEventListener('mouseup', (evt) => {
+      if (this.getStarted() && this.getCurrentMode() === 'select' && !container.contains(evt.target)) {
+        this.mouseUpEvent(evt)
+      }
+    }, true)
     container.addEventListener('mousewheel', this.DOMMouseScrollEvent)
     container.addEventListener('DOMMouseScroll', this.DOMMouseScrollEvent)
 
