@@ -1,4 +1,6 @@
 import SvgCanvas from '../../packages/svgcanvas/svgcanvas.js'
+import en from '../../src/editor/locale/lang.en.js'
+import fr from '../../src/editor/locale/lang.fr.js'
 
 // Bugs found by the audit of the code (November 2026), on the canvas: each
 // test first showed the bug, then its correction.
@@ -248,5 +250,18 @@ describe('audit corrections (canvas)', () => {
 
       expect($('p1').hasAttribute('transform')).toBe(false)
     })
+  })
+})
+
+describe('audit corrections (translations)', () => {
+  it('the French file has the texts of the paste conflict dialog', () => {
+    const keys = ['clipboardDefsConflict', 'clipboardUseExisting', 'clipboardReplaceExisting', 'clipboardKeepBoth']
+    for (const key of keys) {
+      expect(fr.notification[key], key).toBeTruthy()
+      expect(fr.notification[key], key).not.toBe(en.notification[key])
+    }
+    expect(fr.notification.clipboardDefsConflict).toContain('{{ids}}')
+    // The editor tells the answer by its text: the three must differ
+    expect(new Set(keys.slice(1).map((key) => fr.notification[key])).size).toBe(3)
   })
 })

@@ -989,6 +989,10 @@ export default {
     QerrorsRevertToSource: 'Il y a des erreurs de syntaxe dans votre code source SVG.\n' +
       'Restaurer le code source SVG antérieur aux modifications ?',
     QignoreSourceChanges: 'Ignorer les modifications faites à la source SVG ?',
+    clipboardDefsConflict: "Le contenu collé fait référence à des définitions dont l'identifiant existe déjà avec un contenu différent. Identifiants en conflit : {{ids}}. Choisissez comment résoudre tous les conflits. Remplacer les définitions existantes peut modifier des éléments déjà présents dans ce dessin.",
+    clipboardUseExisting: "Utiliser l'existant",
+    clipboardReplaceExisting: "Remplacer l'existant",
+    clipboardKeepBoth: 'Garder les deux',
     featNotSupported: 'Fonction non supportée',
     enterNewImgURL: "Entrer la nouvelle URL de l'image",
     defsFailOnSave: "NOTE : En raison d'un bogue dans votre navigateur, il se peut que cette image ne soit pas correctement affichée (dégradés ou éléments manquants). Le souci sera néanmoins réglé à la sauvegarde.",
