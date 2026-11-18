@@ -197,6 +197,10 @@ export class SEInput extends HTMLElement {
    * @returns {void}
    */
   connectedCallback () {
+    // Moved to another place of the page, the element is connected again:
+    // its listeners must not be added twice
+    if (this.connected) return
+    this.connected = true
     this.$input.addEventListener('change', (e) => {
       e.preventDefault()
       this.value = e.target.value

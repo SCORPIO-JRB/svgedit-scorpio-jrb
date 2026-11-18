@@ -677,7 +677,7 @@ class PathActions {
             stretchy.remove()
             this.#commitJoin(drawnPath, null)
             return false
-          } else if (i <= 1 && len >= 2) {
+          } else if (i === 0 && len >= 3) {
             // Create end segment
             const absX = seglist.getItem(0).x
             const absY = seglist.getItem(0).y
@@ -690,7 +690,7 @@ class PathActions {
             const endseg = drawnPath.createSVGPathSegClosePath()
             seglist.appendItem(newseg)
             seglist.appendItem(endseg)
-          } else if (len < 3) {
+          } else if (len < 2) {
             keep = false
             return keep
           }

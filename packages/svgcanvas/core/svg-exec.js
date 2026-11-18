@@ -746,9 +746,12 @@ const setSvgString = (xmlString, preventUndo) => {
   try {
     // convert string into XML document
     const newDoc = text2xml(xmlString)
+    // Refused before the drawing is touched: a root that is not an <svg>
+    // (a <g>, a parsing error) used to replace it and then fail
     if (
       newDoc.firstElementChild &&
-      newDoc.firstElementChild.namespaceURI !== NS.SVG
+      (newDoc.firstElementChild.namespaceURI !== NS.SVG ||
+        newDoc.firstElementChild.localName !== 'svg')
     ) {
       return false
     }

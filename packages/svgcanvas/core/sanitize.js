@@ -7,7 +7,7 @@
  */
 
 import { getReverseNS, NS } from './namespaces.js'
-import { getHref, setHref, getUrlFromAttr } from './utilities.js'
+import { getHref, setHref } from './utilities.js'
 import { warn } from '../common/logger.js'
 
 const REVERSE_NS = getReverseNS()
@@ -349,7 +349,9 @@ export const isSafeHref = (nodeName, href) => {
   return true
 }
 
-const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gis
+// A url() that the text does not close runs to its end, as in a browser
+const CSS_URL = /url\(\s*(['"]?)(.*?)(?:\1\s*\)|$)/gis
+const CSS_IMAGE_SET = /(?:-webkit-)?image-set\(/gi
 const CSS_IMPORT = /@import\b[^;]*;?/gi
 const CSS_SCRIPTING = /expression\s*\(|javascript:|vbscript:|-moz-binding|behavior\s*:/gi
 const CSS_ESCAPE = /\\(?:([0-9a-f]{1,6})\s?|(.))/gis
@@ -365,9 +367,69 @@ const decodeCssEscapes = (css) => css.replace(CSS_ESCAPE, (match, hex, char) => 
   return codePoint > 0 && codePoint <= 0x10FFFF ? String.fromCodePoint(codePoint) : '�'
 })
 
+/**
+ * Reads the arguments of a CSS function, from `from` (after its opening
+ * parenthesis): where the function ends and the strings it holds, the one
+ * of a `type()` aside. Nested functions are read through and comments
+ * skipped; a function that the text does not close runs to its end, as in a
+ * browser.
+ * @param {string} css
+ * @param {Integer} from
+ * @returns {{end: Integer, strings: string[]}}
+ */
+const readCssFunction = (css, from) => {
+  const strings = []
+  let depth = 1
+  let i = from
+  while (i < css.length && depth) {
+    const c = css[i]
+    if (c === '"' || c === "'") {
+      const start = i + 1
+      do { i += css[i] === '\\' ? 2 : 1 } while (i < css.length && css[i] !== c)
+      // type("image/png") names a format, not an address
+      if (!/type\(\s*$/i.test(css.slice(from, start - 1))) strings.push(css.slice(start, i))
+    } else if (c === '/' && css[i + 1] === '*') {
+      const close = css.indexOf('*/', i + 2)
+      i = close === -1 ? css.length : close + 1
+    } else if (c === '(') {
+      depth++
+    } else if (c === ')') {
+      depth--
+    }
+    i++
+  }
+  return { end: Math.min(i, css.length), strings }
+}
+
+/**
+ * The `image-set()` of a CSS text. They take their images as `url()` or as
+ * bare strings (`"a.png" 1x`), which load just the same.
+ * @param {string} css
+ * @returns {Array<{start: Integer, end: Integer, strings: string[]}>}
+ */
+const imageSets = (css) => [...css.matchAll(CSS_IMAGE_SET)]
+  .map(({ 0: name, index }) => ({ start: index, ...readCssFunction(css, index + name.length) }))
+
 const hasUnsafeCss = (css) => {
   if (/@import\b/i.test(css) || new RegExp(CSS_SCRIPTING.source, 'i').test(css)) return true
-  return [...css.matchAll(CSS_URL)].some(([, , url]) => !isSafeCssUrl(url))
+  return [...css.matchAll(CSS_URL)].some(([, , url]) => !isSafeCssUrl(url)) ||
+    imageSets(css).some(({ strings }) => !strings.every(isSafeCssUrl))
+}
+
+/**
+ * The first address of an attribute value that leads out of the document,
+ * if any. Every `url()` of the value counts, however it is written: `URL(`,
+ * after a space or another value, with CSS escapes. So does a string of an
+ * `image-set()`.
+ * @param {string} value
+ * @returns {string|undefined}
+ */
+const externalUrl = (value) => {
+  const css = decodeCssEscapes(value)
+  return [...css.matchAll(CSS_URL)].map(([, , url]) => url)
+    .concat(imageSets(css).flatMap(({ strings }) => strings))
+    .map((url) => url.trim())
+    .find((url) => url && !url.startsWith('#'))
 }
 
 /**
@@ -381,19 +443,39 @@ const hasUnsafeCss = (css) => {
  * @returns {string}
  */
 export const sanitizeCss = (css, removed = []) => {
-  const cleaned = String(css)
+  const cleaned = removeUnsafeImageSets(String(css)
     .replace(CSS_IMPORT, (match) => { report(removed, shorten(match.trim())); return '' })
     .replace(CSS_URL, (match, quote, url) => {
       if (isSafeCssUrl(url)) return match
       report(removed, `url(${shorten(url)})`)
       return 'none'
     })
-    .replace(CSS_SCRIPTING, (match) => { report(removed, match.trim()); return '' })
+    .replace(CSS_SCRIPTING, (match) => { report(removed, match.trim()); return '' }), removed)
   if (hasUnsafeCss(decodeCssEscapes(cleaned))) {
     report(removed, '<style>')
     return ''
   }
   return cleaned
+}
+
+/**
+ * Replaces, as a whole, each `image-set()` that holds an address that is
+ * not safe.
+ * @param {string} css
+ * @param {string[]} removed - What is removed is added to it
+ * @returns {string}
+ */
+const removeUnsafeImageSets = (css, removed) => {
+  let cleaned = ''
+  let last = 0
+  for (const { start, end, strings } of imageSets(css)) {
+    // `start < last`: inside one that is already replaced
+    if (start < last || strings.every(isSafeCssUrl)) continue
+    report(removed, shorten(css.slice(start, end)))
+    cleaned += `${css.slice(last, start)}none`
+    last = end
+  }
+  return cleaned + css.slice(last)
 }
 
 /**
@@ -577,6 +659,12 @@ const sanitizeNode = (node, removed) => {
             return
           }
           if (ruled.has(styleAttrName)) {
+            // It stays in the style: the check on the attributes, below,
+            // does not see it
+            if (hasUnsafeCss(decodeCssEscapes(`${styleAttrName}:${styleAttrVal}`))) {
+              report(removed, styleAttrName)
+              return
+            }
             // As written since V6 (option fidelity.styleProperties)
             kept.push(isOn('styleProperties') ? declaration.trim() : `${styleAttrName}:${styleAttrVal}`)
           } else {
@@ -659,16 +747,12 @@ const sanitizeNode = (node, removed) => {
     // if the element has attributes pointing to a non-local reference,
     // need to remove the attribute
     ['clip-path', 'fill', 'filter', 'marker-end', 'marker-mid', 'marker-start', 'mask', 'stroke'].forEach((attr) => {
-      let val = node.getAttribute(attr)
+      const val = externalUrl(node.getAttribute(attr) ?? '')
       if (val) {
-        val = getUrlFromAttr(val)
-        // simply check for first character being a '#'
-        if (val && val[0] !== '#') {
-          node.setAttribute(attr, '')
-          warn(`attribute ${attr} in element ${node.nodeName} pointing to a non-local reference (${val}) is removed: ${node.outerHTML}`, null, 'sanitize')
-          node.removeAttribute(attr)
-          report(removed, `${attr}="url(${shorten(val)})"`)
-        }
+        node.setAttribute(attr, '')
+        warn(`attribute ${attr} in element ${node.nodeName} pointing to a non-local reference (${val}) is removed: ${node.outerHTML}`, null, 'sanitize')
+        node.removeAttribute(attr)
+        report(removed, `${attr}="url(${shorten(val)})"`)
       }
     })
 

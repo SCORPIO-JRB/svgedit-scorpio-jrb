@@ -811,6 +811,10 @@ class TopPanel {
     this.showSelectionPosition(box)
     this.showSelectionSize(box, false)
     this.editor.bottomPanel.showCommonValues(elements)
+    // The "+" and the eye of the paints read the boxes that showCommonValues
+    // just filled: refreshed with the selection, they showed the paints of
+    // the selection before.
+    this.editor.layout?.paintPicker?.refreshToggles()
     if (elements.every(elem => elem.tagName === 'text')) {
       this.showCommonTextValues(elements)
     }
@@ -1033,11 +1037,15 @@ class TopPanel {
     trigger.addEventListener('click', () => {
       this.setAlignMenu(popup.hidden, { focus: document.activeElement === trigger })
     })
+    // Lent to the context bar, the popup is out of the menu: the bar opens
+    // and closes it. A press in it then is not a press outside the menu,
+    // which hid it before the click reached its button.
+    const lent = () => !menu.contains(popup)
     document.addEventListener('pointerdown', (e) => {
-      if (!popup.hidden && !e.composedPath().includes(menu)) { this.setAlignMenu(false) }
+      if (!popup.hidden && !lent() && !e.composedPath().includes(menu)) { this.setAlignMenu(false) }
     }, true)
     document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape' || popup.hidden) { return }
+      if (e.key !== 'Escape' || popup.hidden || lent()) { return }
       // The first Escape closes the menu, before the editor's own uses.
       e.stopPropagation()
       e.preventDefault()

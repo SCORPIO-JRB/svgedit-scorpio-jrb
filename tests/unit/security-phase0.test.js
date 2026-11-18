@@ -55,8 +55,29 @@ describe('Phase 0 security: URL configuration (S1, S6, S7)', () => {
     expect(cfg.curConfig.extPath).toBe(defaultExtPath)
     expect(cfg.curConfig.imgPath).toBe(defaultImgPath)
     expect(cfg.curConfig.forceStorage).toBe(false)
-    expect(cfg.curConfig.dimensions).toEqual(['100', '200'])
+    expect(cfg.curConfig.dimensions).toEqual([100, 200])
     expect(cfg.curConfig.gridSnapping).toBe('true')
+  })
+
+  it('ignores a dimensions URL parameter that is not two positive numbers', () => {
+    // The value ends up in the markup of the canvas root: only numbers may
+    // get there, or a crafted link runs script when the editor starts.
+    const values = [
+      '1"><img xmlns="http://www.w3.org/1999/xhtml" src="x" onerror="alert(1)"/>,1',
+      '800',
+      '800,600,400',
+      '800,',
+      '0,600',
+      '-800,600',
+      'abc,def',
+      'Infinity,600'
+    ]
+    for (const value of values) {
+      const cfg = new ConfigObj(stubEditor())
+      window.history.replaceState(null, '', '/?dimensions=' + encodeURIComponent(value))
+      cfg.loadFromURL()
+      expect(cfg.curConfig.dimensions).toEqual([640, 480])
+    }
   })
 
   it('drops an invalid language code from the URL and keeps a valid one', () => {
@@ -184,6 +205,101 @@ describe('Phase 0 security: import filter (S3, S4, S5)', () => {
 
     expect(style.textContent).not.toContain('@import')
     expect(style.textContent).toContain('rect { fill: blue }')
+  })
+
+  it('sanitizeSvg() removes an external url() however the attribute writes it', () => {
+    const values = [
+      ' url(https://evil.example/a.svg#x)',
+      'URL(https://evil.example/a.png)',
+      'url(#local), url(https://evil.example/a.png)',
+      'blur(0) url(https://evil.example/a.svg#f)',
+      // Not closed: a browser reads the address up to the end of the value
+      'url(https://evil.example/a.png',
+      'u\\72l(https://evil.example/a.png)'
+    ]
+    for (const value of values) {
+      const rect = createSvgElement('rect')
+      rect.setAttribute('mask', value)
+      svg.append(rect)
+
+      const removed = sanitize.sanitizeSvg(rect)
+
+      expect(rect.hasAttribute('mask')).toBe(false)
+      expect(removed).toHaveLength(1)
+    }
+  })
+
+  it('sanitizeSvg() keeps a local url(), also when written with spaces or quotes', () => {
+    for (const value of ['url(#grad)', 'url( #grad )', "url('#grad')", 'url("#grad") #000']) {
+      const rect = createSvgElement('rect')
+      rect.setAttribute('fill', value)
+      svg.append(rect)
+
+      const removed = sanitize.sanitizeSvg(rect)
+
+      expect(rect.getAttribute('fill')).toBe(value)
+      expect(removed).toEqual([])
+    }
+  })
+
+  it('sanitizeSvg() removes an external url() from a style property that a rule also sets', () => {
+    // Such a property stays in the style attribute instead of becoming an
+    // attribute: the check on the attributes does not see it.
+    const doc = document.implementation.createDocument(NS.SVG, 'svg')
+    const style = doc.createElementNS(NS.SVG, 'style')
+    style.textContent = 'rect{mask:none;fill:red}'
+    const rect = doc.createElementNS(NS.SVG, 'rect')
+    rect.setAttribute('style', 'mask:url(https://evil.example/a.png);fill:url(#grad)')
+    doc.documentElement.append(style, rect)
+
+    const removed = sanitize.sanitizeSvg(rect)
+
+    expect(rect.hasAttribute('mask')).toBe(false)
+    expect(rect.getAttribute('style')).toBe('fill:url(#grad)')
+    expect(removed).toEqual(['mask'])
+  })
+
+  it('sanitizeCss() removes an external url() that the stylesheet does not close', () => {
+    // A browser reads such an address up to the end of the stylesheet
+    expect(sanitize.sanitizeCss('rect{mask-image:url(https://evil.example/a.png')).toBe('rect{mask-image:none')
+    expect(sanitize.sanitizeCss('rect{mask-image:url("https://evil.example/a.png')).toBe('rect{mask-image:none')
+    expect(sanitize.sanitizeCss('rect{fill:url(#grad')).toBe('rect{fill:url(#grad')
+  })
+
+  it('sanitizeCss() removes an image-set() that holds an external address', () => {
+    // image-set() takes its images as url() or as bare strings, which load
+    // just the same
+    const cases = [
+      'image-set("https://evil.example/a.png" 1x)',
+      '-webkit-image-set("https://evil.example/a.png" 1x)',
+      "image-set(url(#a) 1x, /* ; */ 'https://evil.example/a.png' 2x)",
+      'image-set(linear-gradient(rgb(calc(1*2),0,0),blue) 1x, "https://evil.example/a.png" 2x)',
+      'image-set("\\68ttps://evil.example/a.png" 1x)'
+    ]
+    for (const value of cases) {
+      expect(sanitize.sanitizeCss(`rect{mask-image:${value};fill:red}`)).toBe('rect{mask-image:none;fill:red}')
+    }
+    // Not closed: a browser reads it up to the end of the stylesheet
+    expect(sanitize.sanitizeCss('rect{mask-image:image-set("https://evil.example/a.png')).toBe('rect{mask-image:none')
+  })
+
+  it('sanitizeCss() keeps an image-set() of local references and image data', () => {
+    const css = 'rect{mask-image:image-set(url(#a) 1x, "data:image/png;base64,AA" type("image/png") 2x)}'
+    expect(sanitize.sanitizeCss(css)).toBe(css)
+  })
+
+  it('sanitizeSvg() removes an image-set() with an external address from an attribute and a style', () => {
+    const masked = createSvgElement('rect')
+    masked.setAttribute('mask', "image-set('https://evil.example/a.png' 1x)")
+    const styled = createSvgElement('rect')
+    styled.setAttribute('style', "cursor:image-set('https://evil.example/a.png' 1x), auto")
+    svg.append(masked, styled)
+
+    sanitize.sanitizeSvg(masked)
+    sanitize.sanitizeSvg(styled)
+
+    expect(masked.hasAttribute('mask')).toBe(false)
+    expect(styled.hasAttribute('style')).toBe(false)
   })
 
   it('sanitizeSvg() does not treat Object.prototype names as allowed elements', () => {

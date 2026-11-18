@@ -148,8 +148,9 @@ export const ensureSymbol = (def, batch) => {
   if (existing) return existing
   const symbol = document.createElementNS(NS.SVG, 'symbol')
   symbol.id = freeId(def.id)
-  fill(symbol, def)
+  // In the document before it is filled: the filter skips a detached element
   findDefs().append(symbol)
+  fill(symbol, def)
   normalizeAsOpened(symbol)
   batch.addSubCommand(new InsertElementCommand(symbol))
   return symbol

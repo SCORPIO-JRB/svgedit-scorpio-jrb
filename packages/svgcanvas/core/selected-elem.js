@@ -401,7 +401,7 @@ const cloneSelectedElements = (x, y, { addToHistory = true } = {}) => {
 // ---------------------------------------------------------------------------
 // Duplication that repeats its offset (M7).
 
-/** Offset of a first copy: Mod+D, the D and C keys and buttons. */
+/** Offset of a first copy, in pixels of the screen: Mod+D, the D and C keys and buttons. */
 const DUPLICATE_OFFSET = 20
 /** Below this, an offset is zero: the copies would hide the originals. */
 const DUPLICATE_EPSILON = 1e-9
@@ -451,16 +451,18 @@ const rememberDuplicate = (copies, offsetOrOriginals) => {
 }
 
 /**
- * The offset Mod+D gives to copies of the given elements. When they are the
- * copies of the last duplication, it is the offset of that duplication plus
- * the distance they were moved since: duplicate, move the copy, then Mod+D
- * makes a regular series. Otherwise, 20 to the right and 20 down.
+ * The offset Mod+D gives to copies of the given elements, in the units of
+ * the drawing. When they are the copies of the last duplication, it is the
+ * offset of that duplication plus the distance they were moved since:
+ * duplicate, move the copy, then Mod+D makes a regular series. Otherwise, 20
+ * pixels of the screen to the right and 20 down.
  * @function module:selected-elem.SvgCanvas#getDuplicateOffset
  * @param {Element[]} [elements] - The selected elements by default
  * @returns {{x: number, y: number}}
  */
 const getDuplicateOffset = (elements) => {
-  const fallback = { x: DUPLICATE_OFFSET, y: DUPLICATE_OFFSET }
+  const zoom = svgCanvas.getZoom()
+  const fallback = { x: DUPLICATE_OFFSET / zoom, y: DUPLICATE_OFFSET / zoom }
   const current = (elements || svgCanvas.getSelectedElements()).filter(Boolean)
   const last = lastDuplicate
   if (
@@ -488,14 +490,21 @@ const getDuplicateOffset = (elements) => {
  * where getDuplicateOffset() says, so that repeating Mod+D after moving a copy
  * continues the series.
  * @function module:selected-elem.SvgCanvas#duplicateSelectedElements
- * @param {{x: number, y: number}} [offset] - A fixed offset (Alt+arrows)
+ * @param {{x: number, y: number}} [offset] - A fixed offset (Alt+arrows),
+ *   in pixels of the screen
  * @returns {module:history.BatchCommand|undefined}
  */
 const duplicateSelectedElements = (offset) => {
   const elements = svgCanvas.getSelectedElements().filter(Boolean)
   if (!elements.length) { return undefined }
-  const { x, y } = offset || getDuplicateOffset(elements)
-  const cmd = cloneSelectedElements(x, y)
+  // The copies are moved by pixels of the screen (moveSelectedElements); a
+  // series is remembered in the units of the drawing, as the boxes its
+  // moves are measured on: the two only agree at a zoom of 100 %.
+  const zoom = svgCanvas.getZoom()
+  const { x, y } = offset
+    ? { x: offset.x / zoom, y: offset.y / zoom }
+    : getDuplicateOffset(elements)
+  const cmd = cloneSelectedElements(x * zoom, y * zoom)
   if (cmd) {
     rememberDuplicate(svgCanvas.getSelectedElements(), { x, y })
   }
@@ -1139,6 +1148,16 @@ const pushGroupProperty = (g, undoable) => {
 
   const batchCmd = new BatchCommand('Push group properties')
 
+  // As changeSelectedAttribute, but the change goes into the batch instead
+  // of the history: what the group gives its children is undone with the
+  // ungrouping, in one step
+  const changeAttribute = (attr, value, elem) => {
+    svgCanvas.undoMgr.beginUndoableChange(attr, [elem])
+    svgCanvas.changeSelectedAttributeNoUndo(attr, value, [elem])
+    const cmd = svgCanvas.undoMgr.finishUndoableChange()
+    if (!cmd.isEmpty()) batchCmd.addSubCommand(cmd)
+  }
+
   // TODO: get all fill/stroke properties from the group that we are about to destroy
   // "fill", "fill-opacity", "fill-rule", "stroke", "stroke-dasharray", "stroke-dashoffset",
   // "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stroke-opacity",
@@ -1169,7 +1188,7 @@ const pushGroupProperty = (g, undoable) => {
       const newOpac =
         Math.round((elem.getAttribute('opacity') || 1) * gattrs.opacity * 100) /
         100
-      svgCanvas.changeSelectedAttribute('opacity', newOpac, [elem])
+      changeAttribute('opacity', newOpac, elem)
     }
 
     if (gattrs.filter) {
@@ -1201,11 +1220,7 @@ const pushGroupProperty = (g, undoable) => {
           const suffix =
             blurElem?.tagName === 'feGaussianBlur' ? 'blur' : 'filter'
           gfilter.id = `${elem.id}_${suffix}`
-          svgCanvas.changeSelectedAttribute(
-            'filter',
-            `url(#${gfilter.id})`,
-            [elem]
-          )
+          changeAttribute('filter', `url(#${gfilter.id})`, elem)
         }
       } else {
         gfilter = getRefElem(elem.getAttribute('filter'))
@@ -1215,7 +1230,7 @@ const pushGroupProperty = (g, undoable) => {
 
       // Update blur value
       if (cblur) {
-        svgCanvas.changeSelectedAttribute('stdDeviation', cblur, [blurElem])
+        changeAttribute('stdDeviation', cblur, blurElem)
         svgCanvas.setBlurOffsets(gfilter, cblur)
       }
     }

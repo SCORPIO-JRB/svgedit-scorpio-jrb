@@ -311,6 +311,14 @@ class SvgCanvas {
     container.addEventListener('dblclick', this.dblClickEvent)
     container.addEventListener('mouseup', this.mouseUpEvent)
     container.addEventListener('mouseleave', this.mouseOutEvent)
+    // A drag of the selection goes on when the pointer leaves the canvas
+    // (mouseOutEvent ends the other gestures): a release out there ends it,
+    // or the objects follow the pointer, button up, when it comes back.
+    window.addEventListener('mouseup', (evt) => {
+      if (this.getStarted() && this.getCurrentMode() === 'select' && !container.contains(evt.target)) {
+        this.mouseUpEvent(evt)
+      }
+    }, true)
     container.addEventListener('mousewheel', this.DOMMouseScrollEvent)
     container.addEventListener('DOMMouseScroll', this.DOMMouseScrollEvent)
 
@@ -984,27 +992,24 @@ class SvgCanvas {
   }
 
   restoreRefElements (elem) {
-    // Look for missing reference elements, restore any found
-    const attrs = {}
-    refAttrs.forEach((item, _) => {
-      attrs[item] = elem.getAttribute(item)
-    })
-    Object.values(attrs).forEach(val => {
-      if (val?.startsWith('url(')) {
-        const id = getUrlFromAttr(val).slice(1)
-        const ref = getElement(id)
-        if (!ref) {
-          findDefs().append(this.removedElements[id])
-          delete this.removedElements[id]
-        }
-      }
-    })
-    const childs = elem.getElementsByTagName('*')
-
-    if (childs.length) {
-      for (let i = 0, l = childs.length; i < l; i++) {
-        this.restoreRefElements(childs[i])
-      }
+    // Look for missing reference elements, restore any found: the ones the
+    // element and its descendants point to, by `url(#id)` or by `href`
+    const restore = (id) => {
+      const removed = this.removedElements[id]
+      if (!removed || getElement(id)) return
+      findDefs().append(removed)
+      delete this.removedElements[id]
+      // What it refers to in turn: a gradient that takes its stops from
+      // another, the drawing of a symbol
+      this.restoreRefElements(removed)
+    }
+    for (const el of [elem, ...elem.getElementsByTagName('*')]) {
+      refAttrs.forEach((attr) => {
+        const val = el.getAttribute(attr)
+        if (val?.startsWith('url(')) restore(getUrlFromAttr(val)?.slice(1))
+      })
+      const href = getHref(el)
+      if (href?.startsWith('#')) restore(href.slice(1))
     }
   }
 

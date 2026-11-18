@@ -394,17 +394,6 @@ export const adoptTitle = (host, control, value, t) => {
  */
 export const controlTitle = (element) => element.seTitle ?? element.getAttribute('title')
 
-/**
- * @param {string} label
- * @param {string} spec A shortcut attribute
- * @param {(key: string) => string} [t]
- * @returns {string} "Label (Ctrl+Z)", or the label alone
- */
-export const titleWithShortcut = (label, spec, t) => {
-  const hint = shortcutHint(spec, t)
-  return hint ? `${label} (${hint})` : label
-}
-
 let anonymous = 0
 /**
  * Declares the command of a button or menu entry: its shortcut clicks it,

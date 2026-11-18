@@ -187,6 +187,14 @@ export default {
           mimeTypes: ['image/*']
         })
         const svgContent = await blob.text()
+        // A file that is not a drawing (the picker also offers images) is
+        // refused before the document is cleared: it used to cost the
+        // current drawing and its history.
+        const root = new DOMParser().parseFromString(svgContent, 'text/xml').documentElement
+        if (root.localName !== 'svg' || root.namespaceURI !== svgCanvas.NS.SVG) {
+          seAlert(svgEditor.i18next.t('notification.errorLoadingSVG'))
+          return
+        }
         // Replace the document only once the new file has been read:
         // cancelling the file picker used to leave an empty document.
         svgCanvas.clear()

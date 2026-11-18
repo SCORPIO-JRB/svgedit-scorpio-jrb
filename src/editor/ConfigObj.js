@@ -357,8 +357,15 @@ export default class ConfigObj {
         this.urldata.bkgd_color = '#' + searchParams.get('bkgd_color')
       }
 
-      if (this.urldata.dimensions) {
-        this.urldata.dimensions = this.urldata.dimensions.split(',')
+      if (this.urldata.dimensions !== undefined) {
+        // Only two positive numbers: the value is written into the markup
+        // of the canvas root, where anything else would be an injection.
+        const dimensions = this.urldata.dimensions.split(',').map(Number)
+        if (dimensions.length === 2 && dimensions.every((n) => Number.isFinite(n) && n > 0)) {
+          this.urldata.dimensions = dimensions
+        } else {
+          delete this.urldata.dimensions
+        }
       }
 
       if (this.urldata.extensions) {

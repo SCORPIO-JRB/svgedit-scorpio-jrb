@@ -25,7 +25,7 @@
 import { NS } from './namespaces.js'
 import { BatchCommand, ChangeElementCommand, InsertElementCommand } from './history.js'
 import { findDefs } from './utilities.js'
-import { portsOf, portOf, DIRECTIONS, hasDeclaredPorts } from './ports.js'
+import { portsOf, portOf, hasDeclaredPorts } from './ports.js'
 import { drawingBoxOf } from './multi-transform.js'
 import { route, followEnds, simplify, parsePoints, formatPoints, movableSegments, moveSegment } from './orthogonal.js'
 
@@ -436,17 +436,6 @@ export const portNear = (elems, point, radius) => {
     }
   }
   return best && { elem: best.elem, port: best.port }
-}
-
-/**
- * The stub of a port, for the drawing of a connector being drawn.
- * @param {{x: number, y: number, dir: string}} port
- * @param {number} length
- * @returns {{x: number, y: number}}
- */
-export const stubPoint = (port, length) => {
-  const v = DIRECTIONS[port.dir] ?? { x: 0, y: 0 }
-  return { x: port.x + v.x * length, y: port.y + v.y * length }
 }
 
 /**

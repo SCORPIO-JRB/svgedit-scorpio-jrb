@@ -999,7 +999,7 @@ export class Inspector {
     row.innerHTML = `<span class="se-caption">${t('layout.text_resizing')}</span>
       <div class="se-choices" id="se-text-resizing" role="radiogroup" aria-label="${t('layout.text_resizing')}">${modes.map(([mode, key]) =>
         `<button type="button" class="se-icon-button" role="radio" aria-checked="false" data-value="${mode}"
-          aria-label="${t(`layout.${key}`)}"><se-icon src="${imgPath}/${key === 'text_fixed_size' ? 'text_fixed_size' : key}.svg"></se-icon></button>`).join('')}</div>`
+          aria-label="${t(`layout.${key}`)}"><se-icon src="${imgPath}/${key}.svg"></se-icon></button>`).join('')}</div>`
     for (const button of row.querySelectorAll('[data-value]')) button.seTooltip = { label: button.getAttribute('aria-label') }
     row.addEventListener('click', (e) => {
       const mode = e.target.closest('[data-value]')?.dataset.value

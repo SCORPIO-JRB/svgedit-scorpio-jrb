@@ -17,7 +17,7 @@ import {
 import { withStartTransform } from './recalculate.js'
 import * as draw from './draw.js'
 import * as hstry from './history.js'
-import { findPos } from '../../svgcanvas/common/util.js'
+import { findPos } from '../common/util.js'
 import { isMac } from '../common/browser.js'
 import { isDeepClick } from './selection-nav.js'
 import { SnapIndex, SNAP_THRESHOLD, measureGuides, snapMove, snapPoint, snapResize, snapPorts } from './snap.js'
@@ -1472,6 +1472,16 @@ const mouseUpEvent = (evt) => {
           resizeSelectors(selectedElements)
           // no change in position/size, so maybe we should move to pathedit
         } else {
+          if (mouseUpMode === 'resize') {
+            // A click on a grip, without a move: the three transforms that
+            // the press added for the gesture go, or the file keeps them
+            const startTransform = svgCanvas.getStartTransform()
+            if (startTransform) {
+              selectedElements[0].setAttribute('transform', startTransform)
+            } else {
+              selectedElements[0].removeAttribute('transform')
+            }
+          }
           // The clicked element as selected at mousedown (the top element in
           // the current layer or group), not the raw event target.
           t = svgCanvas.getMouseTarget(evt)
