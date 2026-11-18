@@ -266,6 +266,42 @@ describe('Phase 0 security: import filter (S3, S4, S5)', () => {
     expect(sanitize.sanitizeCss('rect{fill:url(#grad')).toBe('rect{fill:url(#grad')
   })
 
+  it('sanitizeCss() removes an image-set() that holds an external address', () => {
+    // image-set() takes its images as url() or as bare strings, which load
+    // just the same
+    const cases = [
+      'image-set("https://evil.example/a.png" 1x)',
+      '-webkit-image-set("https://evil.example/a.png" 1x)',
+      "image-set(url(#a) 1x, /* ; */ 'https://evil.example/a.png' 2x)",
+      'image-set(linear-gradient(rgb(calc(1*2),0,0),blue) 1x, "https://evil.example/a.png" 2x)',
+      'image-set("\\68ttps://evil.example/a.png" 1x)'
+    ]
+    for (const value of cases) {
+      expect(sanitize.sanitizeCss(`rect{mask-image:${value};fill:red}`)).toBe('rect{mask-image:none;fill:red}')
+    }
+    // Not closed: a browser reads it up to the end of the stylesheet
+    expect(sanitize.sanitizeCss('rect{mask-image:image-set("https://evil.example/a.png')).toBe('rect{mask-image:none')
+  })
+
+  it('sanitizeCss() keeps an image-set() of local references and image data', () => {
+    const css = 'rect{mask-image:image-set(url(#a) 1x, "data:image/png;base64,AA" type("image/png") 2x)}'
+    expect(sanitize.sanitizeCss(css)).toBe(css)
+  })
+
+  it('sanitizeSvg() removes an image-set() with an external address from an attribute and a style', () => {
+    const masked = createSvgElement('rect')
+    masked.setAttribute('mask', "image-set('https://evil.example/a.png' 1x)")
+    const styled = createSvgElement('rect')
+    styled.setAttribute('style', "cursor:image-set('https://evil.example/a.png' 1x), auto")
+    svg.append(masked, styled)
+
+    sanitize.sanitizeSvg(masked)
+    sanitize.sanitizeSvg(styled)
+
+    expect(masked.hasAttribute('mask')).toBe(false)
+    expect(styled.hasAttribute('style')).toBe(false)
+  })
+
   it('sanitizeSvg() does not treat Object.prototype names as allowed elements', () => {
     const fake = createSvgElement('constructor')
     fake.setAttribute('href', '#x')
