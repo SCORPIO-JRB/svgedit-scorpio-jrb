@@ -55,8 +55,29 @@ describe('Phase 0 security: URL configuration (S1, S6, S7)', () => {
     expect(cfg.curConfig.extPath).toBe(defaultExtPath)
     expect(cfg.curConfig.imgPath).toBe(defaultImgPath)
     expect(cfg.curConfig.forceStorage).toBe(false)
-    expect(cfg.curConfig.dimensions).toEqual(['100', '200'])
+    expect(cfg.curConfig.dimensions).toEqual([100, 200])
     expect(cfg.curConfig.gridSnapping).toBe('true')
+  })
+
+  it('ignores a dimensions URL parameter that is not two positive numbers', () => {
+    // The value ends up in the markup of the canvas root: only numbers may
+    // get there, or a crafted link runs script when the editor starts.
+    const values = [
+      '1"><img xmlns="http://www.w3.org/1999/xhtml" src="x" onerror="alert(1)"/>,1',
+      '800',
+      '800,600,400',
+      '800,',
+      '0,600',
+      '-800,600',
+      'abc,def',
+      'Infinity,600'
+    ]
+    for (const value of values) {
+      const cfg = new ConfigObj(stubEditor())
+      window.history.replaceState(null, '', '/?dimensions=' + encodeURIComponent(value))
+      cfg.loadFromURL()
+      expect(cfg.curConfig.dimensions).toEqual([640, 480])
+    }
   })
 
   it('drops an invalid language code from the URL and keeps a valid one', () => {
