@@ -17,7 +17,7 @@ import {
 import { withStartTransform } from './recalculate.js'
 import * as draw from './draw.js'
 import * as hstry from './history.js'
-import { findPos } from '../../svgcanvas/common/util.js'
+import { findPos } from '../common/util.js'
 import { isMac } from '../common/browser.js'
 import { isDeepClick } from './selection-nav.js'
 import { SnapIndex, SNAP_THRESHOLD, measureGuides, snapMove, snapPoint, snapResize, snapPorts } from './snap.js'
