@@ -107,4 +107,51 @@ describe('audit corrections (canvas)', () => {
       }
     })
   })
+
+  describe('Mod+D at a zoom other than 100 %', () => {
+    const xOf = (elem) => Number(elem.getAttribute('x'))
+    const yOf = (elem) => Number(elem.getAttribute('y'))
+    const copy = () => svgCanvas.getSelectedElements()[0]
+
+    beforeEach(() => {
+      load(drawing('<rect id="r1" x="100" y="100" width="40" height="30"/>'))
+      svgCanvas.setZoom(2)
+      select('r1')
+    })
+
+    it('continues the series of a copy that was moved', () => {
+      svgCanvas.duplicateSelectedElements()
+      // 20 pixels of the screen, as before: 10 in the drawing at 200 %
+      expect(xOf(copy())).toBe(110)
+      // Moved by 100 in the drawing (the function takes pixels of the screen)
+      svgCanvas.moveSelectedElements(200, 0, true)
+      expect(xOf(copy())).toBe(210)
+
+      svgCanvas.duplicateSelectedElements()
+      expect([xOf(copy()), yOf(copy())]).toEqual([320, 120])
+
+      // The series is in the units of the drawing: another zoom keeps it
+      svgCanvas.setZoom(1)
+      svgCanvas.duplicateSelectedElements()
+      expect([xOf(copy()), yOf(copy())]).toEqual([430, 130])
+    })
+
+    it('continues the series of an Alt+drag', () => {
+      // Alt+drag: copies made in place, then moved; the offset is measured
+      svgCanvas.cloneSelectedElements(0, 0)
+      svgCanvas.moveSelectedElements(0, 70, true)
+      svgCanvas.rememberDuplicate(svgCanvas.getSelectedElements(), [$('r1')])
+      expect(yOf(copy())).toBe(135)
+
+      svgCanvas.duplicateSelectedElements()
+      expect(yOf(copy())).toBe(170)
+    })
+
+    it('repeats a fixed offset (Alt+arrows) as before', () => {
+      svgCanvas.duplicateSelectedElements({ x: 10, y: 0 })
+      expect(xOf(copy())).toBe(105)
+      svgCanvas.duplicateSelectedElements()
+      expect(xOf(copy())).toBe(110)
+    })
+  })
 })
