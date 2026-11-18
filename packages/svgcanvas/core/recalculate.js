@@ -800,6 +800,8 @@ const recalculateGeometry = selected => {
     if (!preservesMatrix) {
       const geometryAttributes = Object.keys(initial).filter(attribute => attribute !== 'transform')
       const before = elementTransformStateSignature(selected, tlist, geometryAttributes)
+      // A flip gives the element a mirrored copy of its gradient (remapElement)
+      const paints = { fill: selected.getAttribute('fill'), stroke: selected.getAttribute('stroke') }
 
       if (bakeTransformsIntoAttributes(selected, changes, tlist, svgroot)) {
         if (tlist.numberOfItems === 0) {
@@ -808,6 +810,13 @@ const recalculateGeometry = selected => {
         const after = elementTransformStateSignature(selected, tlist, geometryAttributes)
         if (after === before) {
           return null
+        }
+        for (const [type, paint] of Object.entries(paints)) {
+          const mirrored = selected.getAttribute(type)
+          if (mirrored === paint) continue
+          // The undo puts the paint back and removes the copy of the gradient
+          initial[type] = paint
+          batchCmd.addSubCommand(new InsertElementCommand(getRefElem(mirrored)))
         }
         batchCmd.addSubCommand(new ChangeElementCommand(selected, initial))
         return batchCmd

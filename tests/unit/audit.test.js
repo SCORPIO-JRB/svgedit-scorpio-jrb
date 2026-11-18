@@ -190,4 +190,38 @@ describe('audit corrections (canvas)', () => {
       expect($('b').getAttribute('opacity')).toBe('0.25')
     })
   })
+
+  describe('flipping a shape filled with a gradient', () => {
+    // The flip gives the shape a mirrored copy of its gradient
+    const GRADIENT = '<defs><linearGradient id="lg" x1="0" x2="1"><stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#00f"/></linearGradient></defs>'
+    const gradients = () => [...svgCanvas.getSvgContent().querySelectorAll('linearGradient')].map((gradient) => gradient.id)
+
+    beforeEach(() => {
+      load(drawing('<rect id="r1" x="100" y="100" width="120" height="60" fill="url(#lg)"/>', GRADIENT))
+      select('r1')
+    })
+
+    it('mirrors the gradient, as before', () => {
+      svgCanvas.flipSelectedElements(-1, 1)
+
+      const fill = $('r1').getAttribute('fill')
+      expect(fill).not.toBe('url(#lg)')
+      expect(gradients()).toHaveLength(2)
+      const mirrored = svgCanvas.getSvgContent().querySelector(`#${fill.slice(5, -1)}`)
+      expect([mirrored.getAttribute('x1'), mirrored.getAttribute('x2')]).toEqual(['1', '0'])
+    })
+
+    it('is undone with its gradient: the fill comes back, the copy goes', () => {
+      svgCanvas.flipSelectedElements(-1, 1)
+      const flipped = $('r1').getAttribute('fill')
+
+      svgCanvas.undoMgr.undo()
+      expect($('r1').getAttribute('fill')).toBe('url(#lg)')
+      expect(gradients()).toEqual(['lg'])
+
+      svgCanvas.undoMgr.redo()
+      expect($('r1').getAttribute('fill')).toBe(flipped)
+      expect(gradients()).toHaveLength(2)
+    })
+  })
 })
