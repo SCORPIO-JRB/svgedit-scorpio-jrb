@@ -281,3 +281,27 @@ test.describe('audit: the PDF export', () => {
     })
   })
 })
+
+test.describe('audit: the panels of the selected object after a change', () => {
+  test('a change reads the binding of the selected object once', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, drawing('<rect id="r1" x="10" y="10" width="50" height="50" data-tag="a"/>'))
+
+    // It reads the whole drawing, and each change read it twice: for the
+    // document, then for the selection
+    const result = await page.evaluate(() => {
+      const canvas = window.svgEditor.svgCanvas
+      const elem = document.getElementById('r1')
+      const shown = () => document.querySelector('#se-binding input[data-name="data-tag"]')?.value
+      canvas.selectOnly([elem], true)
+      let reads = 0
+      const getBinding = canvas.getBinding
+      canvas.getBinding = (...args) => { reads++; return getBinding(...args) }
+      canvas.setElementData(elem, 'data-tag', 'b')
+      canvas.getBinding = getBinding
+      return { reads, shown: shown() }
+    })
+
+    expect(result).toEqual({ reads: 1, shown: 'b' })
+  })
+})

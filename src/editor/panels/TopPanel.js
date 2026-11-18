@@ -392,6 +392,8 @@ class TopPanel {
         // A change of the nodes is undone as any other (lot Plume): the
         // buttons, and Ctrl+Z which runs the Undo button, stayed disabled.
         this.updateHistoryButtons()
+        // The only way out before layout.selectionChanged(), at the end:
+        // Editor.elementChanged() counts on it.
         return
       }
 
