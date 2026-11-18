@@ -445,6 +445,15 @@ describe('path', function () {
     assert.ok(result.length > 0)
   })
 
+  it('Test convertPath keeps the radii and the flags of an absolute arc', function () {
+    // The copy this module had lost them: it wrote the end point alone
+    const path = document.createElementNS(NS.SVG, 'path')
+    path.setAttribute('d', 'M0,0 A10,10 0 1 0 20,20')
+
+    assert.equal(pathModule.convertPath(path), 'M0,0A10,10 0 1 0 20,20')
+    assert.equal(pathModule.convertPath(path, true), 'm0,0a10,10 0 1 0 20,20')
+  })
+
   it('Test convertPath with relative arc', function () {
     const path = document.createElementNS(NS.SVG, 'path')
     path.setAttribute('d', 'M10,10 a5,5 0 0 1 10,10')
