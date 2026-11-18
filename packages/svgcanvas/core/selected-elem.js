@@ -1148,6 +1148,16 @@ const pushGroupProperty = (g, undoable) => {
 
   const batchCmd = new BatchCommand('Push group properties')
 
+  // As changeSelectedAttribute, but the change goes into the batch instead
+  // of the history: what the group gives its children is undone with the
+  // ungrouping, in one step
+  const changeAttribute = (attr, value, elem) => {
+    svgCanvas.undoMgr.beginUndoableChange(attr, [elem])
+    svgCanvas.changeSelectedAttributeNoUndo(attr, value, [elem])
+    const cmd = svgCanvas.undoMgr.finishUndoableChange()
+    if (!cmd.isEmpty()) batchCmd.addSubCommand(cmd)
+  }
+
   // TODO: get all fill/stroke properties from the group that we are about to destroy
   // "fill", "fill-opacity", "fill-rule", "stroke", "stroke-dasharray", "stroke-dashoffset",
   // "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stroke-opacity",
@@ -1178,7 +1188,7 @@ const pushGroupProperty = (g, undoable) => {
       const newOpac =
         Math.round((elem.getAttribute('opacity') || 1) * gattrs.opacity * 100) /
         100
-      svgCanvas.changeSelectedAttribute('opacity', newOpac, [elem])
+      changeAttribute('opacity', newOpac, elem)
     }
 
     if (gattrs.filter) {
@@ -1210,11 +1220,7 @@ const pushGroupProperty = (g, undoable) => {
           const suffix =
             blurElem?.tagName === 'feGaussianBlur' ? 'blur' : 'filter'
           gfilter.id = `${elem.id}_${suffix}`
-          svgCanvas.changeSelectedAttribute(
-            'filter',
-            `url(#${gfilter.id})`,
-            [elem]
-          )
+          changeAttribute('filter', `url(#${gfilter.id})`, elem)
         }
       } else {
         gfilter = getRefElem(elem.getAttribute('filter'))
@@ -1224,7 +1230,7 @@ const pushGroupProperty = (g, undoable) => {
 
       // Update blur value
       if (cblur) {
-        svgCanvas.changeSelectedAttribute('stdDeviation', cblur, [blurElem])
+        changeAttribute('stdDeviation', cblur, blurElem)
         svgCanvas.setBlurOffsets(gfilter, cblur)
       }
     }

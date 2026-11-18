@@ -154,4 +154,40 @@ describe('audit corrections (canvas)', () => {
       expect(xOf(copy())).toBe(110)
     })
   })
+
+  describe('ungrouping a group that has an opacity', () => {
+    beforeEach(() => {
+      load(drawing(
+        '<g id="g1" opacity="0.5"><rect id="a" x="10" y="10" width="50" height="50"/>' +
+        '<rect id="b" x="100" y="10" width="50" height="50" opacity="0.5"/></g>'
+      ))
+      select('g1')
+    })
+
+    it('gives the opacity to the objects, as before', () => {
+      svgCanvas.ungroupSelectedElement()
+
+      expect($('g1')).toBeNull()
+      expect($('a').getAttribute('opacity')).toBe('0.5')
+      expect($('b').getAttribute('opacity')).toBe('0.25')
+    })
+
+    it('is one undo step, which puts back the group and the opacities', () => {
+      svgCanvas.ungroupSelectedElement()
+      expect(svgCanvas.undoMgr.getUndoStackSize()).toBe(1)
+
+      svgCanvas.undoMgr.undo()
+
+      expect($('g1').getAttribute('opacity')).toBe('0.5')
+      expect($('a').parentNode).toBe($('g1'))
+      // Left at 0.5 under a group at 0.5, the object showed at 25 %
+      expect($('a').hasAttribute('opacity')).toBe(false)
+      expect($('b').getAttribute('opacity')).toBe('0.5')
+
+      svgCanvas.undoMgr.redo()
+      expect($('g1')).toBeNull()
+      expect($('a').getAttribute('opacity')).toBe('0.5')
+      expect($('b').getAttribute('opacity')).toBe('0.25')
+    })
+  })
 })
