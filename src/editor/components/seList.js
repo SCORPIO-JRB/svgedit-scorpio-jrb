@@ -244,6 +244,10 @@ export class SeList extends HTMLElement {
    * @returns {void}
    */
   connectedCallback () {
+    // Moved to another place of the page, the element is connected again:
+    // its listeners must not be added twice
+    if (this.connected) return
+    this.connected = true
     const currentObj = this
     this.$dropdown.addEventListener('selectedindexchange', (e) => {
       if (e?.detail?.selectedItem !== undefined) {

@@ -143,3 +143,31 @@ test.describe('audit corrections: gestures', () => {
     expect(await undoSize(page)).toBe(1)
   })
 })
+
+test.describe('audit corrections: panels', () => {
+  test.beforeEach(async ({ page }) => {
+    await visitAndApproveStorage(page)
+  })
+
+  test('an arrow chosen once in the inspector is one change and one undo step', async ({ page }) => {
+    // The inspector moves the list of the arrows into its panel: connected a
+    // second time, the list added its listeners again and said every choice twice
+    await load(page, drawing('<line id="l1" x1="100" y1="100" x2="300" y2="200" stroke="#000" stroke-width="2" fill="none"/>'))
+    await page.evaluate(() => window.svgEditor.svgCanvas.selectOnly([document.getElementById('l1')], true))
+    await page.waitForFunction(() => Boolean(document.querySelector('.se-inspector #end_marker_list_opts')))
+
+    const changes = await page.evaluate(() => {
+      const list = document.getElementById('end_marker_list_opts')
+      const values = [...list.querySelectorAll('se-list-item')].map((item) => item.getAttribute('value'))
+      let changes = 0
+      list.addEventListener('change', () => { changes++ })
+      // What the list of choices sends when one is picked
+      list.$dropdown.dispatchEvent(new CustomEvent('selectedindexchange', { detail: { selectedItem: values[1] } }))
+      return changes
+    })
+
+    expect(changes).toBe(1)
+    expect(await attr(page, 'l1', 'marker-end')).toMatch(/^url\(#/)
+    expect(await undoSize(page)).toBe(1)
+  })
+})
