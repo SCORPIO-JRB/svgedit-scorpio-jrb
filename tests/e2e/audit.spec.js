@@ -249,3 +249,35 @@ test.describe('audit corrections: panels', () => {
     expect(await undoSize(page)).toBe(1)
   })
 })
+
+test.describe('audit: the PDF export', () => {
+  // Written before the libraries that the export never calls left the
+  // bundle: the page has the size of the drawing and shows its picture.
+  test('the export gives one page of the size of the drawing, with its picture', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, drawing('<rect id="r1" x="10" y="10" width="50" height="50" fill="#f00"/>'))
+
+    const pdf = await page.evaluate(async () => {
+      const { output } = await window.svgEditor.svgCanvas.exportPDF('plan.pdf', 'dataurlstring')
+      const text = atob(output.slice(output.indexOf(',') + 1))
+      // The picture is the first image: three bytes a pixel, not compressed
+      const image = text.indexOf('/Subtype /Image')
+      const pixels = text.indexOf('stream\n', image) + 'stream\n'.length
+      return {
+        head: text.slice(0, 5),
+        pages: text.match(/\/Type \/Page\b/g).length,
+        box: /\/MediaBox \[([^\]]*)\]/.exec(text)[1],
+        size: /\/Width (\d+)\n\/Height (\d+)/.exec(text.slice(image)).slice(1).map(Number),
+        inside: [0, 1, 2].map((i) => text.charCodeAt(pixels + (30 * 640 + 30) * 3 + i))
+      }
+    })
+
+    expect(pdf).toEqual({
+      head: '%PDF-',
+      pages: 1,
+      box: '0 0 640. 480.',
+      size: [640, 480],
+      inside: [255, 0, 0]
+    })
+  })
+})
