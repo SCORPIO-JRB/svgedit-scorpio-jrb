@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js'
-import { visitAndApproveStorage } from './helpers.js'
+import { visitAndApproveStorage, screenPoint, chooseTool } from './helpers.js'
 
 // Bugs found by the audit of the code (November 2026), in the editor: each
 // test first showed the bug, then its correction.
@@ -9,7 +9,7 @@ const drawing = (content, defs = '') =>
 
 async function load (page, svg, zoom = 1) {
   await page.evaluate(({ svg, zoom }) => {
-    window.svgEditor.setConfig({ gridSnapping: false })
+    window.svgEditor.setConfig({ gridSnapping: false, objectSnapping: false })
     const canvas = window.svgEditor.svgCanvas
     canvas.setSvgString(svg)
     canvas.setZoom(zoom)
@@ -21,6 +21,10 @@ async function load (page, svg, zoom = 1) {
 
 const undoSize = (page) => page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.getUndoStackSize())
 const attr = (page, id, name) => page.evaluate(({ id, name }) => document.getElementById(id)?.getAttribute(name), { id, name })
+const clickAt = async (page, x, y) => {
+  const point = await screenPoint(page, x, y)
+  await page.mouse.click(point.x, point.y)
+}
 
 test.describe('audit corrections: files', () => {
   // Without the File System Access API, the editor opens a plain file
@@ -84,5 +88,36 @@ test.describe('audit corrections: gestures', () => {
       expect(await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())).not.toContain('matrix(1 0 0 1 0 0)')
       expect(await undoSize(page)).toBe(0)
     }
+  })
+
+  // The commands of the paths that clicks of the pen leave: "ML", "MLLLz"...
+  const penPaths = async (page, clicks) => {
+    await load(page, drawing(''))
+    await chooseTool(page, 'tool_path')
+    for (const [x, y] of clicks) await clickAt(page, x, y)
+    return page.evaluate(() => [...document.querySelectorAll('#svgcontent g.layer > path')]
+      .map((path) => path.getAttribute('d').match(/[a-z]/gi).join('')))
+  }
+  const A = [300, 100]
+  const B = [400, 200]
+  const C = [300, 300]
+
+  test('the pen: a click on the last point of two ends the path, open', async ({ page }) => {
+    // It closed the path onto its start: a line drawn twice
+    expect(await penPaths(page, [A, B, B])).toEqual(['ML'])
+  })
+
+  test('the pen: a click on the first point of two ends the path, open', async ({ page }) => {
+    expect(await penPaths(page, [A, B, A])).toEqual(['ML'])
+  })
+
+  test('the pen: a click on a point other than the first ends the path, open', async ({ page }) => {
+    // A click on the second point closed the path
+    expect(await penPaths(page, [A, B, C, B])).toEqual(['MLL'])
+    expect(await penPaths(page, [A, B, C, C])).toEqual(['MLL'])
+  })
+
+  test('the pen: a click on the first point still closes a path of three points', async ({ page }) => {
+    expect(await penPaths(page, [A, B, C, A])).toEqual(['MLLLz'])
   })
 })
