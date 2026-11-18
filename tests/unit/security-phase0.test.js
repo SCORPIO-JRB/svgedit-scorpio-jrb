@@ -207,6 +207,65 @@ describe('Phase 0 security: import filter (S3, S4, S5)', () => {
     expect(style.textContent).toContain('rect { fill: blue }')
   })
 
+  it('sanitizeSvg() removes an external url() however the attribute writes it', () => {
+    const values = [
+      ' url(https://evil.example/a.svg#x)',
+      'URL(https://evil.example/a.png)',
+      'url(#local), url(https://evil.example/a.png)',
+      'blur(0) url(https://evil.example/a.svg#f)',
+      // Not closed: a browser reads the address up to the end of the value
+      'url(https://evil.example/a.png',
+      'u\\72l(https://evil.example/a.png)'
+    ]
+    for (const value of values) {
+      const rect = createSvgElement('rect')
+      rect.setAttribute('mask', value)
+      svg.append(rect)
+
+      const removed = sanitize.sanitizeSvg(rect)
+
+      expect(rect.hasAttribute('mask')).toBe(false)
+      expect(removed).toHaveLength(1)
+    }
+  })
+
+  it('sanitizeSvg() keeps a local url(), also when written with spaces or quotes', () => {
+    for (const value of ['url(#grad)', 'url( #grad )', "url('#grad')", 'url("#grad") #000']) {
+      const rect = createSvgElement('rect')
+      rect.setAttribute('fill', value)
+      svg.append(rect)
+
+      const removed = sanitize.sanitizeSvg(rect)
+
+      expect(rect.getAttribute('fill')).toBe(value)
+      expect(removed).toEqual([])
+    }
+  })
+
+  it('sanitizeSvg() removes an external url() from a style property that a rule also sets', () => {
+    // Such a property stays in the style attribute instead of becoming an
+    // attribute: the check on the attributes does not see it.
+    const doc = document.implementation.createDocument(NS.SVG, 'svg')
+    const style = doc.createElementNS(NS.SVG, 'style')
+    style.textContent = 'rect{mask:none;fill:red}'
+    const rect = doc.createElementNS(NS.SVG, 'rect')
+    rect.setAttribute('style', 'mask:url(https://evil.example/a.png);fill:url(#grad)')
+    doc.documentElement.append(style, rect)
+
+    const removed = sanitize.sanitizeSvg(rect)
+
+    expect(rect.hasAttribute('mask')).toBe(false)
+    expect(rect.getAttribute('style')).toBe('fill:url(#grad)')
+    expect(removed).toEqual(['mask'])
+  })
+
+  it('sanitizeCss() removes an external url() that the stylesheet does not close', () => {
+    // A browser reads such an address up to the end of the stylesheet
+    expect(sanitize.sanitizeCss('rect{mask-image:url(https://evil.example/a.png')).toBe('rect{mask-image:none')
+    expect(sanitize.sanitizeCss('rect{mask-image:url("https://evil.example/a.png')).toBe('rect{mask-image:none')
+    expect(sanitize.sanitizeCss('rect{fill:url(#grad')).toBe('rect{fill:url(#grad')
+  })
+
   it('sanitizeSvg() does not treat Object.prototype names as allowed elements', () => {
     const fake = createSvgElement('constructor')
     fake.setAttribute('href', '#x')

@@ -7,7 +7,7 @@
  */
 
 import { getReverseNS, NS } from './namespaces.js'
-import { getHref, setHref, getUrlFromAttr } from './utilities.js'
+import { getHref, setHref } from './utilities.js'
 import { warn } from '../common/logger.js'
 
 const REVERSE_NS = getReverseNS()
@@ -349,7 +349,8 @@ export const isSafeHref = (nodeName, href) => {
   return true
 }
 
-const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gis
+// A url() that the text does not close runs to its end, as in a browser
+const CSS_URL = /url\(\s*(['"]?)(.*?)(?:\1\s*\)|$)/gis
 const CSS_IMPORT = /@import\b[^;]*;?/gi
 const CSS_SCRIPTING = /expression\s*\(|javascript:|vbscript:|-moz-binding|behavior\s*:/gi
 const CSS_ESCAPE = /\\(?:([0-9a-f]{1,6})\s?|(.))/gis
@@ -369,6 +370,17 @@ const hasUnsafeCss = (css) => {
   if (/@import\b/i.test(css) || new RegExp(CSS_SCRIPTING.source, 'i').test(css)) return true
   return [...css.matchAll(CSS_URL)].some(([, , url]) => !isSafeCssUrl(url))
 }
+
+/**
+ * The first address of an attribute value that leads out of the document,
+ * if any. Every `url()` of the value counts, however it is written: `URL(`,
+ * after a space or another value, with CSS escapes.
+ * @param {string} value
+ * @returns {string|undefined}
+ */
+const externalUrl = (value) => [...decodeCssEscapes(value).matchAll(CSS_URL)]
+  .map(([, , url]) => url.trim())
+  .find((url) => url && !url.startsWith('#'))
 
 /**
  * Neutralizes the parts of a stylesheet that can load external resources or run code:
@@ -577,6 +589,12 @@ const sanitizeNode = (node, removed) => {
             return
           }
           if (ruled.has(styleAttrName)) {
+            // It stays in the style: the check on the attributes, below,
+            // does not see it
+            if (hasUnsafeCss(decodeCssEscapes(`${styleAttrName}:${styleAttrVal}`))) {
+              report(removed, styleAttrName)
+              return
+            }
             // As written since V6 (option fidelity.styleProperties)
             kept.push(isOn('styleProperties') ? declaration.trim() : `${styleAttrName}:${styleAttrVal}`)
           } else {
@@ -659,16 +677,12 @@ const sanitizeNode = (node, removed) => {
     // if the element has attributes pointing to a non-local reference,
     // need to remove the attribute
     ['clip-path', 'fill', 'filter', 'marker-end', 'marker-mid', 'marker-start', 'mask', 'stroke'].forEach((attr) => {
-      let val = node.getAttribute(attr)
+      const val = externalUrl(node.getAttribute(attr) ?? '')
       if (val) {
-        val = getUrlFromAttr(val)
-        // simply check for first character being a '#'
-        if (val && val[0] !== '#') {
-          node.setAttribute(attr, '')
-          warn(`attribute ${attr} in element ${node.nodeName} pointing to a non-local reference (${val}) is removed: ${node.outerHTML}`, null, 'sanitize')
-          node.removeAttribute(attr)
-          report(removed, `${attr}="url(${shorten(val)})"`)
-        }
+        node.setAttribute(attr, '')
+        warn(`attribute ${attr} in element ${node.nodeName} pointing to a non-local reference (${val}) is removed: ${node.outerHTML}`, null, 'sanitize')
+        node.removeAttribute(attr)
+        report(removed, `${attr}="url(${shorten(val)})"`)
       }
     })
 
