@@ -224,4 +224,29 @@ describe('audit corrections (canvas)', () => {
       expect(gradients()).toHaveLength(2)
     })
   })
+
+  describe('flipping a rotated path that has rounded corners', () => {
+    // The radii of an arc only follow a scale: under a matrix that turns
+    // the path, they were written as 0 and the corners became sharp.
+    const ROUNDED = 'M110,100 L190,100 A10,10 0 0 1 200,110 L200,150 A10,10 0 0 1 190,160 L110,160 A10,10 0 0 1 100,150 L100,110 A10,10 0 0 1 110,100 Z'
+    const radii = () => [...$('p1').getAttribute('d').matchAll(/A\s*([\d.]+)[\s,]+([\d.]+)/g)].map(([, rx, ry]) => [Number(rx), Number(ry)])
+
+    it('keeps the radii of the corners', () => {
+      load(drawing(`<path id="p1" d="${ROUNDED}" transform="rotate(90 150 130)"/>`))
+      select('p1')
+
+      svgCanvas.flipSelectedElements(-1, 1)
+
+      expect(radii()).toEqual([[10, 10], [10, 10], [10, 10], [10, 10]])
+    })
+
+    it('still writes the flip into a path without arcs', () => {
+      load(drawing('<path id="p1" d="M100,100 L200,100 L200,160 L100,160 Z" transform="rotate(90 150 130)"/>'))
+      select('p1')
+
+      svgCanvas.flipSelectedElements(-1, 1)
+
+      expect($('p1').hasAttribute('transform')).toBe(false)
+    })
+  })
 })

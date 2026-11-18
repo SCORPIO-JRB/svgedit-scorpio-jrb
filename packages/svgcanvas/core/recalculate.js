@@ -45,6 +45,16 @@ const geometryLimitedElements = new Set([
   'rect'
 ])
 
+/**
+ * Whether the attributes of an element cannot follow a matrix that turns or
+ * skews it: the shapes above, and a path that holds arcs, whose radii only
+ * follow a scale.
+ * @param {Element} selected
+ * @returns {boolean}
+ */
+const isGeometryLimited = (selected) => geometryLimitedElements.has(selected.tagName) ||
+  (selected.tagName === 'path' && /a/i.test(selected.getAttribute('d') ?? ''))
+
 // A shear or a rotation left in the matrix, measured against its scale: the
 // single precision noise of Firefox (2e-8 for a scale of 1.2) is not one.
 const hasOffAxisTransform = (matrix) => {
@@ -119,7 +129,7 @@ const bakeTransformsIntoAttributes = (selected, changes, tlist, svgroot) => {
     bakeMatrix = matrixMultiply(rotationTransform.matrix.inverse(), totalMatrix)
   }
 
-  if (geometryLimitedElements.has(selected.tagName) && hasOffAxisTransform(bakeMatrix)) {
+  if (isGeometryLimited(selected) && hasOffAxisTransform(bakeMatrix)) {
     normalizeRetainedTransformList(selected, tlist, svgroot)
     return true
   }
