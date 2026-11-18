@@ -711,7 +711,6 @@ export class PaintPicker {
       const color = paint?.type === 'solidColor' && paint.solidColor && paint.solidColor !== 'none'
         ? parseColor(paint.solidColor)
         : null
-      this.none = !color
       this.setHsvOf(color ?? { r: 255, g: 255, b: 255 }, color ? this.paintAlpha / 100 : 1)
     }
     this.render()
@@ -746,7 +745,6 @@ export class PaintPicker {
    */
   changed (commit) {
     this.mixed = false
-    this.none = false
     if (this.mode === 'gradient' && this.activeStop) {
       this.activeStop.color = toHex(this.rgb)
       this.activeStop.opacity = Math.round(this.alpha * 1000) / 1000
