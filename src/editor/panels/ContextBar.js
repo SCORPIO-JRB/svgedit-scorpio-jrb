@@ -25,6 +25,7 @@
  */
 import { escapeHtml } from './TopBar.js'
 import { isShown } from './Inspector.js'
+import { isConnector } from './LayerTree.js'
 import { controlTitle } from '../commands.js'
 import { isAllHidden } from '../structure.js'
 
@@ -504,8 +505,7 @@ export class ContextBar {
       ? selectionKind({
         elements,
         mode: svgCanvas.getMode(),
-        isConnector: (elem) => elem.hasAttributeNS?.('http://svg-edit.googlecode.com', 'connector') ||
-          Boolean(elem.getAttribute?.('se:connector'))
+        isConnector
       })
       : null
     const entries = kind ? barEntries(kind, elements[0]) : []
@@ -983,7 +983,7 @@ export class ContextBar {
     const kind = selectionKind({
       elements,
       mode: svgCanvas.getMode(),
-      isConnector: (elem) => elem.hasAttributeNS?.('http://svg-edit.googlecode.com', 'connector')
+      isConnector
     })
     const items = []
     for (const entry of menuEntries(kind)) {

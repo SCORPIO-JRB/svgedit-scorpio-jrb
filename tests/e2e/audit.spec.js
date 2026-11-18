@@ -416,3 +416,25 @@ test.describe('audit: the name and the choice of a layer', () => {
     expect(await page.evaluate(() => window.heard)).toBe(2)
   })
 })
+
+test.describe('audit: what a connector is', () => {
+  test('the context menu names a connector as the bar does', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, drawing('<rect id="a" x="10" y="10" width="50" height="50"/><rect id="b" x="300" y="10" width="50" height="50"/>' +
+      '<path id="c" d="M60,35 L300,35" fill="none" stroke="#000"/>'))
+
+    // The bar read the attribute by its name too, the menu by its namespace
+    // only: there, this connector was a path, with its nodes to edit
+    const result = await page.evaluate(async () => {
+      const { svgCanvas, layout } = window.svgEditor
+      const conn = document.getElementById('c')
+      conn.setAttribute('se:connector', 'a b')
+      svgCanvas.selectOnly([conn], true)
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+      return { bar: layout.contextBar.kind, menu: layout.contextBar.menuItems().map((item) => item.id) }
+    })
+
+    expect(result.bar).toBe('connector')
+    expect(result.menu).not.toContain('edit_nodes')
+  })
+})
