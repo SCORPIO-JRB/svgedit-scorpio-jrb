@@ -6,7 +6,6 @@
  */
 
 import { jsPDF as JsPDF } from 'jspdf'
-import 'svg2pdf.js'
 import * as history from './history.js'
 import { error } from '../common/logger.js'
 import {
