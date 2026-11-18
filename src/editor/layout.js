@@ -420,18 +420,24 @@ export class EditorLayout {
 
   /**
    * After a change of the document.
+   * @param {object} [options]
+   * @param {boolean} [options.selection] - False when selectionChanged()
+   *   follows at once: it refreshes the panels of the selected object, and
+   *   its binding reads the whole drawing
    * @returns {void}
    */
-  documentChanged () {
+  documentChanged ({ selection = true } = {}) {
     this.layerTree?.invalidate()
     this.codePanel?.invalidate()
     this.contextBar?.refresh()
     // The frames to export follow the document, and its undo steps (lot V5).
     this.editor.frames?.update()
     this.editor.frames?.refreshInspector()
-    this.editor.binding?.refresh()
-    this.editor.symbolPanel?.refresh()
-    this.editor.connectorPanel?.refresh()
+    if (selection) {
+      this.editor.binding?.refresh()
+      this.editor.symbolPanel?.refresh()
+      this.editor.connectorPanel?.refresh()
+    }
     this.editor.connectors?.scheduleOverlay()
   }
 

@@ -241,11 +241,40 @@ class LayersPanel {
     if (!newName || newName === oldName) {
       return
     }
-    if (this.editor.svgCanvas.getCurrentDrawing().hasLayer(newName)) {
+    this.renameLayerTo(newName)
+  }
+
+  /**
+   * Gives a layer a new name, unless another layer has it: the dialog of the
+   * classic layout, the row of the tree and the field of the inspector.
+   * @param {string} name
+   * @param {string} [layer] The layer to rename, which becomes the current
+   *   one; the current one when not given
+   * @returns {boolean} Whether the layer has the name
+   */
+  renameLayerTo (name, layer) {
+    const { svgCanvas } = this.editor
+    if (svgCanvas.getCurrentDrawing().hasLayer(name)) {
       this.editor.toast(this.editor.i18next.t('notification.layerHasThatName'), { type: 'error' })
-      return
+      return false
     }
-    this.editor.svgCanvas.renameCurrentLayer(newName)
+    if (layer !== undefined) svgCanvas.setCurrentLayer(layer)
+    svgCanvas.renameCurrentLayer(name)
+    this.populateLayers()
+    return true
+  }
+
+  /**
+   * Makes a layer the current one, with nothing selected: the menu of the
+   * toolbar and the row of the tree.
+   * @param {string} name
+   * @returns {void}
+   */
+  selectLayer (name) {
+    const { svgCanvas } = this.editor
+    svgCanvas.setCurrentLayer(name)
+    svgCanvas.clearSelection()
+    svgCanvas.runExtensions('layersChanged')
     this.populateLayers()
   }
 

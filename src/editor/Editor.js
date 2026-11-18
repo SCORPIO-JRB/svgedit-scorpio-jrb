@@ -1020,8 +1020,11 @@ class Editor extends EditorStartup {
     })
 
     this.showSaveWarning = true
-    // The tree of the Layers tab follows the document (lot V3).
-    this.layout?.documentChanged()
+    // The tree of the Layers tab follows the document (lot V3). The context
+    // panel, below, ends with the refresh of the selection, which the panels
+    // of the selected object follow: once is enough, except while the nodes
+    // of a path are edited, where it stops before.
+    this.layout?.documentChanged({ selection: this.svgCanvas.getMode() === 'pathedit' })
 
     // we update the contextual panel with potentially new
     // positional/sizing information (we DON'T want to update the

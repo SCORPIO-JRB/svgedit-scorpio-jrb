@@ -249,3 +249,192 @@ test.describe('audit corrections: panels', () => {
     expect(await undoSize(page)).toBe(1)
   })
 })
+
+test.describe('audit: the PDF export', () => {
+  // Written before the libraries that the export never calls left the
+  // bundle: the page has the size of the drawing and shows its picture.
+  test('the export gives one page of the size of the drawing, with its picture', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, drawing('<rect id="r1" x="10" y="10" width="50" height="50" fill="#f00"/>'))
+
+    const pdf = await page.evaluate(async () => {
+      const { output } = await window.svgEditor.svgCanvas.exportPDF('plan.pdf', 'dataurlstring')
+      const text = atob(output.slice(output.indexOf(',') + 1))
+      // The picture is the first image: three bytes a pixel, not compressed
+      const image = text.indexOf('/Subtype /Image')
+      const pixels = text.indexOf('stream\n', image) + 'stream\n'.length
+      return {
+        head: text.slice(0, 5),
+        pages: text.match(/\/Type \/Page\b/g).length,
+        box: /\/MediaBox \[([^\]]*)\]/.exec(text)[1],
+        size: /\/Width (\d+)\n\/Height (\d+)/.exec(text.slice(image)).slice(1).map(Number),
+        inside: [0, 1, 2].map((i) => text.charCodeAt(pixels + (30 * 640 + 30) * 3 + i))
+      }
+    })
+
+    expect(pdf).toEqual({
+      head: '%PDF-',
+      pages: 1,
+      box: '0 0 640. 480.',
+      size: [640, 480],
+      inside: [255, 0, 0]
+    })
+  })
+})
+
+test.describe('audit: the panels of the selected object after a change', () => {
+  test('a change reads the binding of the selected object once', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, drawing('<rect id="r1" x="10" y="10" width="50" height="50" data-tag="a"/>'))
+
+    // It reads the whole drawing, and each change read it twice: for the
+    // document, then for the selection
+    const result = await page.evaluate(() => {
+      const canvas = window.svgEditor.svgCanvas
+      const elem = document.getElementById('r1')
+      const shown = () => document.querySelector('#se-binding input[data-name="data-tag"]')?.value
+      canvas.selectOnly([elem], true)
+      let reads = 0
+      const getBinding = canvas.getBinding
+      canvas.getBinding = (...args) => { reads++; return getBinding(...args) }
+      canvas.setElementData(elem, 'data-tag', 'b')
+      canvas.getBinding = getBinding
+      return { reads, shown: shown() }
+    })
+
+    expect(result).toEqual({ reads: 1, shown: 'b' })
+  })
+})
+
+test.describe('audit: the name and the choice of a layer', () => {
+  // Written before the three places that rename a layer, and the two that
+  // choose one, shared their code.
+  const LAYERS = `<svg xmlns="${NS}" width="640" height="480"><g class="layer"><title>Fond</title>` +
+    '<rect id="f1" x="10" y="10" width="50" height="50"/></g><g class="layer"><title>Equipements</title>' +
+    '<rect id="e1" x="100" y="100" width="50" height="50"/></g></svg>'
+  const layers = (page) => page.evaluate(() => {
+    const drawing = window.svgEditor.svgCanvas.getCurrentDrawing()
+    return {
+      names: Array.from({ length: drawing.getNumLayers() }, (_, i) => drawing.getLayerName(i)),
+      current: drawing.getCurrentLayerName()
+    }
+  })
+  const refused = (page) => page.getByText('Layer already has that name')
+  // The times the extensions hear of the layers, during an action
+  const countLayersChanged = (page) => page.evaluate(() => {
+    const canvas = window.svgEditor.svgCanvas
+    const run = canvas.runExtensions
+    window.heard = 0
+    canvas.runExtensions = function (name, ...rest) {
+      if (name === 'layersChanged') window.heard++
+      return run.call(this, name, ...rest)
+    }
+  })
+  const renameInTree = async (page, layer, name) => {
+    await page.evaluate((layer) => {
+      const tree = window.svgEditor.layout.layerTree
+      tree.rename(tree.rows.find((row) => row.kind === 'layer' && row.name === layer))
+    }, layer)
+    const field = page.locator('#se-tree .se-tree-rename')
+    await field.fill(name)
+    await field.press('Enter')
+  }
+
+  test('the field of the inspector renames the current layer, not to a name taken', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, LAYERS)
+    const field = page.locator('#se-layer-name')
+    await expect(field).toHaveValue('Equipements')
+
+    await field.fill('Fond')
+    await field.press('Enter')
+    await expect(refused(page)).toBeVisible()
+    expect(await layers(page)).toEqual({ names: ['Fond', 'Equipements'], current: 'Equipements' })
+
+    await field.fill('Vannes')
+    await field.press('Enter')
+    await expect(field).toHaveValue('Vannes')
+    expect(await layers(page)).toEqual({ names: ['Fond', 'Vannes'], current: 'Vannes' })
+    await expect(page.locator('#se-layer-button')).toContainText('Vannes')
+  })
+
+  test('a row of the tree renames its layer, which becomes the current one, not to a name taken', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, LAYERS)
+    await page.locator('#se-tab-layers').click()
+
+    // A name taken: the layer keeps its name, and the current one stays
+    await renameInTree(page, 'Fond', 'Equipements')
+    await expect(refused(page)).toBeVisible()
+    expect(await layers(page)).toEqual({ names: ['Fond', 'Equipements'], current: 'Equipements' })
+
+    await renameInTree(page, 'Fond', 'Murs')
+    expect(await layers(page)).toEqual({ names: ['Murs', 'Equipements'], current: 'Murs' })
+    await expect(page.locator('#se-tree .se-tree-row[data-kind="layer"]', { hasText: 'Murs' })).toBeVisible()
+  })
+
+  test('the dialog of the classic layout renames the current layer, not to a name taken', async ({ page }) => {
+    await visitAndApproveStorage(page, { query: '?layout=classic' })
+    await load(page, LAYERS)
+    const answer = async (text) => {
+      await page.evaluate(() => { window.svgEditor.layersPanel.layerRename() })
+      const field = page.locator('se-popover.se-ask input')
+      await expect(field).toBeFocused()
+      await field.fill(text)
+      await field.press('Enter')
+    }
+
+    await answer('Fond')
+    await expect(refused(page)).toBeVisible()
+    expect(await layers(page)).toEqual({ names: ['Fond', 'Equipements'], current: 'Equipements' })
+
+    await answer('Vannes')
+    await expect.poll(() => layers(page)).toEqual({ names: ['Fond', 'Vannes'], current: 'Vannes' })
+  })
+
+  test('a layer chosen in the tree or in the bar is the current one, with nothing selected', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, LAYERS)
+    await page.locator('#se-tab-layers').click()
+    const selected = () => page.evaluate(() => window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => el.id))
+    const select = () => page.evaluate(() => window.svgEditor.svgCanvas.selectOnly([document.getElementById('e1')], true))
+    await countLayersChanged(page)
+
+    await select()
+    await page.locator('#se-tree .se-tree-row[data-kind="layer"]', { hasText: 'Fond' }).locator('.se-tree-name').click()
+    expect(await layers(page)).toMatchObject({ current: 'Fond' })
+    expect(await selected()).toEqual([])
+    // Once for the choice, once for the list of the layers
+    expect(await page.evaluate(() => window.heard)).toBe(2)
+
+    await select()
+    await page.evaluate(() => { window.heard = 0 })
+    await page.locator('#se-layer-button').click()
+    await page.locator('#se-layer-menu [data-layer="Equipements"]').click()
+    expect(await layers(page)).toMatchObject({ current: 'Equipements' })
+    expect(await selected()).toEqual([])
+    expect(await page.evaluate(() => window.heard)).toBe(2)
+  })
+})
+
+test.describe('audit: what a connector is', () => {
+  test('the context menu names a connector as the bar does', async ({ page }) => {
+    await visitAndApproveStorage(page)
+    await load(page, drawing('<rect id="a" x="10" y="10" width="50" height="50"/><rect id="b" x="300" y="10" width="50" height="50"/>' +
+      '<path id="c" d="M60,35 L300,35" fill="none" stroke="#000"/>'))
+
+    // The bar read the attribute by its name too, the menu by its namespace
+    // only: there, this connector was a path, with its nodes to edit
+    const result = await page.evaluate(async () => {
+      const { svgCanvas, layout } = window.svgEditor
+      const conn = document.getElementById('c')
+      conn.setAttribute('se:connector', 'a b')
+      svgCanvas.selectOnly([conn], true)
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+      return { bar: layout.contextBar.kind, menu: layout.contextBar.menuItems().map((item) => item.id) }
+    })
+
+    expect(result.bar).toBe('connector')
+    expect(result.menu).not.toContain('edit_nodes')
+  })
+})

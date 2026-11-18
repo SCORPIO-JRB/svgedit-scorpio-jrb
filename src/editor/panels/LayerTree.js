@@ -507,10 +507,7 @@ export class LayerTree {
     const { svgCanvas } = editor
     if (row.kind === 'layer') {
       if (svgCanvas.getCurrentGroup?.()) svgCanvas.leaveContext()
-      svgCanvas.setCurrentLayer(row.name)
-      svgCanvas.clearSelection()
-      svgCanvas.runExtensions('layersChanged')
-      editor.layersPanel.populateLayers()
+      editor.layersPanel.selectLayer(row.name)
       return
     }
     // A locked object is not selected (lot V7): the row says why.
@@ -603,13 +600,7 @@ export class LayerTree {
       if (commit && object) {
         if (name !== titleOf(row.el)) editor.svgCanvas.setElementTitle(row.el, name)
       } else if (commit && name && name !== row.name) {
-        if (editor.svgCanvas.getCurrentDrawing().hasLayer(name)) {
-          editor.toast(editor.i18next.t('notification.layerHasThatName'), { type: 'error' })
-        } else {
-          editor.svgCanvas.setCurrentLayer(row.name)
-          editor.svgCanvas.renameCurrentLayer(name)
-          editor.layersPanel.populateLayers()
-        }
+        editor.layersPanel.renameLayerTo(name, row.name)
       }
       this.invalidate()
       this.$tree.focus({ preventScroll: true })
