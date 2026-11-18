@@ -1064,13 +1064,26 @@ export class SeColorPicker extends HTMLElement {
       e.preventDefault()
       this.openPicker()
     })
+    // What was selected when a field was last typed in. A click on the
+    // canvas changes the selection without taking the focus from the field:
+    // what was typed for an object must not go to the next one.
+    const selected = () => svgEditor.svgCanvas.getSelectedElements().filter(Boolean)
+    let typedFor = null
     for (const [field, typed] of [[this.$valueField, () => this.valueTyped()], [this.$alphaField, () => this.alphaTyped()]]) {
-      field.addEventListener('change', typed)
+      const commit = () => {
+        const now = selected()
+        const moved = typedFor && (typedFor.length !== now.length || typedFor.some((el, i) => el !== now[i]))
+        typedFor = null
+        if (moved) this.showValue(true)
+        else typed()
+      }
+      field.addEventListener('input', () => { typedFor = selected() })
+      field.addEventListener('change', commit)
       field.addEventListener('focus', () => field.select())
       field.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault()
-          typed()
+          commit()
           field.select()
         } else if (e.key === 'Escape') {
           e.preventDefault()

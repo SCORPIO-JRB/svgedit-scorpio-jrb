@@ -197,4 +197,41 @@ test.describe('audit corrections: panels', () => {
     await expect(add).toBeHidden()
     expect(await attr(page, 'r', 'fill')).toBe('#33aa66')
   })
+
+  test('a colour typed without Enter does not go to the object clicked next', async ({ page }) => {
+    await load(page, SHAPES)
+    await clickAt(page, 240, 230)
+    expect(await selection(page)).toEqual(['r'])
+    const field = page.locator('.se-inspector #fill_color #value-field')
+    await field.click()
+    await field.fill('FF0000')
+    // A click on the canvas leaves the focus in the field
+    await clickAt(page, 440, 290)
+    expect(await selection(page)).toEqual(['q'])
+    // The focus goes elsewhere: the field says what was typed
+    await page.locator('.se-inspector #stroke_color #value-field').click()
+
+    expect(await attr(page, 'q', 'fill')).toBe('#3366aa')
+    expect(await attr(page, 'r', 'fill')).toBe('#33aa66')
+    await expect(field).toHaveValue('3366AA')
+    expect(await undoSize(page)).toBe(0)
+  })
+
+  test('a colour typed and confirmed still goes to the selection', async ({ page }) => {
+    await load(page, SHAPES)
+    await clickAt(page, 240, 230)
+    const field = page.locator('.se-inspector #fill_color #value-field')
+    await field.click()
+    await field.fill('FF0000')
+    await field.press('Enter')
+    expect(await attr(page, 'r', 'fill')).toBe('#ff0000')
+
+    // Typed after the selection changed, it is for the new selection
+    await clickAt(page, 440, 290)
+    await field.click()
+    await field.fill('00FF00')
+    await page.locator('.se-inspector #stroke_color #value-field').click()
+    expect(await attr(page, 'q', 'fill')).toBe('#00ff00')
+    expect(await attr(page, 'r', 'fill')).toBe('#ff0000')
+  })
 })
