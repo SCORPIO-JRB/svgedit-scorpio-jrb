@@ -19,6 +19,9 @@ async function load (page, svg, zoom = 1) {
   }, { svg, zoom })
 }
 
+const undoSize = (page) => page.evaluate(() => window.svgEditor.svgCanvas.undoMgr.getUndoStackSize())
+const attr = (page, id, name) => page.evaluate(({ id, name }) => document.getElementById(id)?.getAttribute(name), { id, name })
+
 test.describe('audit corrections: files', () => {
   // Without the File System Access API, the editor opens a plain file
   // input, which a test can fill.
@@ -55,5 +58,31 @@ test.describe('audit corrections: files', () => {
 
     await page.waitForFunction(() => Boolean(document.getElementById('opened')))
     expect(await page.evaluate(() => Boolean(document.getElementById('r1')))).toBe(false)
+  })
+})
+
+test.describe('audit corrections: gestures', () => {
+  test.beforeEach(async ({ page }) => {
+    await visitAndApproveStorage(page)
+  })
+
+  test('a click on a resize grip, without a move, writes nothing in the drawing', async ({ page }) => {
+    await load(page, drawing(
+      '<rect id="r1" x="100" y="100" width="120" height="60" fill="#3a6"/>' +
+      '<rect id="r2" x="300" y="100" width="120" height="60" fill="#3a6" transform="rotate(30 360 130)"/>'
+    ))
+    for (const id of ['r1', 'r2']) {
+      const before = await attr(page, id, 'transform')
+      await page.evaluate((id) => window.svgEditor.svgCanvas.selectOnly([document.getElementById(id)], true), id)
+      const grip = await page.locator('#selectorGrip_resize_se').boundingBox()
+      await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+      await page.mouse.down()
+      await page.mouse.up()
+
+      // The press adds three transforms for the gesture: they must not stay
+      expect(await attr(page, id, 'transform')).toBe(before)
+      expect(await page.evaluate(() => window.svgEditor.svgCanvas.getSvgString())).not.toContain('matrix(1 0 0 1 0 0)')
+      expect(await undoSize(page)).toBe(0)
+    }
   })
 })
