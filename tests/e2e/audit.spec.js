@@ -170,4 +170,31 @@ test.describe('audit corrections: panels', () => {
     expect(await attr(page, 'l1', 'marker-end')).toMatch(/^url\(#/)
     expect(await undoSize(page)).toBe(1)
   })
+
+  const SHAPES = drawing(
+    '<rect id="n" x="60" y="60" width="80" height="60" fill="none" stroke="#000" stroke-width="4"/>' +
+    '<rect id="r" x="200" y="200" width="80" height="60" fill="#33aa66" stroke="#000" stroke-width="2"/>' +
+    '<rect id="q" x="400" y="260" width="80" height="60" fill="#3366aa" stroke="#000" stroke-width="2"/>'
+  )
+  const selection = (page) => page.evaluate(() =>
+    window.svgEditor.svgCanvas.getSelectedElements().filter(Boolean).map((el) => el.id))
+
+  test('the "+" of the fill follows a selection extended by a Shift+click', async ({ page }) => {
+    // The paints of several objects are read after the selection changed:
+    // the "+" kept showing for the object without fill selected first, and
+    // a click on it removed the fill of the other one.
+    await load(page, SHAPES)
+    const add = page.locator('.se-paint-add[data-paint="fill"]')
+    await clickAt(page, 60, 90)
+    expect(await selection(page)).toEqual(['n'])
+    await expect(add).toBeVisible()
+
+    await page.keyboard.down('Shift')
+    await clickAt(page, 240, 230)
+    await page.keyboard.up('Shift')
+    expect((await selection(page)).sort()).toEqual(['n', 'r'])
+
+    await expect(add).toBeHidden()
+    expect(await attr(page, 'r', 'fill')).toBe('#33aa66')
+  })
 })

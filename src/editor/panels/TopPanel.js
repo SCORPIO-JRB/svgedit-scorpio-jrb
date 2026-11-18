@@ -811,6 +811,10 @@ class TopPanel {
     this.showSelectionPosition(box)
     this.showSelectionSize(box, false)
     this.editor.bottomPanel.showCommonValues(elements)
+    // The "+" and the eye of the paints read the boxes that showCommonValues
+    // just filled: refreshed with the selection, they showed the paints of
+    // the selection before.
+    this.editor.layout?.paintPicker?.refreshToggles()
     if (elements.every(elem => elem.tagName === 'text')) {
       this.showCommonTextValues(elements)
     }
