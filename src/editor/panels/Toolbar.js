@@ -283,10 +283,7 @@ export class Toolbar {
     if (!item || item.getAttribute('aria-disabled') === 'true') return
     const { editor } = this
     if (item.dataset.layer !== undefined) {
-      editor.svgCanvas.setCurrentLayer(item.dataset.layer)
-      editor.svgCanvas.clearSelection()
-      editor.svgCanvas.runExtensions('layersChanged')
-      editor.layersPanel.populateLayers()
+      editor.layersPanel.selectLayer(item.dataset.layer)
     } else if (item.dataset.action === 'new') {
       editor.layersPanel.newLayer(this.$layerButton)
     } else if (item.dataset.action === 'dupe') {

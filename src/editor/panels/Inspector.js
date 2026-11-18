@@ -1378,13 +1378,8 @@ export class Inspector {
         this.refreshLayer()
         return
       }
-      if (drawing.hasLayer(name)) {
-        editor.toast(editor.i18next.t('notification.layerHasThatName'), { type: 'error' })
-        this.refreshLayer()
-        return
-      }
-      editor.svgCanvas.renameCurrentLayer(name)
-      done()
+      editor.layersPanel.renameLayerTo(name)
+      this.refreshLayer()
     })
     field('se-layer-opacity').addEventListener('change', (e) => {
       // "50", "50 %" or "0.5"
