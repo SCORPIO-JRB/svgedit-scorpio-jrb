@@ -93,4 +93,18 @@ describe('audit corrections (canvas)', () => {
       expect(svgCanvas.getSvgString()).not.toContain('undefined')
     })
   })
+
+  describe('a source that is not a drawing', () => {
+    it('is refused without touching the current drawing', () => {
+      load(drawing('<rect id="r1" x="10" y="10" width="50" height="50"/>'))
+      const before = svgCanvas.getSvgString()
+
+      for (const source of [`<g xmlns="${NS}"><rect width="5" height="5"/></g>`, '<html><body/></html>', 'not a file']) {
+        expect(svgCanvas.setSvgString(source)).toBe(false)
+        expect(svgCanvas.getSvgContent().localName).toBe('svg')
+        expect(svgCanvas.getSvgString()).toBe(before)
+        expect(svgCanvas.undoMgr.getUndoStackSize()).toBe(0)
+      }
+    })
+  })
 })
