@@ -376,6 +376,15 @@ test.describe('Contextual bar (V4): one test for each row of the table', () => {
     // The alignment panel of the inspector, lent to the bar.
     await entry(page, 'align').click()
     await expect(page.locator('#se-ctx-align #tool_align_popup')).toBeVisible()
+    // Its buttons show in the popover, not hidden in its overflow, where the
+    // place of the panel in the inspector (under its own button) put them.
+    // A click first scrolls a hidden button into view: it does not tell.
+    await expect.poll(() => page.evaluate(() => {
+      const popover = document.getElementById('se-ctx-align').getBoundingClientRect()
+      const button = document.getElementById('tool_align_bottom').getBoundingClientRect()
+      const hit = document.elementFromPoint(button.x + button.width / 2, button.y + button.height / 2)
+      return button.top >= popover.top && button.bottom <= popover.bottom && Boolean(hit?.closest('#tool_align_bottom'))
+    })).toBe(true)
     // The two objects end at different heights (their tops are the same
     // from the start): aligned on the bottom, they show that the panel works.
     const bottoms = () => page.evaluate(() => ['r', 'p'].map((id) => {
