@@ -1540,6 +1540,17 @@
   gap: 8px;
 }
 
+/* Align and distribute ▾: the panel of the inspector, lent to the popover,
+   takes its place in it. Placed under its button as in the inspector, it
+   left the popover empty and was hidden in its overflow. The popover draws
+   the frame. */
+#se-ctx-align #tool_align_popup {
+  position: static;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
 /* Text styles: Style ▾ of the contextual bar (lot V4) */
 #se-textstyles {
   width: 280px;
